@@ -1,6 +1,8 @@
 :root {
+  height: 100%;
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
+
   font-weight: 400;
 
   color-scheme: light dark;
@@ -20,15 +22,7 @@
 
 /* Safe area support for devices with notches/Dynamic Island */
 /* This ensures content doesn't get hidden behind physical screen intrusions */
-@supports (padding: max(0px)) {
-  body {
-    /* Use max() to ensure minimum padding even when safe-area-inset is 0 */
-    padding-top: max(0px, env(safe-area-inset-top));
-    padding-right: max(0px, env(safe-area-inset-right));
-    padding-bottom: max(0px, env(safe-area-inset-bottom));
-    padding-left: max(0px, env(safe-area-inset-left));
-  }
-}
+/* Note: Safe area insets are now handled by #root for better control */
 
 /* Dark mode CSS variables */
 :root {
@@ -69,6 +63,18 @@
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
 }
 
+#root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  /* Safe area insets for devices with notches/Dynamic Island */
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+}
+
 a {
   font-weight: 500;
   color: #646cff;
@@ -78,46 +84,28 @@ a:hover {
   color: #535bf2;
 }
 
-body {
-  margin: 0;
-
-  min-height: 100vh;
-  min-height: 100dvh; /* Dynamic viewport height - adjusts for URL bar */
-  max-height: 100vh;
-  max-height: 100dvh;
-  padding: 0;
-  /* Add safe area padding for notches, Dynamic Island, etc. */
-  padding-top: env(safe-area-inset-top);
-  padding-right: env(safe-area-inset-right);
-  padding-bottom: env(safe-area-inset-bottom);
-  padding-left: env(safe-area-inset-left);
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
+html {
+  height: 100% !important; /* Ensure html is 100% of viewport */
   overflow: hidden;
+  width: 100%;
+  -webkit-overflow-scrolling: touch;
 }
 
-/* Mobile-first responsive design */
-@media (max-width: 768px) {
-  body {
-    padding: 10px;
-    align-items: flex-start;
-    /* Combine regular padding with safe area insets */
-    padding-top: max(20px, env(safe-area-inset-top));
-    padding-right: max(10px, env(safe-area-inset-right));
-    padding-bottom: max(10px, env(safe-area-inset-bottom));
-    padding-left: max(10px, env(safe-area-inset-left));
-    overflow: hidden;
-    position: fixed;
-    width: 100%;
-    height: 100vh;
-    height: 100dvh; /* Dynamic viewport height */
-  }
-  
-  html {
-    overflow: hidden;
-    height: 100%;
-    height: 100dvh;
-  }
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100% !important; /* Ensure body is 100% of html */
+  overflow: hidden;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  /* Safe area insets handled by root container */
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 h1 {
@@ -155,10 +143,11 @@ button {
 /* Mobile-friendly buttons */
 @media (max-width: 768px) {
   button {
-    padding: 12px 12px;
+    padding: 14px 16px;
     font-size: 16px;
-    min-height: 25px;
+    min-height: 44px; /* Proper touch target size */
     width: 100%;
+    -webkit-tap-highlight-color: rgba(255, 255, 255, 0.1);
   }
 }
 
@@ -281,30 +270,58 @@ button:focus-visible {
 /* Mobile responsive adjustments */
 @media (max-width: 768px) {
   .home-container {
-    padding: 10px;
+    padding: 16px;
     width: 100%;
     max-width: 100%;
-    max-height: calc(100vh - 40px);
+    height: 100%;
     overflow-y: auto;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .home-container h1 {
+    margin-top: 0;
+    margin-bottom: 24px;
   }
   
   .home-form {
-    gap: 20px;
-    margin-top: 20px;
+    gap: 16px;
+    margin-top: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
   }
   
   .form-section {
-    padding: 15px;
-    gap: 12px;
+    padding: 16px;
+    gap: 16px;
     width: 100%;
     box-sizing: border-box;
+  }
+  
+  .form-section h2 {
+    margin-top: 0;
+    font-size: 1.2em;
   }
   
   .form-input {
     font-size: 16px; /* Prevents zoom on iOS */
     width: 100%;
     box-sizing: border-box;
+    min-height: 44px;
+    padding: 12px 16px;
+  }
+  
+  .form-button {
+    min-height: 44px;
+    font-size: 16px;
+    -webkit-tap-highlight-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .form-divider {
+    margin: 8px 0;
   }
 }
 
@@ -317,7 +334,10 @@ button:focus-visible {
   box-sizing: border-box;
   display: grid;
   grid-template-rows: auto 1fr;
+  grid-template-columns: 1fr;
   gap: 10px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* Common card styling */
@@ -404,17 +424,33 @@ button:focus-visible {
   gap: 15px;
   padding: 20px;
   min-height: 0;
-  overflow-x: hidden;
+  height: 100%;
+  align-self: stretch;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Role view container - takes up remaining space and centers compass mode */
+.role-view-container {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  container-type: size;
 }
 
 /* Player table styles */
 .player-table-container {
   width: 100%;
   overflow-x: auto;
+  overflow-y: auto;
   background-color: var(--bg-card);
   border-radius: 12px;
   border: 1px solid var(--border-primary);
   box-shadow: var(--shadow-md);
+  -webkit-overflow-scrolling: touch;
 }
 
 .player-table-container h2 {
@@ -511,8 +547,30 @@ button:focus-visible {
   font-style: italic;
 }
 
-/* Seeker view styles */
+/* Seeker view wrapper - handles sizing and morphing constraints */
+.seeker-view-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  position: relative;
+  
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.seeker-view-wrapper.compass-mode {
+  aspect-ratio: 1 / 1;
+  width: min(100cqw, 100cqh);
+  height: min(100cqw, 100cqh);
+  max-width: 100%;
+  max-height: 100%;
+}
+
 .seeker-view {
+  width: 100%;
+  height: 100%;
   background-color: var(--bg-seeker);
   border: 2px solid var(--border-danger);
   border-radius: 12px;
@@ -520,9 +578,188 @@ button:focus-visible {
   box-shadow: var(--shadow-md);
   display: flex;
   flex-direction: column;
-  height: 100%;
-  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+  transition: border-radius 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* Morph the seeker-view's border-radius when wrapper is in compass mode */
+.seeker-view-wrapper.compass-mode .seeker-view {
+  border-radius: 50%;
+}
+
+/* Content fade animations */
+.content-visible {
+  opacity: 1;
+  transition: opacity 0.15s ease-in;
+}
+
+.content-hidden {
+  opacity: 0;
+  transition: opacity 0.15s ease-out;
+  pointer-events: none;
+}
+
+/* List view container - morphs from rectangular to circular */
+.seeker-list-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+/* Compass view container - maximizes compass size */
+.seeker-compass-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* Compass container - maximizes space usage */
+.compass-container-morph {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1;
+  margin: 0 auto;
+}
+
+/* Compass Arrow Component Styles */
+.compass-arrow-container {
+  width: 100%;
+  height: 100%;
+  padding: 10px 0;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.compass-error-message {
+  padding: 15px;
+  border-radius: 6px;
+  margin-bottom: 15px;
+  font-size: 14px;
+  border: 1px solid;
+}
+
+.compass-error-denied {
+  background-color: var(--bg-seeker-card);
+  color: var(--text-danger);
+  border-color: var(--border-danger);
+}
+
+.compass-error-unsupported {
+  background-color: var(--bg-card);
+  color: var(--text-secondary);
+  border-color: var(--border-primary);
+}
+
+.compass-circle-interactive {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  transition: opacity 0.2s ease;
+}
+
+.compass-circle-interactive.inactive {
+  opacity: 0.5;
+}
+
+.compass-circle-interactive.active {
+  opacity: 1;
+}
+
+.compass-circle-interactive.clickable {
+  cursor: pointer;
+}
+
+.compass-player-name {
+  position: absolute;
+  top: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--text-danger);
+  max-width: 80%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compass-player-name.hidden {
+  display: none;
+}
+
+.compass-player-name.visible {
+  display: block;
+}
+
+.compass-permission-button {
+  padding: 0;
+  width: 80px;
+  height: 80px;
+  background-color: var(--text-danger);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  font-size: 14px;
+  cursor: pointer;
+  font-weight: 600;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease;
+  z-index: 10;
+  position: relative;
+}
+
+.compass-arrow {
+  font-size: 700%;
+  color: var(--text-danger);
+  transition: transform 0.1s ease-out;
+  line-height: 1;
+}
+
+.compass-distance-display {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--text-danger);
+  background-color: var(--bg-card);
+  padding: 4px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-danger);
+}
+
+
+/* Animation keyframes */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 
 .seeker-title {
   color: var(--text-danger);
@@ -557,6 +794,7 @@ button:focus-visible {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
+  -webkit-overflow-scrolling: touch;
 }
 
 .target-card {
@@ -570,10 +808,19 @@ button:focus-visible {
   cursor: pointer;
   transition: all 0.2s ease;
   min-height: 60px;
+  -webkit-tap-highlight-color: rgba(255, 68, 68, 0.2);
+  user-select: none;
 }
 
 .target-card:hover {
   background-color: var(--bg-seeker);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(255, 68, 68, 0.2);
+}
+
+.target-card:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(255, 68, 68, 0.1);
 }
 
 .target-card.selected {
@@ -583,8 +830,10 @@ button:focus-visible {
 
 .target-info {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
   gap: 5px;
+  flex: 1;
 }
 
 .target-name {
@@ -598,19 +847,36 @@ button:focus-visible {
   font-weight: 600;
 }
 
-.target-distance {
-  background-color: var(--text-danger);
-  color: white;
+/* Shared distance badge styles */
+.distance-badge {
   padding: 6px 12px;
   border-radius: 12px;
   font-size: 0.9em;
   font-weight: 600;
   min-width: 60px;
   text-align: center;
+  color: white;
+  flex-shrink: 0;
+}
+
+.target-distance {
+  background-color: var(--text-danger);
+}
+
+/* Hider view wrapper - same structure as seeker-view-wrapper */
+.hider-view-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  position: relative;
 }
 
 /* Hider view styles */
 .hider-view {
+  width: 100%;
+  height: 100%;
   background-color: var(--bg-hider);
   border: 2px solid var(--border-success);
   border-radius: 12px;
@@ -618,8 +884,8 @@ button:focus-visible {
   box-shadow: var(--shadow-md);
   display: flex;
   flex-direction: column;
-  height: 100%;
-  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .hider-title {
@@ -683,6 +949,7 @@ button:focus-visible {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
+  -webkit-overflow-scrolling: touch;
 }
 
 .seeker-card {
@@ -698,22 +965,15 @@ button:focus-visible {
 
 .seeker-info {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
 }
 
 .seeker-name {
   color: var(--text-primary);
   margin: 0;
-}
-
-.seeker-distance {
-  padding: 6px 12px;
-  border-radius: 12px;
-  font-size: 0.9em;
-  font-weight: 600;
-  min-width: 60px;
-  text-align: center;
-  color: white;
 }
 
 .seeker-distance.danger {
@@ -727,26 +987,38 @@ button:focus-visible {
 /* Mobile responsive adjustments for lobby */
 @media (max-width: 768px) {
   .lobby-container {
-    padding: 10px;
+    padding: 12px;
     width: 100%;
-    height: calc(100vh - 40px);
+    height: 100%;
     box-sizing: border-box;
-    grid-template-rows: auto 1fr;
+    gap: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
   }
   
   .lobby-header {
     flex-direction: column;
-    gap: 15px;
+    gap: 12px;
     text-align: center;
+    padding: 12px;
   }
   
   .lobby-title {
-    font-size: 1.5em;
+    font-size: 1.4em;
+    margin: 0;
   }
   
-  .leave-lobby-btn {
+  .lobby-id {
+    font-size: 0.75em;
+    margin: 4px 0 0 0;
+  }
+  
+  .leave-lobby-btn,
+  .view-players-btn {
     width: 100%;
-    min-height: 48px;
+    min-height: 44px;
+    font-size: 16px;
   }
   
   .player-table {
@@ -767,23 +1039,69 @@ button:focus-visible {
   }
   
   .target-card, .seeker-card {
-    flex-direction: column;
-    gap: 10px;
-    text-align: center;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
   }
   
-  .target-distance, .seeker-distance {
-    align-self: center;
+  .distance-badge {
+    flex-shrink: 0;
   }
   
   .player-controls {
     width: 100%;
     box-sizing: border-box;
+    padding: 12px;
+    gap: 12px;
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow: hidden;
+  }
+  
+  .role-view-container {
+    width: 100%;
+    height: 100%;
+  }
+  
+  .seeker-view-wrapper,
+  .hider-view-wrapper {
+    width: 100%;
+    height: 100%;
   }
   
   .seeker-view, .hider-view {
+    padding: 12px;
+  }
+  
+  .compass-container {
+    margin: 0 auto 12px auto;
+  }
+  
+  .compass-container-morph {
     width: 100%;
-    box-sizing: border-box;
+    height: 100%;
+  }
+  
+  .compass {
+    width: 25vmin;
+    height: 25vmin;
+    margin: 0 auto;
+  }
+  
+  .seeker-compass-view {
+    padding: 0;
+  }
+  
+  .targets-list, .seekers-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .target-card, .seeker-card {
+    min-height: 60px;
+    padding: 12px;
   }
 }
 
@@ -1017,16 +1335,31 @@ button:focus-visible {
   .name-edit-btn,
   .name-save-btn,
   .name-cancel-btn {
-    padding: 6px 10px;
-    font-size: 12px;
+    padding: 10px 14px;
+    font-size: 14px;
+    min-height: 44px;
+    -webkit-tap-highlight-color: rgba(255, 255, 255, 0.1);
   }
   
   .name-editor-buttons {
-    gap: 4px;
+    gap: 6px;
+    padding: 6px 8px 6px 0;
+  }
+  
+  .name-input {
+    padding: 12px 12px 12px 16px;
+    font-size: 16px; /* Prevents zoom on iOS */
+    min-height: 44px;
   }
   
   .role-controls {
     width: 100%;
+    height: 44px;
+  }
+  
+  .role-btn {
+    min-height: 44px;
+    -webkit-tap-highlight-color: rgba(255, 255, 255, 0.1);
   }
 }
 
@@ -1104,24 +1437,40 @@ button:focus-visible {
 /* Mobile responsive modal */
 @media (max-width: 768px) {
   .modal-overlay {
-    padding: 10px;
+    padding: 0;
+    align-items: flex-end;
   }
   
   .modal-content {
-    max-width: 95vw;
-    max-height: 95vh;
+    max-width: 100vw;
+    max-height: 90vh;
+    width: 100%;
+    border-radius: 16px 16px 0 0;
+    display: flex;
+    flex-direction: column;
   }
   
   .modal-header {
-    padding: 15px;
+    padding: 16px;
+    flex-shrink: 0;
   }
   
   .modal-header h2 {
     font-size: 1.3em;
   }
   
+  .modal-close-btn {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    -webkit-tap-highlight-color: rgba(255, 255, 255, 0.1);
+  }
+  
   .modal-body {
-    padding: 15px;
+    padding: 16px;
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
   
   .lobby-header-buttons {
@@ -1133,6 +1482,6 @@ button:focus-visible {
   .view-players-btn,
   .leave-lobby-btn {
     flex: 1;
-    min-height: 48px;
+    min-height: 44px;
   }
 }

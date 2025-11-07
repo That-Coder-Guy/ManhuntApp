@@ -142,17 +142,19 @@ function LobbyFound({ lobbyConnection, initialPlayerData, onError, onClearSessio
                     onError={onError}
                 />
 
-                {isSeeker ? (
-                    <SeekerView 
-                        players={otherPlayers}
-                        currentLocation={currentLocation}
-                    />
-                ) : (
-                    <HiderView 
-                        players={otherPlayers}
-                        currentLocation={currentLocation}
-                    />
-                )}
+                <div className="role-view-container">
+                    {isSeeker ? (
+                        <SeekerView 
+                            players={otherPlayers}
+                            currentLocation={currentLocation}
+                        />
+                    ) : (
+                        <HiderView 
+                            players={otherPlayers}
+                            currentLocation={currentLocation}
+                        />
+                    )}
+                </div>
             </div>
 
             {/* Player Table Modal */}

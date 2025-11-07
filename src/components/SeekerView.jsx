@@ -6,24 +6,64 @@ function SeekerView({ players, currentLocation })
     // Filter to get only hiders
     const hiders = players.filter(player => !player.is_seeker);
 
+    // State for view mode: 'list' or 'compass'
+    const [viewMode, setViewMode] = useState('list');
+    
     // State for selected hider
     const [selectedHider, setSelectedHider] = useState(null);
+    
+    // State for content visibility during transitions
+    const [contentVisible, setContentVisible] = useState(true);
 
-    // Auto-select first hider when hiders list changes
+    // Handle hiders list changes - update selected hider or reset to list view
     useEffect(() => {
-        if (hiders.length > 0 && !selectedHider) {
-            setSelectedHider(hiders[0]);
-        } else if (hiders.length === 0) {
+        if (hiders.length === 0) {
             setSelectedHider(null);
+            setViewMode('list');
         } else if (selectedHider) {
             // Check if selected hider still exists in the list
-            const stillExists = hiders.find(h => h.player_id === selectedHider.player_id);
-            if (!stillExists && hiders.length > 0) {
-                setSelectedHider(hiders[0]);
+            const updatedHider = hiders.find(h => h.player_id === selectedHider.player_id);
+            if (!updatedHider) {
+                // Selected hider is gone, reset to list view
+                setSelectedHider(null);
+                setViewMode('list');
+            } else {
+                // Update selected hider with latest data (including name changes)
+                setSelectedHider(updatedHider);
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [hiders.length, selectedHider?.player_id]);
+    }, [hiders]);
+
+    // Handle player selection - switch to compass view with morph animation
+    function handlePlayerSelect(hider) {
+        setSelectedHider(hider);
+        // Start fade out
+        setContentVisible(false);
+        // After fade out, start morphing
+        setTimeout(() => {
+            setViewMode('compass');
+            // After morph completes, show compass content
+            setTimeout(() => {
+                setContentVisible(true);
+            }, 400); // Match morph duration
+        }, 150); // Match fade out duration
+    }
+
+    // Handle compass click - switch back to list view with reverse animation
+    function handleCompassClick() {
+        // Start fade out
+        setContentVisible(false);
+        // After fade out, start morphing back and switch view
+        setTimeout(() => {
+            setViewMode('list');
+            setSelectedHider(null);
+            // After morph completes, show list content
+            setTimeout(() => {
+                setContentVisible(true);
+            }, 400); // Match morph duration
+        }, 150); // Match fade out duration
+    }
 
     // Calculate distance between two coordinates (Haversine formula)
     function calculateDistance(lat1, lon1, lat2, lon2)
@@ -64,26 +104,32 @@ function SeekerView({ players, currentLocation })
         : null;
 
     return (
-        <div className="seeker-view">
+        <div className={`seeker-view-wrapper ${viewMode === 'compass' ? 'compass-mode' : ''}`}>
+            <div className="seeker-view">
             {hiders.length === 0 ? (
                 <div className="no-targets">
                     No hiders
                 </div>
+            ) : viewMode === 'compass' && selectedHider ? (
+                /* Compass View - shows only the compass */
+                <div className={`seeker-compass-view ${contentVisible ? 'content-visible' : 'content-hidden'}`}>
+                    <div 
+                        className="compass-container-morph"
+                        onClick={handleCompassClick}
+                    >
+                        <CompassArrow
+                            targetLatitude={selectedHider.latitude}
+                            targetLongitude={selectedHider.longitude}
+                            currentLocation={currentLocation}
+                            targetName={selectedHider.name || `Player ${selectedHider.player_id}`}
+                            distance={selectedDistance}
+                            onClick={handleCompassClick}
+                        />
+                    </div>
+                </div>
             ) : (
-                <>
-                    {/* Compass Arrow Display */}
-                    {selectedHider && (
-                        <div className="compass-container">
-                            <CompassArrow
-                                targetLatitude={selectedHider.latitude}
-                                targetLongitude={selectedHider.longitude}
-                                currentLocation={currentLocation}
-                                targetName={selectedHider.name || `Player ${selectedHider.player_id}`}
-                                distance={selectedDistance}
-                            />
-                        </div>
-                    )}
-
+                /* List View - shows scrollable list of players */
+                <div className={`seeker-list-view ${contentVisible ? 'content-visible' : 'content-hidden'}`}>
                     <h3 className="targets-title">
                         Select Target ({hiders.length} hiders)
                     </h3>
@@ -98,27 +144,25 @@ function SeekerView({ players, currentLocation })
                                 )
                                 : null;
 
-                            const isSelected = selectedHider && selectedHider.player_id === hider.player_id;
-
                             return (
                                 <div
                                     key={hider.player_id}
-                                    onClick={() => setSelectedHider(hider)}
-                                    className={`target-card ${isSelected ? 'selected' : ''}`}
+                                    onClick={() => handlePlayerSelect(hider)}
+                                    className="target-card"
                                 >
                                     <div className="target-info">
                                         <strong className="target-name">{hider.name || `Player ${hider.player_id}`}</strong>
-                                        {isSelected && <span className="tracking-indicator">● Tracking</span>}
                                     </div>
-                                    <div className="target-distance">
+                                    <div className="distance-badge target-distance">
                                         {formatDistance(distance)}
                                     </div>
                                 </div>
                             );
                         })}
                     </div>
-                </>
+                </div>
             )}
+            </div>
         </div>
     );
 }

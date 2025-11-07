@@ -55,7 +55,8 @@ function HiderView({ players, currentLocation })
     const closestDistance = getClosestSeekerDistance();
 
     return (
-        <div className="hider-view">
+        <div className="hider-view-wrapper">
+            <div className="hider-view">
             {seekers.length === 0 ? (
                 <div className="no-seekers">
                     No seekers
@@ -93,7 +94,7 @@ function HiderView({ players, currentLocation })
                                     <div className="seeker-info">
                                         <strong className="seeker-name">{seeker.name || `Player ${seeker.player_id}`}</strong>
                                     </div>
-                                    <div className={`seeker-distance ${distance && distance < 100 ? 'danger' : 'safe'}`}>
+                                    <div className={`distance-badge seeker-distance ${distance && distance < 100 ? 'danger' : 'safe'}`}>
                                         {formatDistance(distance)}
                                     </div>
                                 </div>
@@ -102,6 +103,7 @@ function HiderView({ players, currentLocation })
                     </div>
                 </>
             )}
+            </div>
         </div>
     );
 }

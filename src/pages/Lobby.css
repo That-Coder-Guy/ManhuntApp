@@ -1,27 +1,2 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
-}
-
-.compass {
-  width: 30vmin;              /* scales with the viewport (vmin = smaller of width/height) */
-  height: 30vmin;
-  position: relative;
-  border-radius: 50%;
-  background-color: antiquewhite;
-  display: flex;
-  margin: 2rem auto;
-}
-
-.arrow {
-    position: relative;
-    width: 60%;
-    height: 60%;
-    left: 50%;
-    top: 46%;
-    transform: translate(-50%, -50%);
-    transform-origin: 50% 54%;
-    opacity: 85%;
-}
+/* Lobby.css - This file is mostly empty now as styles have been moved to index.css */
+/* Removed #root styles to prevent conflicts with App.css */
