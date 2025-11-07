@@ -46,8 +46,8 @@ function SeekerView({ players, currentLocation })
             // After morph completes, show compass content
             setTimeout(() => {
                 setContentVisible(true);
-            }, 400); // Match morph duration
-        }, 150); // Match fade out duration
+            }, 250); // Match morph duration (0.25s)
+        }, 100); // Match fade out duration (0.1s)
     }
 
     // Handle compass click - switch back to list view with reverse animation
@@ -61,8 +61,8 @@ function SeekerView({ players, currentLocation })
             // After morph completes, show list content
             setTimeout(() => {
                 setContentVisible(true);
-            }, 400); // Match morph duration
-        }, 150); // Match fade out duration
+            }, 250); // Match morph duration (0.25s)
+        }, 100); // Match fade out duration (0.1s)
     }
 
     // Calculate distance between two coordinates (Haversine formula)

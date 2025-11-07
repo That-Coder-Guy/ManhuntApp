@@ -38,8 +38,9 @@ function CompassArrow({ targetLatitude, targetLongitude, currentLocation, target
 
         function handleOrientationAbsolute(event) {
             // Absolute orientation gives true heading on Android devices
+            // Alpha is 0-360 where 0 = North, increases clockwise
             if (event.alpha !== null) {
-                setDeviceHeading(360 - event.alpha); // Invert for correct compass direction
+                setDeviceHeading(event.alpha);
             }
         }
 
