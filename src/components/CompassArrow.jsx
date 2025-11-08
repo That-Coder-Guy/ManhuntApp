@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 
 function CompassArrow({ targetLatitude, targetLongitude, currentLocation, targetName, distance, onClick })
 {
@@ -8,126 +8,100 @@ function CompassArrow({ targetLatitude, targetLongitude, currentLocation, target
     const previousRotationRef = useRef(null);
     const PERMISSION_STORAGE_KEY = 'manhunt_compass_permission';
 
-    // Check for saved permission state on mount
-    useEffect(() => {
-        const savedPermission = localStorage.getItem(PERMISSION_STORAGE_KEY);
-        if (savedPermission === 'granted') {
-            // Permission was previously granted, set up listeners immediately
-            setCompassPermission('granted');
-        } else if (savedPermission === 'denied') {
-            // Permission was previously denied, don't ask again
-            setCompassPermission('denied');
+    const deviceInfo = useMemo(() => {
+        if (typeof navigator === 'undefined') {
+            return { isIOS: false, isAndroid: false };
         }
+        const ua = navigator.userAgent || '';
+        const platform = navigator.platform || '';
+        const isIOS = /iPhone|iPad|iPod/.test(ua) || (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        const isAndroid = /Android/.test(ua);
+        return { isIOS, isAndroid };
     }, []);
 
-    // Get device compass heading
+    // Initialize permission state from storage / platform defaults
     useEffect(() => {
-        let permissionGranted = false;
+        if (typeof window === 'undefined') return;
 
-        function handleOrientation(event) {
-            // iOS devices: use webkitCompassHeading (true heading relative to North)
-            if (event.webkitCompassHeading !== undefined && event.webkitCompassHeading !== null) {
-                // webkitCompassHeading gives degrees from North (0-360)
-                setDeviceHeading(event.webkitCompassHeading);
-            }
-            // Android/other devices: use alpha (0-360, where 0 is North)
-            else if (event.alpha !== null) {
-                setDeviceHeading(event.alpha);
-            }
+        const savedPermission = localStorage.getItem(PERMISSION_STORAGE_KEY);
+        if (savedPermission === 'granted') {
+            setCompassPermission('granted');
+            return;
+        }
+        if (savedPermission === 'denied') {
+            setCompassPermission('denied');
+            return;
         }
 
-        function handleOrientationAbsolute(event) {
-            // Absolute orientation gives true heading on Android devices
-            // Alpha is 0-360 where 0 = North, increases clockwise
+        if (deviceInfo.isAndroid) {
+            setCompassPermission('granted');
+            localStorage.setItem(PERMISSION_STORAGE_KEY, 'granted');
+        } else if (!deviceInfo.isIOS) {
+            setCompassPermission('unsupported');
+        } else {
+            setCompassPermission('unknown');
+        }
+    }, [deviceInfo]);
+
+    // Persist permission selections
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        if (compassPermission === 'granted') {
+            localStorage.setItem(PERMISSION_STORAGE_KEY, 'granted');
+        } else if (compassPermission === 'denied') {
+            localStorage.setItem(PERMISSION_STORAGE_KEY, 'denied');
+        }
+    }, [compassPermission]);
+
+    // Attach orientation listeners when permission granted
+    useEffect(() => {
+        if (compassPermission !== 'granted' || typeof window === 'undefined') {
+            return undefined;
+        }
+
+        const handleOrientation = (event) => {
+            if (event.webkitCompassHeading !== undefined && event.webkitCompassHeading !== null) {
+                setDeviceHeading(event.webkitCompassHeading);
+            } else if (event.alpha !== null) {
+                setDeviceHeading(event.alpha);
+            }
+        };
+
+        const handleOrientationAbsolute = (event) => {
             if (event.alpha !== null) {
                 setDeviceHeading(event.alpha);
             }
-        }
+        };
 
-        // Detect iOS devices
-        const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || 
-                     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-        
-        // Detect Android devices
-        const isAndroid = /Android/.test(navigator.userAgent);
-
-        // Only proceed if device is iOS or Android
-        if (isIOS || isAndroid) {
-            // Check if permission was previously granted
-            const savedPermission = localStorage.getItem(PERMISSION_STORAGE_KEY);
-            
-            // iOS 13+ requires permission
-            if (typeof DeviceOrientationEvent !== 'undefined' && 
-                typeof DeviceOrientationEvent.requestPermission === 'function') {
-                // If permission was previously granted, set up listeners immediately
-                if (savedPermission === 'granted') {
-                    permissionGranted = true;
-                    setCompassPermission('granted');
-                    window.addEventListener('deviceorientation', handleOrientation, true);
-                } else {
-                    // Waiting for user to grant permission
-                    setCompassPermission('unknown');
-                }
-            } else if (isAndroid) {
-                // Android devices - no permission needed, directly set up listeners
-                permissionGranted = true;
-                setCompassPermission('granted');
-                // Save to localStorage so we remember it
-                localStorage.setItem(PERMISSION_STORAGE_KEY, 'granted');
-                // Try absolute orientation first (more accurate for compass)
-                if (window.DeviceOrientationEvent) {
-                    window.addEventListener('deviceorientationabsolute', handleOrientationAbsolute, true);
-                }
-                // Fallback to regular orientation
+        const attachListeners = () => {
+            if (window.DeviceOrientationEvent) {
                 window.addEventListener('deviceorientation', handleOrientation, true);
-            }
-        } else {
-            setCompassPermission('unsupported');
-        }
-
-        return () => {
-            if (permissionGranted) {
-                window.removeEventListener('deviceorientation', handleOrientation, true);
-                window.removeEventListener('deviceorientationabsolute', handleOrientationAbsolute, true);
+                window.addEventListener('deviceorientationabsolute', handleOrientationAbsolute, true);
             }
         };
-    }, []);
 
-    // Function to request iOS compass permission (must be called from user gesture)
-    async function requestCompassPermission()
-    {
-        if (typeof DeviceOrientationEvent !== 'undefined' && 
-            typeof DeviceOrientationEvent.requestPermission === 'function') {
-            try {
-                const permissionState = await DeviceOrientationEvent.requestPermission();
-                if (permissionState === 'granted') {
-                    setCompassPermission('granted');
-                    
-                    // Save permission to localStorage so we remember it
-                    localStorage.setItem(PERMISSION_STORAGE_KEY, 'granted');
-                    
-                    // Set up event listeners
-                    function handleOrientation(event) {
-                        if (event.webkitCompassHeading !== undefined && event.webkitCompassHeading !== null) {
-                            setDeviceHeading(event.webkitCompassHeading);
-                        } else if (event.alpha !== null) {
-                            setDeviceHeading(event.alpha);
-                        }
-                    }
-                    
-                    window.addEventListener('deviceorientation', handleOrientation, true);
-                } else {
-                    setCompassPermission('denied');
-                    // Save denied state so we don't ask again
-                    localStorage.setItem(PERMISSION_STORAGE_KEY, 'denied');
-                }
-            } catch (error) {
-                console.error('Error requesting device orientation permission:', error);
-                setCompassPermission('denied');
-                localStorage.setItem(PERMISSION_STORAGE_KEY, 'denied');
+        const detachListeners = () => {
+            window.removeEventListener('deviceorientation', handleOrientation, true);
+            window.removeEventListener('deviceorientationabsolute', handleOrientationAbsolute, true);
+        };
+
+        attachListeners();
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                detachListeners();
+                attachListeners();
             }
-        }
-    }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            detachListeners();
+        };
+    }, [compassPermission]);
 
     // Calculate bearing from current location to target
     function calculateBearing(lat1, lon1, lat2, lon2)
@@ -202,6 +176,38 @@ function CompassArrow({ targetLatitude, targetLongitude, currentLocation, target
 
     const arrowRotation = accumulatedRotation;
 
+    const handleCompassInteraction = (event) => {
+        if (compassPermission === 'unknown' && deviceInfo.isIOS) {
+            if (event?.stopPropagation) {
+                event.stopPropagation();
+            }
+            requestCompassPermission();
+            return;
+        }
+
+        if (typeof onClick === 'function') {
+            onClick(event);
+        }
+    };
+
+    async function requestCompassPermission()
+    {
+        if (typeof DeviceOrientationEvent !== 'undefined' && 
+            typeof DeviceOrientationEvent.requestPermission === 'function') {
+            try {
+                const permissionState = await DeviceOrientationEvent.requestPermission();
+                if (permissionState === 'granted') {
+                    setCompassPermission('granted');
+                } else {
+                    setCompassPermission('denied');
+                }
+            } catch (error) {
+                console.error('Error requesting device orientation permission:', error);
+                setCompassPermission('denied');
+            }
+        }
+    }
+
     return (
         <div className="compass-arrow-container">
             {/* Show message if permission denied */}
@@ -211,53 +217,36 @@ function CompassArrow({ targetLatitude, targetLongitude, currentLocation, target
                 </div>
             )}
 
-            {/* Show message if unsupported device */}
-            {compassPermission === 'unsupported' && (
-                <div className="compass-error-message compass-error-unsupported">
-                    Compass not available on this device. Arrow shows direction from North.
-                </div>
-            )}
-            
             {/* Compass Circle with Arrow */}
             <div 
                 className={`compass-circle-interactive ${
-                    compassPermission === 'granted' || compassPermission === 'unsupported' ? 'active' : 'inactive'
+                    compassPermission === 'granted' ? 'active' : compassPermission === 'unsupported' ? 'unsupported' : 'inactive'
                 } ${onClick ? 'clickable' : ''}`}
-                onClick={onClick}
+                onClick={handleCompassInteraction}
             >
                 {/* Player name indicator */}
                 <div className={`compass-player-name ${
-                    compassPermission === 'granted' || compassPermission === 'unsupported' ? 'visible' : 'hidden'
+                    compassPermission === 'granted' ? 'visible' : 'hidden'
                 }`}>
                     {targetName}
                 </div>
-                
-                {/* Permission request button in center */}
-                {compassPermission === 'unknown' && (
-                    <button
-                        className="compass-permission-button"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            requestCompassPermission();
-                        }}
-                        onMouseDown={(e) => {
-                            e.stopPropagation();
-                            e.currentTarget.style.transform = 'scale(0.95)';
-                        }}
-                        onMouseUp={(e) => {
-                            e.stopPropagation();
-                            e.currentTarget.style.transform = 'scale(1)';
-                        }}
-                        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                        onTouchStart={(e) => e.stopPropagation()}
-                        onTouchEnd={(e) => e.stopPropagation()}
-                    >
-                        Enable
-                    </button>
+
+                {/* Unsupported message */}
+                {compassPermission === 'unsupported' && (
+                    <div className="compass-unsupported-hint">
+                        Orientation tracking is not supported on this device.
+                    </div>
+                )}
+
+                {/* Pending permission hint */}
+                {compassPermission === 'unknown' && deviceInfo.isIOS && (
+                    <div className="compass-activation-hint">
+                        Tap to activate compass
+                    </div>
                 )}
                 
                 {/* Direction Arrow */}
-                {(compassPermission === 'granted' || compassPermission === 'unsupported') && (
+                {compassPermission === 'granted' && (
                     <div 
                         className="compass-arrow"
                         style={{ transform: `rotate(${arrowRotation}deg)` }}
@@ -267,7 +256,7 @@ function CompassArrow({ targetLatitude, targetLongitude, currentLocation, target
                 )}
 
                 {/* Distance display in center */}
-                {(compassPermission === 'granted' || compassPermission === 'unsupported') && (
+                {compassPermission === 'granted' && (
                     <div className="compass-distance-display">
                         {formatDistance(distance)}
                     </div>

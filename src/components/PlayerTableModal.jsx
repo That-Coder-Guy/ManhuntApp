@@ -1,12 +1,29 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
 import PlayerTable from './PlayerTable';
 
 function PlayerTableModal({ players, currentPlayer, isOpen, onClose }) {
-    if (!isOpen) return null;
+    useEffect(() => {
+        if (isOpen) {
+            document.body.classList.add('modal-open');
+        } else {
+            document.body.classList.remove('modal-open');
+        }
+
+        return () => {
+            document.body.classList.remove('modal-open');
+        };
+    }, [isOpen]);
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div
+            className={`modal-overlay ${isOpen ? 'modal-overlay-open' : ''}`}
+            onClick={onClose}
+            aria-hidden={!isOpen}
+        >
+            <div
+                className={`modal-content modal-slide ${isOpen ? 'modal-slide-open' : ''}`}
+                onClick={(e) => e.stopPropagation()}
+            >
                 <div className="modal-header">
                     <h2>Players in Lobby</h2>
                     <button 

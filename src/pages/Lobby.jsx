@@ -3,8 +3,9 @@ import { useParams } from 'react-router-dom';
 import LobbyFound from '../components/LobbyFound';
 import LobbyLoading from '../components/LobbyLoading';
 import LobbyError from '../components/LobbyError';
-import PlayerNotFound from '../components/PlayerNotFound';
 import PlayerError from '../components/PlayerError';
+import PermissionsGate from '../components/PermissionsGate';
+import useWakeLock from '../hooks/useWakeLock';
 import { joinLobby as apiJoinLobby, API_RESPONSE_STATUS } from '../utils/api.js';
 
 function Lobby()
@@ -15,8 +16,7 @@ function Lobby()
         SUCCESS: 1,
         NOT_FOUND: 2,
         ERROR: 3,
-        PLAYER_NOT_FOUND: 4,
-        PLAYER_TIMED_OUT: 5
+        PLAYER_TIMED_OUT: 4
     };
 
     // State for lobby join result
@@ -31,11 +31,16 @@ function Lobby()
     
     // Initial player data from API response
     const [initialPlayerData, setInitialPlayerData] = useState(null);
+    const [permissionsGranted, setPermissionsGranted] = useState(false);
 
     // Constants
     const { lobby_id: lobbyId } = useParams();
     const hasJoinedLobby = useRef(false);
     const STORAGE_KEY = `manhunt_lobby_${lobbyId}`;
+
+    const { isSupported: isWakeLockSupported, isActive: isWakeLockActive, requestWakeLock } = useWakeLock(
+        Boolean(lobbyConnection?.playerToken)
+    );
 
     // Save lobby session to localStorage
     function saveSession(connection, playerData)
@@ -86,6 +91,8 @@ function Lobby()
         } catch (error) {
             console.error('Error clearing session:', error);
         }
+
+        setPermissionsGranted(false);
     }
 
     // Update player data in the saved session
@@ -195,6 +202,7 @@ function Lobby()
             saveSession(connection, player_data);
             
             setJoinStatus(JOIN_STATUS.SUCCESS);
+            setPermissionsGranted(false);
         } catch (error) {
             console.error('Error joining lobby:', error);
             
@@ -241,6 +249,12 @@ function Lobby()
         hasJoinedLobby.current = true;
     }, [lobbyId]);
 
+    useEffect(() => {
+        if (joinStatus !== JOIN_STATUS.SUCCESS) {
+            setPermissionsGranted(false);
+        }
+    }, [joinStatus]);
+
     // Handle errors from child components
     function handleError(errorStatus)
     {
@@ -268,20 +282,28 @@ function Lobby()
         
         case JOIN_STATUS.SUCCESS:
             return (
-                <LobbyFound
-                    lobbyConnection={lobbyConnection}
-                    initialPlayerData={initialPlayerData}
-                    onError={handleError}
-                    onClearSession={clearSession}
-                    onUpdatePlayerData={updatePlayerData}
-                />
+                <>
+                    <LobbyFound
+                        lobbyConnection={lobbyConnection}
+                        initialPlayerData={initialPlayerData}
+                        onError={handleError}
+                        onClearSession={clearSession}
+                        onUpdatePlayerData={updatePlayerData}
+                        permissionsGranted={permissionsGranted}
+                    />
+                    {!permissionsGranted && (
+                        <PermissionsGate
+                            onComplete={() => setPermissionsGranted(true)}
+                            requestWakeLock={requestWakeLock}
+                            isWakeLockSupported={isWakeLockSupported}
+                            isWakeLockActive={isWakeLockActive}
+                        />
+                    )}
+                </>
             );
         
         case JOIN_STATUS.NOT_FOUND:
             return <LobbyError />;
-        
-        case JOIN_STATUS.PLAYER_NOT_FOUND:
-            return <PlayerNotFound />;
         
         case JOIN_STATUS.PLAYER_TIMED_OUT:
             return <PlayerError lobbyId={lobbyId} />;

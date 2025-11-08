@@ -7,7 +7,7 @@ import LobbyHeader from './LobbyHeader';
 import PlayerTableModal from './PlayerTableModal';
 import { tradePlayerData, API_RESPONSE_STATUS } from '../utils/api.js';
 
-function LobbyFound({ lobbyConnection, initialPlayerData, onError, onClearSession, onUpdatePlayerData })
+function LobbyFound({ lobbyConnection, initialPlayerData, onError, onClearSession, onUpdatePlayerData, permissionsGranted = false })
 {
     // Destructure lobby connection data
     const { lobbyId, lobbyName, playerToken } = lobbyConnection;
@@ -88,13 +88,17 @@ function LobbyFound({ lobbyConnection, initialPlayerData, onError, onClearSessio
         }
     }
 
-    // Effect to get location periodically
+    // Effect to get location periodically once permissions granted
     useEffect(() =>
     {
+        if (!permissionsGranted) {
+            return undefined;
+        }
+
         getLocation();
         const intervalId = setInterval(getLocation, 2000);
         return () => clearInterval(intervalId);
-    }, []);
+    }, [permissionsGranted]);
 
     // Effect to trade player data when lobby connection is available
     useEffect(() =>

@@ -4,8 +4,6 @@ function PlayerError({ lobbyId }) {
     const navigate = useNavigate();
 
     const handleRejoin = () => {
-        // Navigate to the same lobby to join as a new player
-        // We'll need to clear the session and rejoin
         window.location.href = `/lobby/${lobbyId}`;
     };
 
@@ -14,16 +12,20 @@ function PlayerError({ lobbyId }) {
     };
 
     return (
-        <div>
-            <h1>Player Timed Out</h1>
-            <p>Your connection to the lobby has expired. You'll need to rejoin as a new player.</p>
-            <div style={{ marginTop: '20px' }}>
-                <button onClick={handleRejoin} style={{ marginRight: '10px' }}>
-                    Rejoin Lobby
-                </button>
-                <button onClick={handleGoHome}>
-                    Go to Home Page
-                </button>
+        <div className="error-screen">
+            <div className="error-card">
+                <h1 className="error-title">Player Timed Out</h1>
+                <p className="error-message">
+                    Your player session has expired. Rejoin the lobby to continue playing.
+                </p>
+                <div className="error-actions">
+                    <button className="error-button primary" onClick={handleRejoin}>
+                        Rejoin Lobby
+                    </button>
+                    <button className="error-button" onClick={handleGoHome}>
+                        Go Home
+                    </button>
+                </div>
             </div>
         </div>
     );
