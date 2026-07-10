@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { updatePlayerName } from '../utils/api';
 
-function PlayerNameEditor({ currentName, playerId, lobbyId, playerToken, onNameUpdate, onError })
+function PlayerNameEditor({ currentName, updatePlayer })
 {
     const [isEditing, setIsEditing] = useState(false);
     const [nameInput, setNameInput] = useState(currentName || '');
@@ -26,6 +25,13 @@ function PlayerNameEditor({ currentName, playerId, lobbyId, playerToken, onNameU
         }
     }, [isEditing]);
 
+    // Keep readonly display in sync when the name changes elsewhere
+    useEffect(() => {
+        if (!isEditing) {
+            setNameInput(currentName || '');
+        }
+    }, [currentName, isEditing]);
+
     // Cancel editing
     function handleCancel()
     {
@@ -39,7 +45,7 @@ function PlayerNameEditor({ currentName, playerId, lobbyId, playerToken, onNameU
     {
         // Validate name
         const trimmedName = nameInput.trim();
-        
+
         if (!trimmedName)
         {
             setError('Name cannot be empty');
@@ -63,23 +69,16 @@ function PlayerNameEditor({ currentName, playerId, lobbyId, playerToken, onNameU
 
         try
         {
-            await updatePlayerName(lobbyId, playerToken, trimmedName);
-            
-            // Update parent component
-            onNameUpdate(trimmedName);
+            await updatePlayer({ name: trimmedName });
             setIsEditing(false);
         }
         catch (err)
         {
-            // Check for specific API error statuses
-            if (err.status === 'lobby_not_found' || err.status === 'invalid_player_token' || err.status === 'http_error')
-            {
-                onError(err.status);
-                return;
-            }
-            
+            // Never kick the player over a name change — show the problem inline
             console.error('Error updating name:', err);
-            setError('Failed to update name. Please try again.');
+            setError(err.status === 'network_error'
+                ? "Couldn't reach the server — check your connection and try again."
+                : 'Failed to update name. Please try again.');
         }
         finally
         {

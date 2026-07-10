@@ -1,41 +1,24 @@
+import { useEffect, useState } from 'react';
+import { calculateDistance, formatDistance } from '../utils/geo';
+import { getTimeAgo, isStale } from '../utils/time';
+
 function HiderView({ players, currentLocation })
 {
     // Filter to get only seekers
     const seekers = players.filter(player => player.is_seeker);
 
-    // Calculate distance between two coordinates (Haversine formula)
-    function calculateDistance(lat1, lon1, lat2, lon2)
+    // Tick every second so "updated Xs ago" labels stay current
+    const [, setTick] = useState(0);
+    useEffect(() =>
     {
-        if (!lat1 || !lon1 || !lat2 || !lon2) return null;
-        
-        const R = 6371e3; // Earth's radius in meters
-        const φ1 = lat1 * Math.PI / 180;
-        const φ2 = lat2 * Math.PI / 180;
-        const Δφ = (lat2 - lat1) * Math.PI / 180;
-        const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                Math.cos(φ1) * Math.cos(φ2) *
-                Math.sin(Δλ/2) * Math.sin(Δλ/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-        const distance = R * c; // Distance in meters
-        return distance;
-    }
-
-    // Format distance for display
-    function formatDistance(distance)
-    {
-        if (distance === null) return 'Unknown';
-        if (distance < 1000) return `${Math.round(distance)}m`;
-        return `${(distance / 1000).toFixed(2)}km`;
-    }
+        const intervalId = setInterval(() => setTick(t => t + 1), 1000);
+        return () => clearInterval(intervalId);
+    }, []);
 
     // Find closest seeker
-    function getClosestSeekerDistance()
+    function getClosestSeeker()
     {
-        if (seekers.length === 0 || !currentLocation.latitude || !currentLocation.longitude) return null;
-
+        let closest = null;
         let minDistance = Infinity;
         seekers.forEach(seeker => {
             const distance = calculateDistance(
@@ -46,13 +29,18 @@ function HiderView({ players, currentLocation })
             );
             if (distance !== null && distance < minDistance) {
                 minDistance = distance;
+                closest = seeker;
             }
         });
 
-        return minDistance === Infinity ? null : minDistance;
+        return closest ? { seeker: closest, distance: minDistance } : null;
     }
 
-    const closestDistance = getClosestSeekerDistance();
+    const closest = getClosestSeeker();
+    const closestDistance = closest ? closest.distance : null;
+    const closestStale = closest
+        ? (isStale(closest.seeker.location_last_updated) || closest.seeker.connected === false)
+        : false;
 
     return (
         <div className="hider-view-wrapper">
@@ -70,6 +58,11 @@ function HiderView({ players, currentLocation })
                         <div className={`closest-distance ${closestDistance && closestDistance < 100 ? 'danger' : 'safe'}`}>
                             {formatDistance(closestDistance)}
                         </div>
+                        {closest && closestStale && (
+                            <div className="closest-freshness">
+                                updated {getTimeAgo(closest.seeker.location_last_updated)}
+                            </div>
+                        )}
                     </div>
 
                     <h3 className="seekers-title">
@@ -77,22 +70,27 @@ function HiderView({ players, currentLocation })
                     </h3>
                     <div className="seekers-list">
                         {seekers.map((seeker) => {
-                            const distance = currentLocation.latitude && currentLocation.longitude && seeker.latitude && seeker.longitude
-                                ? calculateDistance(
-                                    currentLocation.latitude,
-                                    currentLocation.longitude,
-                                    seeker.latitude,
-                                    seeker.longitude
-                                )
-                                : null;
+                            const distance = calculateDistance(
+                                currentLocation.latitude,
+                                currentLocation.longitude,
+                                seeker.latitude,
+                                seeker.longitude
+                            );
+                            const stale = isStale(seeker.location_last_updated) || seeker.connected === false;
 
                             return (
                                 <div
                                     key={seeker.player_id}
-                                    className="seeker-card"
+                                    className={`seeker-card ${stale ? 'player-stale' : ''}`}
                                 >
                                     <div className="seeker-info">
                                         <strong className="seeker-name">{seeker.name || `Player ${seeker.player_id}`}</strong>
+                                        <span className="player-freshness">
+                                            {seeker.connected === false ? 'offline · ' : ''}
+                                            {seeker.location_last_updated
+                                                ? `updated ${getTimeAgo(seeker.location_last_updated)}`
+                                                : 'no location yet'}
+                                        </span>
                                     </div>
                                     <div className={`distance-badge seeker-distance ${distance && distance < 100 ? 'danger' : 'safe'}`}>
                                         {formatDistance(distance)}
@@ -109,4 +107,3 @@ function HiderView({ players, currentLocation })
 }
 
 export default HiderView;
-

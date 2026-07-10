@@ -1,9 +1,23 @@
-import { useState } from 'react';
-import { updatePlayerRole, API_RESPONSE_STATUS } from '../utils/api.js';
+import { useEffect, useRef, useState } from 'react';
 
-function RoleSwitcher({ isSeeker, playerId, lobbyId, playerToken, onRoleUpdate, onError })
+function RoleSwitcher({ isSeeker, updatePlayer })
 {
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+    const errorTimerRef = useRef(null);
+
+    // Auto-dismiss transient errors
+    useEffect(() => () =>
+    {
+        if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+    }, []);
+
+    function showError(message)
+    {
+        setError(message);
+        if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+        errorTimerRef.current = setTimeout(() => setError(''), 5000);
+    }
 
     // Handle role change
     async function handleRoleChange(newIsSeeker)
@@ -15,27 +29,19 @@ function RoleSwitcher({ isSeeker, playerId, lobbyId, playerToken, onRoleUpdate, 
         }
 
         setIsLoading(true);
+        setError('');
 
         try
         {
-            // Use the centralized API function
-            await updatePlayerRole(lobbyId, playerToken, newIsSeeker);
-            
-            // Update parent component
-            onRoleUpdate(newIsSeeker);
+            await updatePlayer({ is_seeker: newIsSeeker });
         }
         catch (err)
         {
+            // Never kick the player over a role change — show the problem inline
             console.error('Error updating role:', err);
-            
-            // Handle API errors - kick user to error page
-            if (err.status === API_RESPONSE_STATUS.LOBBY_NOT_FOUND || 
-                err.status === API_RESPONSE_STATUS.INVALID_PLAYER_TOKEN ||
-                err.status === API_RESPONSE_STATUS.HTTP_ERROR ||
-                err.status === API_RESPONSE_STATUS.NETWORK_ERROR) {
-                onError(err.status);
-            }
-            // For other errors, just log and do nothing
+            showError(err.status === 'network_error'
+                ? "Couldn't update role — check your connection and try again."
+                : 'Failed to update role. Please try again.');
         }
         finally
         {
@@ -43,7 +49,7 @@ function RoleSwitcher({ isSeeker, playerId, lobbyId, playerToken, onRoleUpdate, 
         }
     }
 
-        return (
+    return (
         <div className="role-switcher">
             <div className={`role-controls ${isSeeker ? 'seeker-active' : 'hider-active'}`}>
                 {/* Seeker Button */}
@@ -64,9 +70,13 @@ function RoleSwitcher({ isSeeker, playerId, lobbyId, playerToken, onRoleUpdate, 
                     Hider
                 </button>
             </div>
+            {error && (
+                <p className="role-error">
+                    {error}
+                </p>
+            )}
         </div>
     );
 }
 
 export default RoleSwitcher;
-

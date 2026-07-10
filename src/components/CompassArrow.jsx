@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { calculateBearing, formatDistance } from '../utils/geo';
+import { getTimeAgo, isStale } from '../utils/time';
 
-function CompassArrow({ targetLatitude, targetLongitude, currentLocation, targetName, distance, onClick })
+function CompassArrow({ targetLatitude, targetLongitude, currentLocation, targetName, distance, locationLastUpdated, isDisconnected, onClick })
 {
     const [deviceHeading, setDeviceHeading] = useState(0);
     const [compassPermission, setCompassPermission] = useState('unknown'); // 'unknown', 'granted', 'denied', 'unsupported'
@@ -103,42 +105,23 @@ function CompassArrow({ targetLatitude, targetLongitude, currentLocation, target
         };
     }, [compassPermission]);
 
-    // Calculate bearing from current location to target
-    function calculateBearing(lat1, lon1, lat2, lon2)
+    // Get bearing to target (null when either position is missing)
+    const targetBearing = calculateBearing(
+        currentLocation.latitude,
+        currentLocation.longitude,
+        targetLatitude,
+        targetLongitude
+    );
+
+    // Tick every second so the freshness label stays current
+    const [, setTick] = useState(0);
+    useEffect(() =>
     {
-        if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+        const intervalId = setInterval(() => setTick(t => t + 1), 1000);
+        return () => clearInterval(intervalId);
+    }, []);
 
-        const φ1 = lat1 * Math.PI / 180;
-        const φ2 = lat2 * Math.PI / 180;
-        const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-        const y = Math.sin(Δλ) * Math.cos(φ2);
-        const x = Math.cos(φ1) * Math.sin(φ2) -
-                Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
-        
-        let bearing = Math.atan2(y, x) * 180 / Math.PI;
-        bearing = (bearing + 360) % 360; // Normalize to 0-360
-
-        return bearing;
-    }
-
-    // Format distance for display
-    function formatDistance(distance)
-    {
-        if (distance === null || distance === undefined) return 'Unknown';
-        if (distance < 1000) return `${Math.round(distance)}m`;
-        return `${(distance / 1000).toFixed(2)}km`;
-    }
-
-    // Get bearing to target
-    const targetBearing = targetLatitude && targetLongitude && currentLocation.latitude && currentLocation.longitude
-        ? calculateBearing(
-            currentLocation.latitude,
-            currentLocation.longitude,
-            targetLatitude,
-            targetLongitude
-        )
-        : null;
+    const targetIsStale = isDisconnected || isStale(locationLastUpdated);
 
     // Calculate arrow rotation (target bearing - device heading)
     // Use accumulated rotation to prevent CSS from seeing large jumps
@@ -259,6 +242,16 @@ function CompassArrow({ targetLatitude, targetLongitude, currentLocation, target
                 {compassPermission === 'granted' && (
                     <div className="compass-distance-display">
                         {formatDistance(distance)}
+                    </div>
+                )}
+
+                {/* Freshness warning when the target's position is stale */}
+                {compassPermission === 'granted' && targetIsStale && (
+                    <div className="compass-freshness">
+                        {isDisconnected ? 'offline · ' : ''}
+                        {locationLastUpdated
+                            ? `updated ${getTimeAgo(locationLastUpdated)}`
+                            : 'no location yet'}
                     </div>
                 )}
             </div>

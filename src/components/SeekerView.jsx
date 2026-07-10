@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import CompassArrow from './CompassArrow';
+import { calculateDistance, formatDistance } from '../utils/geo';
+import { getTimeAgo, isStale } from '../utils/time';
 
 function SeekerView({ players, currentLocation })
 {
@@ -8,12 +10,20 @@ function SeekerView({ players, currentLocation })
 
     // State for view mode: 'list' or 'compass'
     const [viewMode, setViewMode] = useState('list');
-    
+
     // State for selected hider
     const [selectedHider, setSelectedHider] = useState(null);
-    
+
     // State for content visibility during transitions
     const [contentVisible, setContentVisible] = useState(true);
+
+    // Tick every second so "updated Xs ago" labels stay current
+    const [, setTick] = useState(0);
+    useEffect(() =>
+    {
+        const intervalId = setInterval(() => setTick(t => t + 1), 1000);
+        return () => clearInterval(intervalId);
+    }, []);
 
     // Handle hiders list changes - update selected hider or reset to list view
     useEffect(() => {
@@ -65,36 +75,8 @@ function SeekerView({ players, currentLocation })
         }, 100); // Match fade out duration (0.1s)
     }
 
-    // Calculate distance between two coordinates (Haversine formula)
-    function calculateDistance(lat1, lon1, lat2, lon2)
-    {
-        if (!lat1 || !lon1 || !lat2 || !lon2) return null;
-        
-        const R = 6371e3; // Earth's radius in meters
-        const φ1 = lat1 * Math.PI / 180;
-        const φ2 = lat2 * Math.PI / 180;
-        const Δφ = (lat2 - lat1) * Math.PI / 180;
-        const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                Math.cos(φ1) * Math.cos(φ2) *
-                Math.sin(Δλ/2) * Math.sin(Δλ/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-        const distance = R * c; // Distance in meters
-        return distance;
-    }
-
-    // Format distance for display
-    function formatDistance(distance)
-    {
-        if (distance === null) return 'Unknown';
-        if (distance < 1000) return `${Math.round(distance)}m`;
-        return `${(distance / 1000).toFixed(2)}km`;
-    }
-
     // Get selected hider distance
-    const selectedDistance = selectedHider && currentLocation.latitude && currentLocation.longitude
+    const selectedDistance = selectedHider
         ? calculateDistance(
             currentLocation.latitude,
             currentLocation.longitude,
@@ -113,7 +95,7 @@ function SeekerView({ players, currentLocation })
             ) : viewMode === 'compass' && selectedHider ? (
                 /* Compass View - shows only the compass */
                 <div className={`seeker-compass-view ${contentVisible ? 'content-visible' : 'content-hidden'}`}>
-                    <div 
+                    <div
                         className="compass-container-morph"
                         onClick={handleCompassClick}
                     >
@@ -123,6 +105,8 @@ function SeekerView({ players, currentLocation })
                             currentLocation={currentLocation}
                             targetName={selectedHider.name || `Player ${selectedHider.player_id}`}
                             distance={selectedDistance}
+                            locationLastUpdated={selectedHider.location_last_updated}
+                            isDisconnected={selectedHider.connected === false}
                             onClick={handleCompassClick}
                         />
                     </div>
@@ -135,23 +119,28 @@ function SeekerView({ players, currentLocation })
                     </h3>
                     <div className="targets-list">
                         {hiders.map((hider) => {
-                            const distance = currentLocation.latitude && currentLocation.longitude && hider.latitude && hider.longitude
-                                ? calculateDistance(
-                                    currentLocation.latitude,
-                                    currentLocation.longitude,
-                                    hider.latitude,
-                                    hider.longitude
-                                )
-                                : null;
+                            const distance = calculateDistance(
+                                currentLocation.latitude,
+                                currentLocation.longitude,
+                                hider.latitude,
+                                hider.longitude
+                            );
+                            const stale = isStale(hider.location_last_updated) || hider.connected === false;
 
                             return (
                                 <div
                                     key={hider.player_id}
                                     onClick={() => handlePlayerSelect(hider)}
-                                    className="target-card"
+                                    className={`target-card ${stale ? 'player-stale' : ''}`}
                                 >
                                     <div className="target-info">
                                         <strong className="target-name">{hider.name || `Player ${hider.player_id}`}</strong>
+                                        <span className="player-freshness">
+                                            {hider.connected === false ? 'offline · ' : ''}
+                                            {hider.location_last_updated
+                                                ? `updated ${getTimeAgo(hider.location_last_updated)}`
+                                                : 'no location yet'}
+                                        </span>
                                     </div>
                                     <div className="distance-badge target-distance">
                                         {formatDistance(distance)}
@@ -168,4 +157,3 @@ function SeekerView({ players, currentLocation })
 }
 
 export default SeekerView;
-

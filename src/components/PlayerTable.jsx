@@ -1,27 +1,10 @@
 import { useState, useEffect } from 'react';
+import { getTimeAgo } from '../utils/time';
 
 function PlayerTable({ players, currentPlayer })
 {
     // State to force re-render for time updates
     const [, setTick] = useState(0);
-
-    // Calculate time ago from epoch timestamp
-    function getTimeAgo(epochTimestamp)
-    {
-        if (!epochTimestamp) return 'N/A';
-        
-        const now = Date.now();
-        const msAgo = now - epochTimestamp;
-        const secondsAgo = Math.floor(msAgo / 1000);
-        
-        // Handle future timestamps (clock sync issues)
-        if (secondsAgo < 0) return 'Just now';
-        
-        if (secondsAgo < 5) return 'Just now';
-        if (secondsAgo < 60) return `${secondsAgo}s ago`;
-        if (secondsAgo < 3600) return `${Math.floor(secondsAgo / 60)}m ago`;
-        return `${Math.floor(secondsAgo / 3600)}h ago`;
-    }
 
     // Effect to update "time ago" display every second
     useEffect(() =>
@@ -55,10 +38,14 @@ function PlayerTable({ players, currentPlayer })
                         </tr>
                     ) : (
                         allPlayers.map((player, index) => (
-                            <tr key={player.player_id || 'current'} className={index === 0 && currentPlayer ? 'current-player-row' : ''}>
+                            <tr
+                                key={player.player_id || 'current'}
+                                className={`${index === 0 && currentPlayer ? 'current-player-row' : ''} ${player.connected === false ? 'player-stale' : ''}`.trim()}
+                            >
                                 <td className="player-name-cell">
                                     {player.name || `Player ${player.player_id}`}
                                     {index === 0 && currentPlayer && <span className="current-player-indicator"> (You)</span>}
+                                    {player.connected === false && <span className="player-offline-indicator"> (offline)</span>}
                                 </td>
                                 <td>
                                     <span className={`player-role-badge ${player.is_seeker ? 'seeker' : 'hider'}`}>
