@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { createLobby } from '../utils/api.js';
 
@@ -6,6 +6,7 @@ function Home()
 {
     const [newLobbyName, setNewLobbyName] = useState("");
     const [joinLobbyId, setJoinLobbyId] = useState(""); /* Pre-existing lobby id for joining the lobby*/
+    const [isCreating, setIsCreating] = useState(false);
     const navigate = useNavigate();
 
     async function createLobbyClick()
@@ -13,32 +14,35 @@ function Home()
         if (!newLobbyName.trim())
         {
             alert("Please enter a lobby name first!");
+            return;
         }
-        else
-        {
-            try {
-                // Use the centralized API function
-                const data = await createLobby(newLobbyName);
-                const { lobby_id } = data;
 
-                // Navigates to the lobby page and passes the necessary lobby information.
-                navigate(`/lobby/${lobby_id}`);
-            } catch (error) {
-                console.error('Error creating lobby:', error);
-                alert('Failed to create lobby. Please try again.');
-            }
+        setIsCreating(true);
+        try {
+            // Use the centralized API function
+            const data = await createLobby(newLobbyName.trim());
+            const { lobby_id } = data;
+
+            // Navigates to the lobby page and passes the necessary lobby information.
+            navigate(`/lobby/${encodeURIComponent(lobby_id)}`);
+        } catch (error) {
+            console.error('Error creating lobby:', error);
+            alert('Failed to create lobby. Please check your connection and try again.');
+        } finally {
+            setIsCreating(false);
         }
     }
 
-    async function joinLobbyClick()
+    function joinLobbyClick()
     {
-        if (!joinLobbyId.trim())
+        const lobbyId = joinLobbyId.trim();
+        if (!lobbyId)
         {
             alert("Please enter a lobby ID first!");
         }
         else
-        { 
-            navigate(`/lobby/${joinLobbyId}`);
+        {
+            navigate(`/lobby/${encodeURIComponent(lobbyId)}`);
         }
     }
 
@@ -55,15 +59,15 @@ function Home()
                         onChange={(e) => setNewLobbyName(e.target.value)}
                         className="form-input"
                     />
-                    <button onClick={createLobbyClick} className="form-button primary">
-                        Create Lobby
+                    <button onClick={createLobbyClick} disabled={isCreating} className="form-button primary">
+                        {isCreating ? 'Creating…' : 'Create Lobby'}
                     </button>
                 </div>
-                
+
                 <div className="form-divider">
                     <span>OR</span>
                 </div>
-                
+
                 <div className="form-section">
                     <h2>Join Existing Lobby</h2>
                     <input

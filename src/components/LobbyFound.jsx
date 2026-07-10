@@ -1,160 +1,115 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import PlayerNameEditor from './PlayerNameEditor';
 import RoleSwitcher from './RoleSwitcher';
 import SeekerView from './SeekerView';
 import HiderView from './HiderView';
 import LobbyHeader from './LobbyHeader';
 import PlayerTableModal from './PlayerTableModal';
-import { tradePlayerData, API_RESPONSE_STATUS } from '../utils/api.js';
+import ConnectionBanner from './ConnectionBanner';
 
-function LobbyFound({ lobbyConnection, initialPlayerData, onError, onClearSession, onUpdatePlayerData, permissionsGranted = false })
+function LobbyFound({
+    lobbyId,
+    lobbyName,
+    selfPlayer,
+    players,
+    connectionState,
+    lastSyncTime,
+    lastLocationSentAt,
+    updateLocation,
+    updatePlayer,
+    leaveLobby,
+    onClearSession,
+    permissionsGranted = false
+})
 {
-    // Destructure lobby connection data
-    const { lobbyId, lobbyName, playerToken } = lobbyConnection;
-    
-    // Player data with local state for name and role updates
-    const [playerName, setPlayerName] = useState(initialPlayerData?.name || '');
-    const [isSeeker, setIsSeeker] = useState(initialPlayerData?.is_seeker || false);
-    const { player_id } = initialPlayerData || {};
+    const { player_id, name: playerName, is_seeker: isSeeker } = selfPlayer || {};
 
-    // Update session data when player data changes
-    const updatePlayerData = (updates) => {
-        if (onUpdatePlayerData) {
-            onUpdatePlayerData(updates);
-        }
-    };
-
-    // State for current location
+    // Current GPS position (kept locally so own distances work even offline)
     const [currentLocation, setCurrentLocation] = useState({
         latitude: null,
         longitude: null
     });
-
-    // State for other players in the lobby
-    const [otherPlayers, setOtherPlayers] = useState([]);
+    const [gpsError, setGpsError] = useState(false);
 
     // State for modal
     const [isPlayerTableModalOpen, setIsPlayerTableModalOpen] = useState(false);
 
-    // Trade player data with server
-    async function tradePlayerDataWithServer()
-    {
-        if (!lobbyId || !playerToken) return;
-        
-        try
-        {
-            // Use the centralized API function with optional location data
-            const data = await tradePlayerData(
-                lobbyId, 
-                playerToken, 
-                currentLocation.latitude, 
-                currentLocation.longitude
-            );
-            
-            // Filter out current player as an extra safety measure
-            const filteredPlayers = data.other_players.filter(player => player.player_id !== player_id);
-            setOtherPlayers(filteredPlayers);
-        }
-        catch (error)
-        {
-            // Handle specific API error statuses
-            if (error.status === API_RESPONSE_STATUS.LOBBY_NOT_FOUND || 
-                error.status === API_RESPONSE_STATUS.INVALID_PLAYER_TOKEN ||
-                error.status === API_RESPONSE_STATUS.HTTP_ERROR ||
-                error.status === API_RESPONSE_STATUS.NETWORK_ERROR) {
-                onError(error.status);
-                return;
-            }
-            
-            // Don't call onError for network errors, just log them
-            // This prevents kicking users out due to temporary network issues
-        }
-    }
+    // Keep the latest updateLocation without retriggering the geolocation watch
+    const updateLocationRef = useRef(updateLocation);
+    updateLocationRef.current = updateLocation;
 
-    // Get current geolocation
-    function updateLocation(position)
-    {
-        setCurrentLocation({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude
-        });
-    }
-
-    function getLocation()
-    {
-        if (navigator.geolocation)
-        {
-            navigator.geolocation.getCurrentPosition(updateLocation);
-        }
-    }
-
-    // Effect to get location periodically once permissions granted
+    // Continuously watch the device position once permissions are granted.
+    // GPS often works when the network doesn't: local state always updates,
+    // while uploads are throttled/dropped by the socket hook as needed.
     useEffect(() =>
     {
-        if (!permissionsGranted) {
+        if (!permissionsGranted) return undefined;
+
+        if (!navigator.geolocation)
+        {
+            setGpsError(true);
             return undefined;
         }
 
-        getLocation();
-        const intervalId = setInterval(getLocation, 2000);
-        return () => clearInterval(intervalId);
-    }, [permissionsGranted]);
+        const watchId = navigator.geolocation.watchPosition(
+            (position) =>
+            {
+                setGpsError(false);
+                const { latitude, longitude } = position.coords;
+                setCurrentLocation({ latitude, longitude });
+                updateLocationRef.current(latitude, longitude);
+            },
+            (error) =>
+            {
+                console.warn('Geolocation error:', error);
+                setGpsError(true);
+            },
+            {
+                enableHighAccuracy: true,
+                maximumAge: 5000,
+                timeout: 15000
+            }
+        );
 
-    // Effect to trade player data when lobby connection is available
-    useEffect(() =>
-    {
-        if (lobbyId && playerToken)
-        {
-            tradePlayerDataWithServer();
-            const intervalId = setInterval(tradePlayerDataWithServer, 2000);
-            return () => clearInterval(intervalId);
-        }
-    }, [lobbyId, playerToken, currentLocation]);
+        return () => navigator.geolocation.clearWatch(watchId);
+    }, [permissionsGranted]);
 
     return (
         <div className="lobby-container">
+            <ConnectionBanner
+                connectionState={connectionState}
+                lastSyncTime={lastSyncTime}
+                gpsError={gpsError}
+            />
+
             <LobbyHeader
                 lobbyId={lobbyId}
                 lobbyName={lobbyName}
-                playerToken={playerToken}
+                leaveLobby={leaveLobby}
                 onClearSession={onClearSession}
                 onOpenPlayerTable={() => setIsPlayerTableModalOpen(true)}
             />
-                
+
             <div className="player-controls lobby-card-base">
                 <PlayerNameEditor
                     currentName={playerName}
-                    playerId={player_id}
-                    lobbyId={lobbyId}
-                    playerToken={playerToken}
-                    onNameUpdate={(newName) => {
-                        setPlayerName(newName);
-                        updatePlayerData({ name: newName });
-                    }}
-                    onError={onError}
+                    updatePlayer={updatePlayer}
                 />
 
                 <RoleSwitcher
                     isSeeker={isSeeker}
-                    playerId={player_id}
-                    lobbyId={lobbyId}
-                    playerToken={playerToken}
-                    onRoleUpdate={(newRole) => {
-                        setIsSeeker(newRole);
-                        updatePlayerData({ is_seeker: newRole });
-                    }}
-                    onError={onError}
+                    updatePlayer={updatePlayer}
                 />
 
                 <div className="role-view-container">
                     {isSeeker ? (
-                        <SeekerView 
-                            players={otherPlayers}
+                        <SeekerView
+                            players={players}
                             currentLocation={currentLocation}
                         />
                     ) : (
-                        <HiderView 
-                            players={otherPlayers}
+                        <HiderView
+                            players={players}
                             currentLocation={currentLocation}
                         />
                     )}
@@ -163,12 +118,13 @@ function LobbyFound({ lobbyConnection, initialPlayerData, onError, onClearSessio
 
             {/* Player Table Modal */}
             <PlayerTableModal
-                players={otherPlayers}
+                players={players}
                 currentPlayer={{
                     player_id: player_id,
                     name: playerName,
                     is_seeker: isSeeker,
-                    location_last_updated: Date.now() // Current time since we just updated location
+                    connected: true,
+                    location_last_updated: lastLocationSentAt
                 }}
                 isOpen={isPlayerTableModalOpen}
                 onClose={() => setIsPlayerTableModalOpen(false)}

@@ -1,15 +1,17 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { leaveLobby } from '../utils/api.js';
 
-function LobbyHeader({ lobbyId, lobbyName, playerToken, onClearSession, onOpenPlayerTable })
+function LobbyHeader({ lobbyId, lobbyName, leaveLobby, onClearSession, onOpenPlayerTable })
 {
     const navigate = useNavigate();
+    const [isLeaving, setIsLeaving] = useState(false);
 
     // Function to leave lobby
     async function handleLeaveLobby()
     {
+        setIsLeaving(true);
         try {
-            await leaveLobby(lobbyId, playerToken);
+            await leaveLobby();
         } catch (error) {
             console.error('Error leaving lobby:', error);
         } finally {
@@ -34,9 +36,10 @@ function LobbyHeader({ lobbyId, lobbyName, playerToken, onClearSession, onOpenPl
                 </button>
                 <button
                     onClick={handleLeaveLobby}
+                    disabled={isLeaving}
                     className="leave-lobby-btn"
                 >
-                    Leave Lobby
+                    {isLeaving ? 'Leaving…' : 'Leave Lobby'}
                 </button>
             </div>
         </div>
