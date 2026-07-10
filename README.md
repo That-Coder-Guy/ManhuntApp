@@ -59,3 +59,24 @@ Notes:
   headers for `/manhunt-api/socket.io`. If it can't, Socket.IO automatically
   falls back to HTTP long-polling.
 - Lobby state is in-memory only: restarting the server ends all live games.
+
+## Compass / device orientation (Android & iOS)
+
+The compass arrow works across platforms via `src/hooks/useCompassHeading.js`
+(pure math in `src/utils/orientation.js`, unit-tested with `npm test`):
+
+- **iOS Safari**: uses `webkitCompassHeading` (a true clockwise heading) behind
+  the iOS tap-to-grant permission prompt.
+- **Android Chrome / Samsung Internet**: uses `deviceorientationabsolute`.
+  Spec `alpha` is *counterclockwise* and only meaningful with tilt taken into
+  account, so the heading is computed as the horizontal projection of the
+  device's top axis, then screen-rotation compensated and smoothed.
+- **Firefox Android**: falls back to `deviceorientation` events flagged
+  `absolute: true`.
+- Relative orientation events (arbitrary, drifting zero) are never used.
+- Devices with no magnetometer are detected at runtime and get a cardinal
+  direction fallback ("Head NE" + distance) instead of a dead arrow.
+
+Requirements: sensors only work over **HTTPS**, and any proxy must not send a
+`Permissions-Policy` header that blocks `accelerometer`, `gyroscope`, or
+`magnetometer`.
