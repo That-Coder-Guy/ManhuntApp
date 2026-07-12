@@ -96,7 +96,9 @@ function PermissionsGate({
   const locationGranted = locationStatus === 'granted';
   const wakeLockGranted = !isWakeLockSupported || wakeLockStatus === 'granted';
 
-  const canContinue = locationGranted && wakeLockGranted;
+  // Location is required (distances/directions depend on it); Wake Lock is a
+  // recommended convenience and must never block starting the game.
+  const canContinue = locationGranted;
 
   const handleLocationToggle = () => {
     if (!isLocationSupported) {
@@ -162,7 +164,10 @@ function PermissionsGate({
 
         <div className="permissions-list">
           <div className="permission-item">
-            <span className="permission-name">Location</span>
+            <div className="permission-text">
+              <span className="permission-name">Location <span className="permission-required">(required)</span></span>
+              <span className="permission-explainer">Needed to show distances and directions to other players.</span>
+            </div>
             <span className={`permission-status permission-status-${locationStatus}`}>
               {statusLabels[locationStatus] || locationStatus}
             </span>
@@ -170,6 +175,7 @@ function PermissionsGate({
               type="button"
               className={`permission-toggle ${locationGranted ? 'toggle-on' : ''}`}
               onClick={handleLocationToggle}
+              aria-label="Enable location"
               disabled={
                 locationStatus === 'requesting' ||
                 locationStatus === 'unsupported'
@@ -180,7 +186,10 @@ function PermissionsGate({
           </div>
 
           <div className="permission-item">
-            <span className="permission-name">Wake Lock</span>
+            <div className="permission-text">
+              <span className="permission-name">Keep screen on <span className="permission-optional">(optional)</span></span>
+              <span className="permission-explainer">Stops your screen sleeping while you play.</span>
+            </div>
             <span className={`permission-status permission-status-${wakeLockStatus}`}>
               {statusLabels[wakeLockStatus] || wakeLockStatus}
             </span>
@@ -188,6 +197,7 @@ function PermissionsGate({
               type="button"
               className={`permission-toggle ${wakeLockGranted ? 'toggle-on' : ''}`}
               onClick={handleWakeLockToggle}
+              aria-label="Keep screen on"
               disabled={
                 wakeLockStatus === 'requesting' ||
                 wakeLockStatus === 'unsupported' ||

@@ -33,12 +33,25 @@ function Home()
         }
     }
 
+    // Accept either a bare lobby ID or a full invite URL (…/lobby/<id>)
+    function extractLobbyId(input)
+    {
+        const trimmed = input.trim();
+        const match = trimmed.match(/\/lobby\/([^/?#]+)/);
+        const raw = match ? match[1] : trimmed;
+        try {
+            return decodeURIComponent(raw);
+        } catch {
+            return raw;
+        }
+    }
+
     function joinLobbyClick()
     {
-        const lobbyId = joinLobbyId.trim();
+        const lobbyId = extractLobbyId(joinLobbyId);
         if (!lobbyId)
         {
-            alert("Please enter a lobby ID first!");
+            alert("Please enter a lobby ID or invite link first!");
         }
         else
         {
@@ -72,7 +85,7 @@ function Home()
                     <h2>Join Existing Lobby</h2>
                     <input
                         type="text"
-                        placeholder="Enter lobby ID"
+                        placeholder="Enter lobby ID or paste invite link"
                         value={joinLobbyId}
                         onChange={(e) => setJoinLobbyId(e.target.value)}
                         className="form-input"
