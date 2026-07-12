@@ -1,21 +1,37 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ShareModal from './ShareModal';
 
 function LobbyHeader({ lobbyId, lobbyName, leaveLobby, onClearSession, onOpenPlayerTable })
 {
     const navigate = useNavigate();
     const [isLeaving, setIsLeaving] = useState(false);
+    const [confirmingLeave, setConfirmingLeave] = useState(false);
+    const [isShareOpen, setIsShareOpen] = useState(false);
+    const confirmTimerRef = useRef(null);
 
-    // Function to leave lobby
-    async function handleLeaveLobby()
+    useEffect(() => () => {
+        if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+    }, []);
+
+    // First tap arms the confirm; second tap within the window actually leaves,
+    // so a mis-tap next to "View Players" can't eject a player mid-game.
+    async function handleLeaveClick()
     {
+        if (!confirmingLeave) {
+            setConfirmingLeave(true);
+            confirmTimerRef.current = setTimeout(() => setConfirmingLeave(false), 3000);
+            return;
+        }
+
+        if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+        setConfirmingLeave(false);
         setIsLeaving(true);
         try {
             await leaveLobby();
         } catch (error) {
             console.error('Error leaving lobby:', error);
         } finally {
-            // Clear saved session when user explicitly leaves
             onClearSession();
             navigate('/');
         }
@@ -29,19 +45,31 @@ function LobbyHeader({ lobbyId, lobbyName, leaveLobby, onClearSession, onOpenPla
             </div>
             <div className="lobby-header-buttons">
                 <button
+                    onClick={() => setIsShareOpen(true)}
+                    className="invite-btn"
+                >
+                    Invite
+                </button>
+                <button
                     onClick={onOpenPlayerTable}
                     className="view-players-btn"
                 >
                     View Players
                 </button>
                 <button
-                    onClick={handleLeaveLobby}
+                    onClick={handleLeaveClick}
                     disabled={isLeaving}
-                    className="leave-lobby-btn"
+                    className={`leave-lobby-btn ${confirmingLeave ? 'confirming' : ''}`}
                 >
-                    {isLeaving ? 'Leaving…' : 'Leave Lobby'}
+                    {isLeaving ? 'Leaving…' : confirmingLeave ? 'Tap to confirm' : 'Leave Lobby'}
                 </button>
             </div>
+
+            <ShareModal
+                lobbyId={lobbyId}
+                isOpen={isShareOpen}
+                onClose={() => setIsShareOpen(false)}
+            />
         </div>
     );
 }

@@ -56,6 +56,9 @@ function HiderView({ players, currentLocation })
                             Closest Seeker
                         </div>
                         <div className={`closest-distance ${closestDistance && closestDistance < 100 ? 'danger' : 'safe'}`}>
+                            {closestDistance != null && closestDistance < 100 && (
+                                <span className="proximity-flag" aria-label="Danger, seeker is close">⚠ Close</span>
+                            )}
                             {formatDistance(closestDistance)}
                         </div>
                         {closest && closestStale && (
@@ -93,6 +96,9 @@ function HiderView({ players, currentLocation })
                                         </span>
                                     </div>
                                     <div className={`distance-badge seeker-distance ${distance && distance < 100 ? 'danger' : 'safe'}`}>
+                                        {distance != null && distance < 100 && (
+                                            <span className="proximity-flag-icon" aria-label="Seeker is close">⚠ </span>
+                                        )}
                                         {formatDistance(distance)}
                                     </div>
                                 </div>

@@ -98,6 +98,12 @@ function CompassArrow({ targetLatitude, targetLongitude, currentLocation, target
                 } ${onClick ? 'clickable' : ''}`}
                 onClick={handleCompassInteraction}
             >
+                {/* Visible back affordance — the whole circle is tappable, but
+                    the "tap anywhere to go back" gesture isn't discoverable */}
+                {onClick && (status === COMPASS_STATUS.GRANTED || status === COMPASS_STATUS.UNSUPPORTED) && (
+                    <div className="compass-back-hint" aria-hidden="true">‹ Back</div>
+                )}
+
                 {/* Player name indicator */}
                 <div className={`compass-player-name ${
                     status === COMPASS_STATUS.GRANTED || status === COMPASS_STATUS.UNSUPPORTED ? 'visible' : 'hidden'
