@@ -26,13 +26,13 @@ function ConnectionBanner({ connectionState, lastSyncTime, gpsError })
             {reconnecting && (
                 <div className="connection-banner connection-banner-offline" role="status">
                     {navigator.onLine === false ? 'Offline' : 'Reconnecting…'}
-                    {' — showing last known positions'}
-                    {lastSyncTime ? ` (updated ${getTimeAgo(lastSyncTime)})` : ''}
+                    {' · last positions'}
+                    {lastSyncTime ? ` · ${getTimeAgo(lastSyncTime)}` : ''}
                 </div>
             )}
             {gpsError && (
                 <div className="connection-banner connection-banner-gps" role="status">
-                    GPS signal lost — your position isn't updating
+                    GPS signal lost
                 </div>
             )}
         </div>

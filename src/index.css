@@ -250,8 +250,11 @@ button:disabled {
   height: 100%;
   margin: 0 auto;
   padding: 20px;
-  display: grid;
-  grid-template-rows: auto 1fr;
+  /* One flexible column: banner + header are auto-height, the content area
+     (.player-controls) takes the rest. Robust to the optional connection
+     banner, unlike a fixed 2-row grid. */
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   min-height: 0;
   overflow: hidden;
@@ -281,15 +284,20 @@ button:disabled {
   display: flex;
   gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .lobby-info {
   flex: 1;
+  min-width: 0;
 }
 
 .lobby-title {
   margin: 0 0 5px 0;
   font-size: 1.8em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .lobby-id {
@@ -297,6 +305,9 @@ button:disabled {
   font-size: 0.8em;
   color: var(--text-secondary);
   font-family: monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .leave-lobby-btn {
@@ -339,7 +350,7 @@ button:disabled {
   gap: 15px;
   padding: 20px;
   min-height: 0;
-  height: 100%;
+  flex: 1 1 auto;
   overflow: hidden;
 }
 
@@ -468,6 +479,7 @@ button:disabled {
 .seeker-view {
   width: 100%;
   height: 100%;
+  min-height: 0;
   background-color: var(--bg-seeker);
   border: 2px solid var(--border-danger);
   border-radius: 12px;
@@ -780,6 +792,7 @@ button:disabled {
 .hider-view {
   width: 100%;
   height: 100%;
+  min-height: 0;
   background-color: var(--bg-hider);
   border: 2px solid var(--border-success);
   border-radius: 12px;
@@ -788,6 +801,13 @@ button:disabled {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* The closest-seeker banner and title are fixed; the list is the scroll area */
+.closest-seeker,
+.seekers-title,
+.targets-title {
+  flex-shrink: 0;
 }
 
 .closest-seeker {
@@ -1007,10 +1027,10 @@ button:disabled {
   background-color: var(--bg-card);
   border-radius: 12px;
   box-shadow: var(--shadow-lg);
-  max-width: 90vw;
-  max-height: 90vh;
   width: 100%;
   max-width: 800px;
+  max-height: 90vh;
+  max-height: 90dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1091,10 +1111,17 @@ button:disabled {
   }
   
   button {
+    -webkit-tap-highlight-color: rgba(255, 255, 255, 0.1);
+  }
+
+  /* Only the primary full-width action buttons stretch; inline button groups
+     (header, name editor, share actions, role toggle) keep their own sizing. */
+  .form-button,
+  .permissions-continue-button,
+  .error-button {
     padding: 14px 16px;
     font-size: 16px;
     width: 100%;
-    -webkit-tap-highlight-color: rgba(255, 255, 255, 0.1);
   }
   
   .home-container {
@@ -1127,23 +1154,28 @@ button:disabled {
   
   .lobby-header {
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
     text-align: center;
     padding: 12px;
   }
-  
+
   .lobby-title {
-    font-size: 1.4em;
+    font-size: 1.3em;
     margin: 0;
   }
-  
+
   .lobby-id {
     font-size: 0.75em;
     margin: 4px 0 0 0;
   }
-  
-  .leave-lobby-btn, .view-players-btn {
-    width: 100%;
+
+  /* Compact wrapping row so three buttons don't become three tall bars that
+     push the game off-screen */
+  .invite-btn, .view-players-btn, .leave-lobby-btn {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 10px 12px;
+    font-size: 15px;
   }
   
   .player-table {
@@ -1198,6 +1230,7 @@ button:disabled {
   .modal-content {
     max-width: 100vw;
     max-height: 90vh;
+    max-height: 90dvh;
     border-radius: 16px 16px 0 0;
   }
   
@@ -1253,6 +1286,7 @@ button:disabled {
 .permissions-card {
   position: relative;
   width: min(360px, 100%);
+  max-height: 100%;
   padding: 20px;
   background: rgba(34, 34, 44, 0.75);
   border-radius: 16px;
@@ -1260,7 +1294,8 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  overflow: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .permissions-card::before {
@@ -1558,19 +1593,17 @@ button:disabled {
 
 /* ===== CONNECTION / FRESHNESS STATUS ===== */
 .connection-banner-stack {
-  position: sticky;
-  top: env(safe-area-inset-top, 0);
+  flex-shrink: 0;
   z-index: 500;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: 10px;
 }
 
 .connection-banner {
-  padding: 8px 14px;
+  padding: 7px 12px;
   border-radius: 10px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   text-align: center;
   backdrop-filter: blur(8px);
@@ -1738,10 +1771,13 @@ button:disabled {
   display: block;
   width: 240px;
   height: 240px;
+  max-width: 100%;
+  height: auto;
 }
 
 .share-qr-placeholder {
   width: 240px;
+  max-width: 100%;
   height: 240px;
   display: flex;
   align-items: center;
