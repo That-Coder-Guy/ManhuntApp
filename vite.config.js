@@ -52,8 +52,16 @@ export default defineConfig({
     })
   ],
   server: {
+    // Allow the dev server (`npm run dev`) to be reached through a tunnel.
+    // Leading-dot entries match any subdomain of that suffix.
+    // Note: single-origin (`npm run tunnel`) is the recommended way to expose
+    // the app publicly, since it tunnels the frontend + API + socket together.
     allowedHosts: [
-      'gil-rigoristic-eleanor.ngrok-free.dev'  // ngrok domain
+      '.ngrok-free.app',
+      '.ngrok.app',
+      '.ngrok-free.dev',
+      '.ngrok.io',
+      '.trycloudflare.com',
     ],
   },
 })

@@ -51,14 +51,42 @@ Two options:
    — it serves `dist/` itself when it exists. Build with `VITE_API_ORIGIN=""`
    (empty) so the client talks to its own origin.
 2. **Split hosting:** host `dist/` anywhere, build with
-   `VITE_API_ORIGIN=https://your-api-host`, and add the frontend origin to
-   `ALLOWED_ORIGINS` in `server/server.js`.
+   `VITE_API_ORIGIN=https://your-api-host`, and set the `ALLOWED_ORIGINS`
+   env var (comma-separated) to your frontend origin.
 
 Notes:
 - Any reverse proxy in front of the server must forward WebSocket upgrade
   headers for `/manhunt-api/socket.io`. If it can't, Socket.IO automatically
   falls back to HTTP long-polling.
 - Lobby state is in-memory only: restarting the server ends all live games.
+
+## Play over the internet (ngrok)
+
+To play with friends who aren't on your Wi-Fi, expose the whole app — frontend,
+API, and websocket — through one public URL:
+
+```bash
+npm run tunnel
+```
+
+This builds for single-origin, starts the server, opens an `ngrok` tunnel to it,
+and prints the public `https://…` URL. Open that on your phone, then use the
+in-app **Invite** button (QR code / link) to get everyone else in.
+
+Prerequisites: the [ngrok CLI](https://ngrok.com/download) installed and authed
+once with `ngrok config add-authtoken <your-token>`.
+
+Notes:
+- ngrok's free tier shows a one-time "You are about to visit…" interstitial on
+  first load — tap **Visit Site** and the app loads normally.
+- The server auto-accepts tunnel origins (`*.ngrok-free.app`, `*.ngrok.app`,
+  `*.ngrok-free.dev`, `*.ngrok.io`, `*.trycloudflare.com`) so a fresh random URL
+  just works.
+
+Environment knobs (server):
+- `PORT` — server port (default `3001`).
+- `ALLOWED_ORIGINS` — extra comma-separated origins to allow.
+- `TRUST_ALL_ORIGINS=1` — allow any origin (disables the CORS allowlist).
 
 ## Compass / device orientation (Android & iOS)
 

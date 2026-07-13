@@ -7,6 +7,9 @@
     "dev": "vite --host",
     "dev:server": "npm --prefix server start",
     "build": "vite build",
+    "build:selfhost": "VITE_API_ORIGIN= vite build",
+    "serve": "node server/server.js",
+    "tunnel": "node scripts/tunnel.cjs",
     "lint": "eslint .",
     "test": "node --test \"tests/**/*.test.js\"",
     "preview": "vite preview"
