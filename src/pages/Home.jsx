@@ -1,33 +1,35 @@
-import { useState } from 'react'
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+    IonPage, IonHeader, IonToolbar, IonTitle, IonContent,
+    IonCard, IonCardHeader, IonCardTitle, IonCardContent,
+    IonInput, IonButton, IonToast
+} from '@ionic/react';
 import { createLobby } from '../utils/api.js';
 
 function Home()
 {
-    const [newLobbyName, setNewLobbyName] = useState("");
-    const [joinLobbyId, setJoinLobbyId] = useState(""); /* Pre-existing lobby id for joining the lobby*/
+    const [newLobbyName, setNewLobbyName] = useState('');
+    const [joinLobbyId, setJoinLobbyId] = useState('');
     const [isCreating, setIsCreating] = useState(false);
+    const [toast, setToast] = useState('');
     const navigate = useNavigate();
 
     async function createLobbyClick()
     {
         if (!newLobbyName.trim())
         {
-            alert("Please enter a lobby name first!");
+            setToast('Please enter a lobby name first!');
             return;
         }
 
         setIsCreating(true);
         try {
-            // Use the centralized API function
             const data = await createLobby(newLobbyName.trim());
-            const { lobby_id } = data;
-
-            // Navigates to the lobby page and passes the necessary lobby information.
-            navigate(`/lobby/${encodeURIComponent(lobby_id)}`);
+            navigate(`/lobby/${encodeURIComponent(data.lobby_id)}`);
         } catch (error) {
             console.error('Error creating lobby:', error);
-            alert('Failed to create lobby. Please check your connection and try again.');
+            setToast('Failed to create lobby. Please check your connection and try again.');
         } finally {
             setIsCreating(false);
         }
@@ -51,7 +53,7 @@ function Home()
         const lobbyId = extractLobbyId(joinLobbyId);
         if (!lobbyId)
         {
-            alert("Please enter a lobby ID or invite link first!");
+            setToast('Please enter a lobby ID or invite link first!');
         }
         else
         {
@@ -60,43 +62,74 @@ function Home()
     }
 
     return (
-        <div className="home-container">
-            <h1>Welcome to Manhunt!</h1>
-            <div className="home-form">
-                <div className="form-section">
-                    <h2>Create New Lobby</h2>
-                    <input
-                        type="text"
-                        placeholder="Enter lobby name"
-                        value={newLobbyName}
-                        onChange={(e) => setNewLobbyName(e.target.value)}
-                        className="form-input"
-                    />
-                    <button onClick={createLobbyClick} disabled={isCreating} className="form-button primary">
-                        {isCreating ? 'Creating…' : 'Create Lobby'}
-                    </button>
-                </div>
+        <IonPage data-testid="home-page">
+            <IonHeader>
+                <IonToolbar>
+                    <IonTitle>Manhunt</IonTitle>
+                </IonToolbar>
+            </IonHeader>
+            <IonContent className="ion-padding">
+                <IonCard>
+                    <IonCardHeader>
+                        <IonCardTitle>Create New Lobby</IonCardTitle>
+                    </IonCardHeader>
+                    <IonCardContent>
+                        <IonInput
+                            data-testid="create-name-input"
+                            label="Lobby name"
+                            labelPlacement="stacked"
+                            fill="outline"
+                            placeholder="Enter lobby name"
+                            value={newLobbyName}
+                            onIonInput={(e) => setNewLobbyName(e.detail.value ?? '')}
+                        />
+                        <IonButton
+                            data-testid="create-btn"
+                            expand="block"
+                            className="ion-margin-top"
+                            onClick={createLobbyClick}
+                            disabled={isCreating}
+                        >
+                            {isCreating ? 'Creating…' : 'Create Lobby'}
+                        </IonButton>
+                    </IonCardContent>
+                </IonCard>
 
-                <div className="form-divider">
-                    <span>OR</span>
-                </div>
+                <IonCard>
+                    <IonCardHeader>
+                        <IonCardTitle>Join Existing Lobby</IonCardTitle>
+                    </IonCardHeader>
+                    <IonCardContent>
+                        <IonInput
+                            data-testid="join-id-input"
+                            label="Lobby ID or invite link"
+                            labelPlacement="stacked"
+                            fill="outline"
+                            placeholder="Enter lobby ID or paste invite link"
+                            value={joinLobbyId}
+                            onIonInput={(e) => setJoinLobbyId(e.detail.value ?? '')}
+                        />
+                        <IonButton
+                            data-testid="join-btn"
+                            expand="block"
+                            color="success"
+                            className="ion-margin-top"
+                            onClick={joinLobbyClick}
+                        >
+                            Join Lobby
+                        </IonButton>
+                    </IonCardContent>
+                </IonCard>
 
-                <div className="form-section">
-                    <h2>Join Existing Lobby</h2>
-                    <input
-                        type="text"
-                        placeholder="Enter lobby ID or paste invite link"
-                        value={joinLobbyId}
-                        onChange={(e) => setJoinLobbyId(e.target.value)}
-                        className="form-input"
-                    />
-                    <button onClick={joinLobbyClick} className="form-button secondary">
-                        Join Lobby
-                    </button>
-                </div>
-            </div>
-        </div>
-    )
+                <IonToast
+                    isOpen={!!toast}
+                    message={toast}
+                    duration={2500}
+                    onDidDismiss={() => setToast('')}
+                />
+            </IonContent>
+        </IonPage>
+    );
 }
 
 export default Home;

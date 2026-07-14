@@ -158,14 +158,14 @@ function Lobby()
                         onClearSession={clearSession}
                         permissionsGranted={permissionsGranted}
                     />
-                    {!permissionsGranted && (
-                        <PermissionsGate
-                            onComplete={() => setPermissionsGranted(true)}
-                            requestWakeLock={requestWakeLock}
-                            isWakeLockSupported={isWakeLockSupported}
-                            isWakeLockActive={isWakeLockActive}
-                        />
-                    )}
+                    <PermissionsGate
+                        isOpen={!permissionsGranted}
+                        onComplete={() => setPermissionsGranted(true)}
+                        requestWakeLock={requestWakeLock}
+                        isWakeLockSupported={isWakeLockSupported}
+                        isWakeLockActive={isWakeLockActive}
+                    />
+
                 </>
             );
 

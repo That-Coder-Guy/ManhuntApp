@@ -15,6 +15,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ionic/react": "^8.8.13",
+    "ionicons": "^8.0.13",
     "qrcode": "^1.5.4",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
