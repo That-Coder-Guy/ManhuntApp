@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
+import {
+    IonModal, IonHeader, IonToolbar, IonTitle, IonButtons, IonButton,
+    IonContent, IonItem, IonLabel, IonNote
+} from '@ionic/react';
 import QRCode from 'qrcode';
 
 /**
  * Invite sheet: QR code + copy-link + native share so friends can join a lobby
- * without typing a 36-character UUID. Reuses the shared modal classes.
+ * without typing a 36-character UUID.
  */
 function ShareModal({ lobbyId, isOpen, onClose })
 {
@@ -16,15 +20,6 @@ function ShareModal({ lobbyId, isOpen, onClose })
     const [idCopied, setIdCopied] = useState(false);
 
     const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
-
-    useEffect(() => {
-        if (isOpen) {
-            document.body.classList.add('modal-open');
-        } else {
-            document.body.classList.remove('modal-open');
-        }
-        return () => document.body.classList.remove('modal-open');
-    }, [isOpen]);
 
     // Render the QR to a data URL (offline, no network) whenever the URL changes
     useEffect(() => {
@@ -66,59 +61,59 @@ function ShareModal({ lobbyId, isOpen, onClose })
     }
 
     return (
-        <div
-            className={`modal-overlay ${isOpen ? 'modal-overlay-open' : ''}`}
-            onClick={onClose}
-            aria-hidden={!isOpen}
-        >
-            <div
-                className={`modal-content share-modal modal-slide ${isOpen ? 'modal-slide-open' : ''}`}
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="modal-header">
-                    <h2>Invite Players</h2>
-                    <button className="modal-close-btn" onClick={onClose} aria-label="Close">×</button>
+        <IonModal isOpen={isOpen} onDidDismiss={onClose} data-testid="share-modal">
+            <IonHeader>
+                <IonToolbar>
+                    <IonTitle>Invite Players</IonTitle>
+                    <IonButtons slot="end">
+                        <IonButton data-testid="share-close" onClick={onClose}>Close</IonButton>
+                    </IonButtons>
+                </IonToolbar>
+            </IonHeader>
+            <IonContent className="ion-padding">
+                <p className="ion-text-center">
+                    Scan this QR code or share the link to join this lobby.
+                </p>
+
+                <div className="share-qr">
+                    {qrDataUrl
+                        ? <img data-testid="share-qr-img" src={qrDataUrl} alt="QR code to join the lobby" />
+                        : <div className="share-qr-placeholder">Generating…</div>}
                 </div>
-                <div className="modal-body share-body">
-                    <p className="share-instructions">
-                        Scan this QR code or share the link to join this lobby.
-                    </p>
 
-                    <div className="share-qr">
-                        {qrDataUrl
-                            ? <img src={qrDataUrl} alt="QR code to join the lobby" width="240" height="240" />
-                            : <div className="share-qr-placeholder">Generating…</div>}
-                    </div>
-
-                    <div className="share-actions">
-                        {canShare && (
-                            <button type="button" className="form-button primary" onClick={handleShare}>
-                                Share…
-                            </button>
-                        )}
-                        <button
-                            type="button"
-                            className="form-button secondary"
-                            onClick={() => copyToClipboard(joinUrl, setCopied)}
-                        >
-                            {copied ? 'Link copied!' : 'Copy link'}
-                        </button>
-                    </div>
-
-                    <div className="share-id-row">
-                        <span className="share-id-label">Lobby ID</span>
-                        <code className="share-id-value">{lobbyId}</code>
-                        <button
-                            type="button"
-                            className="share-id-copy"
-                            onClick={() => copyToClipboard(lobbyId, setIdCopied)}
-                        >
-                            {idCopied ? 'Copied' : 'Copy'}
-                        </button>
-                    </div>
+                <div className="ion-margin-top">
+                    {canShare && (
+                        <IonButton data-testid="share-native" expand="block" onClick={handleShare}>
+                            Share…
+                        </IonButton>
+                    )}
+                    <IonButton
+                        data-testid="share-copy"
+                        expand="block"
+                        color="success"
+                        onClick={() => copyToClipboard(joinUrl, setCopied)}
+                    >
+                        {copied ? 'Link copied!' : 'Copy link'}
+                    </IonButton>
                 </div>
-            </div>
-        </div>
+
+                <IonItem lines="none" className="ion-margin-top">
+                    <IonLabel>
+                        <IonNote>Lobby ID</IonNote>
+                        <p className="share-id-value" data-testid="share-id">{lobbyId}</p>
+                    </IonLabel>
+                    <IonButton
+                        data-testid="share-id-copy"
+                        slot="end"
+                        fill="outline"
+                        size="small"
+                        onClick={() => copyToClipboard(lobbyId, setIdCopied)}
+                    >
+                        {idCopied ? 'Copied' : 'Copy'}
+                    </IonButton>
+                </IonItem>
+            </IonContent>
+        </IonModal>
     );
 }
 

@@ -3,8 +3,8 @@ import { CONNECTION_STATE } from '../hooks/useLobbySocket';
 import { getTimeAgo } from '../utils/time';
 
 /**
- * Slim status banner shown while the socket is reconnecting or GPS is lost.
- * Hidden entirely when everything is healthy.
+ * Slim status strips rendered inside the page's fixed IonHeader while the
+ * socket is reconnecting or GPS is lost. Hidden entirely when healthy.
  */
 function ConnectionBanner({ connectionState, lastSyncTime, gpsError })
 {
@@ -22,20 +22,20 @@ function ConnectionBanner({ connectionState, lastSyncTime, gpsError })
     if (!reconnecting && !gpsError) return null;
 
     return (
-        <div className="connection-banner-stack">
+        <>
             {reconnecting && (
-                <div className="connection-banner connection-banner-offline" role="status">
+                <div className="connection-banner connection-banner-offline" role="status" data-testid="offline-banner">
                     {navigator.onLine === false ? 'Offline' : 'Reconnecting…'}
                     {' · last positions'}
                     {lastSyncTime ? ` · ${getTimeAgo(lastSyncTime)}` : ''}
                 </div>
             )}
             {gpsError && (
-                <div className="connection-banner connection-banner-gps" role="status">
+                <div className="connection-banner connection-banner-gps" role="status" data-testid="gps-banner">
                     GPS signal lost
                 </div>
             )}
-        </div>
+        </>
     );
 }
 

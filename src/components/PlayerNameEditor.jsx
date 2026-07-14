@@ -1,76 +1,40 @@
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { IonItem, IonInput, IonButton, IonNote } from '@ionic/react';
+
+const MAX_NAME_LENGTH = 30;
 
 function PlayerNameEditor({ currentName, updatePlayer })
 {
-    const [isEditing, setIsEditing] = useState(false);
     const [nameInput, setNameInput] = useState(currentName || '');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
-    const inputRef = useRef(null);
 
-    const MAX_NAME_LENGTH = 30;
-
-    // Start editing mode
-    function handleEditClick()
-    {
-        setNameInput(currentName || '');
-        setIsEditing(true);
-        setError('');
-    }
-
-    // Focus input when editing starts
+    // Keep in sync when the name changes elsewhere (join/resume)
     useEffect(() => {
-        if (isEditing && inputRef.current) {
-            inputRef.current.focus();
-        }
-    }, [isEditing]);
-
-    // Keep readonly display in sync when the name changes elsewhere
-    useEffect(() => {
-        if (!isEditing) {
-            setNameInput(currentName || '');
-        }
-    }, [currentName, isEditing]);
-
-    // Cancel editing
-    function handleCancel()
-    {
-        setIsEditing(false);
         setNameInput(currentName || '');
-        setError('');
-    }
+    }, [currentName]);
 
-    // Save the new name
+    const trimmed = nameInput.trim();
+    const isDirty = trimmed !== (currentName || '');
+
     async function handleSave()
     {
-        // Validate name
-        const trimmedName = nameInput.trim();
-
-        if (!trimmedName)
+        if (!trimmed)
         {
             setError('Name cannot be empty');
             return;
         }
-
-        if (trimmedName.length > MAX_NAME_LENGTH)
+        if (trimmed.length > MAX_NAME_LENGTH)
         {
             setError(`Name must be ${MAX_NAME_LENGTH} characters or less`);
             return;
         }
 
-        if (trimmedName === currentName)
-        {
-            setIsEditing(false);
-            return;
-        }
-
         setIsLoading(true);
         setError('');
-
         try
         {
-            await updatePlayer({ name: trimmedName });
-            setIsEditing(false);
+            await updatePlayer({ name: trimmed });
         }
         catch (err)
         {
@@ -86,71 +50,36 @@ function PlayerNameEditor({ currentName, updatePlayer })
         }
     }
 
-    // Handle Enter key to save
-    function handleKeyDown(e)
-    {
-        if (e.key === 'Enter' && isEditing)
-        {
-            handleSave();
-        }
-        else if (e.key === 'Escape' && isEditing)
-        {
-            handleCancel();
-        }
-    }
-
     return (
-        <div className="name-editor">
-            <div className={`name-editor-controls ${error ? 'error' : ''}`}>
-                <input
-                    ref={inputRef}
-                    type="text"
+        <>
+            <IonItem>
+                <IonInput
+                    data-testid="name-input"
+                    label="Your name"
+                    labelPlacement="stacked"
+                    maxlength={MAX_NAME_LENGTH}
                     value={nameInput}
-                    onChange={(e) => setNameInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    maxLength={MAX_NAME_LENGTH}
-                    disabled={!isEditing || isLoading}
-                    className={`name-input ${!isEditing ? 'readonly' : ''}`}
+                    disabled={isLoading}
+                    onIonInput={(e) => { setNameInput(e.detail.value ?? ''); setError(''); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && isDirty) handleSave(); }}
                 />
-                <div className="name-editor-buttons">
-                    {!isEditing ? (
-                        <button
-                            onClick={handleEditClick}
-                            className="name-edit-btn"
-                        >
-                            Edit
-                        </button>
-                    ) : (
-                        <>
-                            <button
-                                onClick={handleSave}
-                                disabled={isLoading}
-                                className="name-save-btn"
-                            >
-                                {isLoading ? '...' : 'Save'}
-                            </button>
-                            <button
-                                onClick={handleCancel}
-                                disabled={isLoading}
-                                className="name-cancel-btn"
-                            >
-                                Cancel
-                            </button>
-                        </>
-                    )}
-                </div>
-            </div>
+                {isDirty && (
+                    <IonButton
+                        data-testid="name-save"
+                        slot="end"
+                        disabled={isLoading}
+                        onClick={handleSave}
+                    >
+                        {isLoading ? '…' : 'Save'}
+                    </IonButton>
+                )}
+            </IonItem>
             {error && (
-                <p className="name-error">
+                <IonNote color="danger" data-testid="name-error" style={{ display: 'block', padding: '4px 16px' }}>
                     {error}
-                </p>
+                </IonNote>
             )}
-            {isEditing && (
-                <p className="name-counter">
-                    {nameInput.length}/{MAX_NAME_LENGTH} characters
-                </p>
-            )}
-        </div>
+        </>
     );
 }
 
