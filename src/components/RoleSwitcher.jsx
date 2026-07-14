@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { IonSegment, IonSegmentButton, IonLabel, IonNote } from '@ionic/react';
 
 function RoleSwitcher({ isSeeker, updatePlayer })
 {
@@ -6,7 +7,6 @@ function RoleSwitcher({ isSeeker, updatePlayer })
     const [error, setError] = useState('');
     const errorTimerRef = useRef(null);
 
-    // Auto-dismiss transient errors
     useEffect(() => () =>
     {
         if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
@@ -19,18 +19,12 @@ function RoleSwitcher({ isSeeker, updatePlayer })
         errorTimerRef.current = setTimeout(() => setError(''), 5000);
     }
 
-    // Handle role change
     async function handleRoleChange(newIsSeeker)
     {
-        // Don't do anything if clicking the already selected role
-        if (newIsSeeker === isSeeker)
-        {
-            return;
-        }
+        if (newIsSeeker === isSeeker) return;
 
         setIsLoading(true);
         setError('');
-
         try
         {
             await updatePlayer({ is_seeker: newIsSeeker });
@@ -50,30 +44,23 @@ function RoleSwitcher({ isSeeker, updatePlayer })
     }
 
     return (
-        <div className="role-switcher">
-            <div className={`role-controls ${isSeeker ? 'seeker-active' : 'hider-active'}`}>
-                {/* Seeker Button */}
-                <button
-                    onClick={() => handleRoleChange(true)}
-                    disabled={isLoading}
-                    className={`role-btn seeker ${isSeeker ? 'active' : ''}`}
-                >
-                    Seeker
-                </button>
-
-                {/* Hider Button */}
-                <button
-                    onClick={() => handleRoleChange(false)}
-                    disabled={isLoading}
-                    className={`role-btn hider ${!isSeeker ? 'active' : ''}`}
-                >
-                    Hider
-                </button>
-            </div>
+        <div className="ion-margin-vertical">
+            <IonSegment
+                value={isSeeker ? 'seeker' : 'hider'}
+                disabled={isLoading}
+                onIonChange={(e) => handleRoleChange(e.detail.value === 'seeker')}
+            >
+                <IonSegmentButton value="seeker" data-testid="role-seeker">
+                    <IonLabel>Seeker</IonLabel>
+                </IonSegmentButton>
+                <IonSegmentButton value="hider" data-testid="role-hider">
+                    <IonLabel>Hider</IonLabel>
+                </IonSegmentButton>
+            </IonSegment>
             {error && (
-                <p className="role-error">
+                <IonNote color="danger" data-testid="role-error" style={{ display: 'block', padding: '6px 4px' }}>
                     {error}
-                </p>
+                </IonNote>
             )}
         </div>
     );

@@ -6,16 +6,18 @@ const cors = require('cors');
 const { Server } = require('socket.io');
 const { v4: uuidv4 } = require('uuid');
 
-const ALLOWED_ORIGINS = [
-    "https://people.cs.ksu.edu",
-    "https://gil-rigoristic-eleanor.ngrok-free.dev",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173"
-];
+const { isAllowedOrigin } = require('./origins');
+
+// cors' `origin` accepts a (origin, callback) => callback(err, allow) function;
+// Socket.IO uses the same cors package, so one function serves both.
+function corsOrigin(origin, callback)
+{
+    callback(null, isAllowedOrigin(origin));
+}
 
 const app = express();
 app.use(cors({
-    origin: ALLOWED_ORIGINS,
+    origin: corsOrigin,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true
@@ -26,7 +28,7 @@ const server = http.createServer(app);
 const io = new Server(server, {
     path: '/manhunt-api/socket.io',
     cors: {
-        origin: ALLOWED_ORIGINS,
+        origin: corsOrigin,
         methods: ['GET', 'POST'],
         credentials: true
     }
