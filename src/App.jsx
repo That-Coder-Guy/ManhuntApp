@@ -6,7 +6,9 @@ import ErrorBoundary from './components/ErrorBoundary';
 
 // Ionic components only — routing stays on react-router v7 (Ionic's own router
 // binding requires react-router v5), so pages render without native transitions.
-setupIonicReact();
+// mode: 'ios' renders Apple-style components on every platform to match the
+// liquid-glass theme in index.css.
+setupIonicReact({ mode: 'ios' });
 
 function App() {
     return (

@@ -1,43 +1,269 @@
 /* ============================================================
-   Manhunt — custom styles on top of Ionic.
-   Ionic owns ALL layout (IonPage/IonHeader/IonContent): every
-   page has one framework-managed scroll region, safe areas are
-   handled, so nothing here positions or sizes page structure.
-   This file only styles the bespoke game widgets.
+   Manhunt — Liquid Glass theme on top of Ionic (iOS mode).
+   Ionic owns ALL layout (IonPage/IonHeader/IonContent); this file
+   themes surfaces: translucent, blurred "glass" panels floating
+   over an ambient gradient scene, capsule shapes, specular
+   highlights — in the style of Apple's Liquid Glass design.
    ============================================================ */
 
 :root {
   /* Brand accent mapped onto Ionic's primary color */
-  --ion-color-primary: #646cff;
-  --ion-color-primary-rgb: 100, 108, 255;
+  --ion-color-primary: #7c83ff;
+  --ion-color-primary-rgb: 124, 131, 255;
   --ion-color-primary-contrast: #ffffff;
   --ion-color-primary-contrast-rgb: 255, 255, 255;
-  --ion-color-primary-shade: #585fe0;
-  --ion-color-primary-tint: #747bff;
+  --ion-color-primary-shade: #6d73e0;
+  --ion-color-primary-tint: #8990ff;
 
   /* Game palette used by the compass + status widgets */
-  --game-danger: #ff4444;
-  --game-success: #4caf50;
-  --game-warning: #ffa500;
-  --game-muted: #8a8a8a;
+  --game-danger: #ff5d5d;
+  --game-success: #4cd08a;
+  --game-warning: #ffb340;
+  --game-muted: #9aa0b5;
+
+  /* Liquid glass tokens */
+  --glass-bg: rgba(255, 255, 255, 0.08);
+  --glass-bg-strong: rgba(255, 255, 255, 0.13);
+  --glass-border: rgba(255, 255, 255, 0.16);
+  --glass-highlight: rgba(255, 255, 255, 0.28);
+  --glass-shadow: 0 12px 36px rgba(4, 6, 16, 0.45);
+  --glass-blur: blur(24px) saturate(170%);
+  --glass-radius: 22px;
+
+  --ion-font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
+  --ion-background-color: #0b0d18;
+  --ion-text-color: #f2f3f7;
+  /* Items never paint their own opaque plate — the glass shell does */
+  --ion-item-background: transparent;
 }
 
-/* ===== CONNECTION / GPS BANNERS (inside IonHeader, never overlap content) ===== */
+/* ===== AMBIENT SCENE (what the glass refracts) ===== */
+body {
+  background:
+    radial-gradient(60rem 42rem at 12% 8%, rgba(124, 131, 255, 0.34), transparent 62%),
+    radial-gradient(46rem 38rem at 88% 20%, rgba(255, 93, 129, 0.20), transparent 60%),
+    radial-gradient(64rem 46rem at 50% 100%, rgba(64, 189, 168, 0.22), transparent 62%),
+    #0b0d18 !important;
+  background-attachment: fixed;
+}
+
+ion-content {
+  --background: transparent;
+}
+
+/* ===== GLASS HEADERS (ion-header is light DOM — reliable blur) ===== */
+ion-header {
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  background: rgba(16, 18, 32, 0.55);
+  border-bottom: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+
+ion-header ion-toolbar {
+  --background: transparent;
+  --border-width: 0;
+}
+
+/* iOS centers titles absolutely; with three toolbar buttons a long lobby name
+   collides with them — lead-align it and reserve space for the buttons. */
+ion-toolbar ion-title {
+  text-align: start;
+  padding-inline-start: 16px;
+  padding-inline-end: 158px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* Toolbar icon buttons: small glass capsules */
+ion-toolbar ion-buttons ion-button {
+  --background: rgba(255, 255, 255, 0.10);
+  --background-hover: rgba(255, 255, 255, 0.16);
+  --border-radius: 999px;
+  --padding-start: 10px;
+  --padding-end: 10px;
+  margin-inline: 3px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+ion-toolbar ion-buttons ion-button[color="danger"] {
+  --background: rgba(255, 93, 93, 0.18);
+  border-color: rgba(255, 93, 93, 0.35);
+}
+
+/* ===== GLASS CARDS ===== */
+ion-card {
+  --background: transparent;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0) 55%), var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
+  color: var(--ion-text-color);
+}
+
+/* ===== GLASS LISTS / ITEMS ===== */
+ion-list.list-inset,
+ion-list[inset] {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
+  overflow: hidden;
+  margin-inline: 0;
+}
+
+ion-item {
+  --background: transparent;
+  --background-hover: rgba(255, 255, 255, 0.06);
+  --border-color: rgba(255, 255, 255, 0.10);
+  --color: var(--ion-text-color);
+}
+
+/* Standalone items (name editor) get their own glass shell */
+ion-content > ion-item,
+ion-content .glass-item {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
+  overflow: hidden;
+}
+
+/* ===== CAPSULE BUTTONS ===== */
+ion-content ion-button {
+  --border-radius: 999px;
+  --box-shadow: none;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+ion-content ion-button[expand="block"] {
+  --background: rgba(124, 131, 255, 0.42);
+  --background-activated: rgba(124, 131, 255, 0.55);
+  --background-hover: rgba(124, 131, 255, 0.50);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid rgba(151, 157, 255, 0.45);
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(20, 24, 60, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.30);
+  min-height: 48px;
+}
+
+ion-content ion-button[expand="block"][color="success"] {
+  --background: rgba(76, 208, 138, 0.34);
+  --background-activated: rgba(76, 208, 138, 0.46);
+  --background-hover: rgba(76, 208, 138, 0.42);
+  border-color: rgba(76, 208, 138, 0.45);
+}
+
+ion-content ion-button[fill="outline"] {
+  --border-color: var(--glass-border);
+  --background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-radius: 999px;
+}
+
+/* ===== GLASS SEGMENT (Seeker/Hider) ===== */
+ion-segment {
+  --background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  min-height: 42px;
+}
+
+ion-segment-button {
+  --indicator-color: rgba(255, 255, 255, 0.22);
+  --color: var(--game-muted);
+  --color-checked: #ffffff;
+  --border-radius: 999px;
+  min-height: 36px;
+  text-transform: none;
+  font-weight: 600;
+}
+
+ion-segment-button::part(indicator-background) {
+  border-radius: 999px;
+  box-shadow: 0 2px 10px rgba(4, 6, 16, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  border: 0.5px solid rgba(255, 255, 255, 0.25);
+}
+
+/* ===== GLASS MODALS & ALERTS ===== */
+ion-modal {
+  --background: rgba(18, 20, 34, 0.62);
+  --border-radius: 26px;
+}
+
+ion-modal::part(content) {
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
+}
+
+ion-alert.leave-alert .alert-wrapper,
+ion-alert .alert-wrapper {
+  background: rgba(24, 26, 42, 0.70);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: 22px;
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
+}
+
+/* ===== GLASS BADGES ===== */
+ion-badge {
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-weight: 700;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.distance-badge-danger {
+  --background: rgba(255, 93, 93, 0.42);
+  --color: #fff;
+  border: 1px solid rgba(255, 93, 93, 0.55);
+}
+
+.distance-badge-safe {
+  --background: rgba(76, 208, 138, 0.34);
+  --color: #fff;
+  border: 1px solid rgba(76, 208, 138, 0.5);
+}
+
+/* ===== CONNECTION / GPS BANNERS (inside IonHeader) ===== */
 .connection-banner {
   padding: 6px 12px;
   font-size: 13px;
   font-weight: 600;
   text-align: center;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .connection-banner-offline {
-  background: rgba(180, 83, 9, 0.35);
-  color: #fbbf24;
+  background: rgba(255, 179, 64, 0.16);
+  border-top: 1px solid rgba(255, 179, 64, 0.35);
+  color: #ffcf8a;
 }
 
 .connection-banner-gps {
-  background: rgba(153, 27, 27, 0.35);
-  color: #f87171;
+  background: rgba(255, 93, 93, 0.16);
+  border-top: 1px solid rgba(255, 93, 93, 0.35);
+  color: #ff9d9d;
 }
 
 /* ===== FRESHNESS / PROXIMITY CUES ===== */
@@ -65,24 +291,15 @@
 }
 
 .closest-distance {
-  font-size: 1.6em;
+  font-size: 1.7em;
   font-weight: 700;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.35);
 }
 
 .closest-distance.danger { color: var(--game-danger); }
 .closest-distance.safe { color: var(--game-success); }
 
-.distance-badge-danger {
-  --background: var(--game-danger);
-  --color: #fff;
-}
-
-.distance-badge-safe {
-  --background: var(--game-success);
-  --color: #fff;
-}
-
-/* ===== COMPASS WIDGET (bespoke; lives inside IonContent) ===== */
+/* ===== COMPASS WIDGET — a liquid glass dial ===== */
 .compass-screen {
   display: flex;
   flex-direction: column;
@@ -103,12 +320,31 @@
   width: min(85vw, 52vh, 420px);
   aspect-ratio: 1;
   border-radius: 50%;
-  border: 2px solid var(--game-danger);
-  background: rgba(45, 27, 27, 0.6);
+  background:
+    radial-gradient(120% 120% at 30% 18%, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.02) 45%),
+    rgba(255, 255, 255, 0.07);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    var(--glass-shadow),
+    inset 0 1px 1px rgba(255, 255, 255, 0.30),
+    inset 0 -18px 40px rgba(4, 6, 16, 0.30);
   display: flex;
   align-items: center;
   justify-content: center;
   user-select: none;
+  overflow: hidden;
+}
+
+/* Specular sweep across the dial */
+.compass-circle-interactive::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: linear-gradient(125deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 28%, transparent 46%);
+  pointer-events: none;
 }
 
 .compass-circle-interactive.inactive { opacity: 0.6; }
@@ -119,6 +355,7 @@
   color: var(--game-danger);
   transition: transform 0.1s ease-out;
   line-height: 1;
+  filter: drop-shadow(0 4px 14px rgba(255, 93, 93, 0.45));
 }
 
 .compass-player-name {
@@ -128,7 +365,7 @@
   transform: translateX(-50%);
   font-size: 16px;
   font-weight: 700;
-  color: var(--game-danger);
+  color: #ffb1b1;
   max-width: 80%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -144,11 +381,14 @@
   transform: translateX(-50%);
   font-size: 22px;
   font-weight: 700;
-  color: var(--game-danger);
-  background: rgba(20, 20, 30, 0.75);
-  padding: 4px 16px;
-  border-radius: 14px;
-  border: 1px solid var(--game-danger);
+  color: #fff;
+  background: rgba(255, 93, 93, 0.28);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  padding: 4px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 93, 93, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.30);
 }
 
 .compass-freshness {
@@ -165,12 +405,14 @@
   position: absolute;
   top: 14px;
   left: 14px;
-  padding: 4px 10px;
+  padding: 4px 12px;
   font-size: 12px;
   font-weight: 600;
-  color: #d0d0d0;
-  background: rgba(20, 20, 30, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #e6e8f0;
+  background: rgba(255, 255, 255, 0.10);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 999px;
   pointer-events: none;
 }
@@ -181,10 +423,12 @@
   font-size: 14px;
   font-weight: 600;
   text-align: center;
-  color: #d0d0d0;
-  background: rgba(20, 20, 30, 0.65);
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #dfe2ec;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 16px;
+  border: 1px solid var(--glass-border);
   max-width: 85%;
 }
 
@@ -225,22 +469,26 @@
 
 .compass-error-message {
   padding: 12px 16px;
-  border-radius: 10px;
+  border-radius: 16px;
   margin-bottom: 12px;
   font-size: 14px;
-  border: 1px solid var(--game-danger);
-  color: var(--game-danger);
-  background: rgba(61, 42, 42, 0.5);
+  border: 1px solid rgba(255, 93, 93, 0.4);
+  color: #ff9d9d;
+  background: rgba(255, 93, 93, 0.12);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 /* ===== SHARE / QR ===== */
 .share-qr {
-  background: #fff;
+  background: rgba(255, 255, 255, 0.92);
   padding: 12px;
-  border-radius: 12px;
+  border-radius: 20px;
   line-height: 0;
   margin: 0 auto;
   width: fit-content;
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .share-qr img {
@@ -248,6 +496,7 @@
   width: 240px;
   max-width: 70vw;
   height: auto;
+  border-radius: 8px;
 }
 
 .share-qr-placeholder {
@@ -262,7 +511,7 @@
 }
 
 .share-id-value {
-  font-family: monospace;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 0.8em;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -280,21 +529,29 @@
 .player-table td {
   padding: 12px 10px;
   text-align: left;
-  border-bottom: 1px solid var(--ion-color-step-150, #333);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
 }
 
 .player-role-badge {
   display: inline-block;
-  padding: 3px 10px;
-  border-radius: 12px;
+  padding: 3px 12px;
+  border-radius: 999px;
   font-size: 0.8em;
   font-weight: 600;
   text-transform: uppercase;
   color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
-.player-role-badge.seeker { background: var(--game-danger); }
-.player-role-badge.hider { background: var(--game-success); }
+.player-role-badge.seeker {
+  background: rgba(255, 93, 93, 0.42);
+  border: 1px solid rgba(255, 93, 93, 0.55);
+}
+
+.player-role-badge.hider {
+  background: rgba(76, 208, 138, 0.34);
+  border: 1px solid rgba(76, 208, 138, 0.5);
+}
 
 .current-player-indicator {
   color: var(--ion-color-primary);
@@ -312,7 +569,20 @@
   font-size: 0.9em;
 }
 
-/* ===== ERROR BOUNDARY FALLBACK (rendered without Ionic context guarantees) ===== */
+/* ===== SECTION HEADINGS & NOTES ===== */
+ion-content h3 {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* Default IonNote gray is illegible on glass — lift it */
+ion-card ion-note,
+ion-item ion-note,
+ion-content ion-note {
+  color: #c3c8da;
+}
+
+/* ===== ERROR BOUNDARY FALLBACK ===== */
 .fatal-error-screen {
   min-height: 100dvh;
   display: flex;
@@ -320,4 +590,20 @@
   justify-content: center;
   padding: 24px;
   text-align: center;
+  background: #0b0d18;
+  color: #f2f3f7;
+}
+
+/* ===== REDUCED TRANSPARENCY / MOTION RESPECT ===== */
+@media (prefers-reduced-transparency: reduce) {
+  ion-header,
+  ion-card,
+  ion-list.list-inset,
+  ion-segment,
+  ion-modal::part(content),
+  .compass-circle-interactive {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(24, 26, 42, 0.96);
+  }
 }
