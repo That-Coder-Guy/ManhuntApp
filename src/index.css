@@ -76,7 +76,10 @@ ion-toolbar ion-title {
   letter-spacing: -0.01em;
 }
 
-/* Toolbar icon buttons: small glass capsules */
+/* Toolbar icon buttons: small glass capsules.
+   The border + radius must live on ::part(native) — the element that also
+   paints --background — otherwise the host border rounds a pill while the
+   background keeps the default (smaller) button rounding. */
 ion-toolbar ion-buttons ion-button {
   --background: rgba(255, 255, 255, 0.10);
   --background-hover: rgba(255, 255, 255, 0.16);
@@ -84,12 +87,18 @@ ion-toolbar ion-buttons ion-button {
   --padding-start: 10px;
   --padding-end: 10px;
   margin-inline: 3px;
-  border-radius: 999px;
+}
+
+ion-toolbar ion-buttons ion-button::part(native) {
   border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
 }
 
 ion-toolbar ion-buttons ion-button[color="danger"] {
   --background: rgba(255, 93, 93, 0.18);
+}
+
+ion-toolbar ion-buttons ion-button[color="danger"]::part(native) {
   border-color: rgba(255, 93, 93, 0.35);
 }
 
