@@ -152,7 +152,12 @@ function PermissionsGate({
     }, [isOpen]);
 
     return (
-        <IonModal isOpen={isOpen} backdropDismiss={false} data-testid="gate-modal">
+        <IonModal
+            isOpen={isOpen}
+            backdropDismiss={false}
+            cssClass="permissions-dialog"
+            data-testid="gate-modal"
+        >
             <IonContent className="ion-padding">
                 <h2>Enable Permissions</h2>
 
@@ -170,7 +175,11 @@ function PermissionsGate({
                             data-testid="toggle-location"
                             aria-label="Enable location"
                             checked={locationGranted}
-                            disabled={locationStatus === 'requesting' || locationStatus === 'unsupported'}
+                            disabled={
+                                locationGranted ||
+                                locationStatus === 'requesting' ||
+                                locationStatus === 'unsupported'
+                            }
                             onClick={handleLocationToggle}
                         />
                     </IonItem>

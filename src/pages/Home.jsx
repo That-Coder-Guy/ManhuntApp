@@ -69,6 +69,7 @@ function Home()
                 </IonToolbar>
             </IonHeader>
             <IonContent className="ion-padding">
+                <div className="home-center">
                 <IonCard>
                     <IonCardHeader>
                         <IonCardTitle>Create New Lobby</IonCardTitle>
@@ -76,9 +77,8 @@ function Home()
                     <IonCardContent>
                         <IonInput
                             data-testid="create-name-input"
-                            label="Lobby name"
-                            labelPlacement="stacked"
-                            fill="outline"
+                            fill="solid"
+                            className="glass-input"
                             placeholder="Enter lobby name"
                             value={newLobbyName}
                             onIonInput={(e) => setNewLobbyName(e.detail.value ?? '')}
@@ -102,9 +102,8 @@ function Home()
                     <IonCardContent>
                         <IonInput
                             data-testid="join-id-input"
-                            label="Lobby ID or invite link"
-                            labelPlacement="stacked"
-                            fill="outline"
+                            fill="solid"
+                            className="glass-input"
                             placeholder="Enter lobby ID or paste invite link"
                             value={joinLobbyId}
                             onIonInput={(e) => setJoinLobbyId(e.detail.value ?? '')}
@@ -120,6 +119,7 @@ function Home()
                         </IonButton>
                     </IonCardContent>
                 </IonCard>
+                </div>
 
                 <IonToast
                     isOpen={!!toast}

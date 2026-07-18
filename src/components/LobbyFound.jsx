@@ -95,7 +95,10 @@ function LobbyFound({
     }
 
     return (
-        <IonPage data-testid="lobby-page">
+        <IonPage
+            className={!permissionsGranted ? 'permissions-dialog-background' : undefined}
+            data-testid="lobby-page"
+        >
             <IonHeader>
                 <IonToolbar>
                     <IonTitle data-testid="lobby-title">{lobbyName}</IonTitle>
