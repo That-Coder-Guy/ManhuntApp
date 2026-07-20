@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-    IonModal, IonContent, IonList, IonItem, IonLabel, IonToggle,
+    IonModal, IonList, IonItem, IonLabel, IonToggle,
     IonNote, IonButton
 } from '@ionic/react';
 
@@ -158,7 +158,7 @@ function PermissionsGate({
             cssClass="permissions-dialog"
             data-testid="gate-modal"
         >
-            <IonContent className="ion-padding">
+            <div className="permissions-dialog-body">
                 <h2>Enable Permissions</h2>
 
                 <IonList inset>
@@ -216,7 +216,7 @@ function PermissionsGate({
                 >
                     {canContinue ? 'Continue' : 'Waiting for permissions'}
                 </IonButton>
-            </IonContent>
+            </div>
         </IonModal>
     );
 }

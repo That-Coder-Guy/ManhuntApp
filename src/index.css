@@ -296,8 +296,33 @@ ion-modal::part(content) {
 
 ion-modal.permissions-dialog {
   --width: min(92vw, 520px);
-  --height: min(460px, 88vh);
+  --height: auto;
   --border-radius: 22px;
+}
+
+ion-modal.permissions-dialog::part(content) {
+  height: auto;
+  max-height: 88vh;
+}
+
+ion-modal.permissions-dialog .permissions-dialog-body {
+  padding: 0 16px 16px;
+}
+
+ion-modal.permissions-dialog .permissions-dialog-body > h2 {
+  margin-block: 20px;
+}
+
+ion-modal.permissions-dialog ion-list.list-inset,
+ion-modal.permissions-dialog ion-list[inset] {
+  margin-inline: 0;
+  margin-block-start: 0;
+}
+
+ion-modal.permissions-dialog .permissions-dialog-body > ion-button {
+  display: block;
+  margin-inline: 0;
+  width: 100%;
 }
 
 ion-modal.permissions-dialog ion-label p {
@@ -367,10 +392,6 @@ ion-badge {
 .player-freshness {
   font-size: 12px;
   color: var(--game-muted);
-}
-
-.player-stale {
-  opacity: 0.55;
 }
 
 .proximity-flag {
@@ -496,22 +517,6 @@ ion-badge {
   font-size: 12px;
   white-space: nowrap;
   color: var(--game-muted);
-}
-
-.compass-back-hint {
-  position: absolute;
-  top: 14px;
-  left: 14px;
-  padding: 4px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #e6e8f0;
-  background: rgba(255, 255, 255, 0.10);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 999px;
-  pointer-events: none;
 }
 
 .compass-activation-hint,
