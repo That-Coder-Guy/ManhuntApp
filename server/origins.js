@@ -49,6 +49,10 @@ function isAllowedOrigin(origin)
     }
 
     if (hostname === "localhost" || hostname === "127.0.0.1") return true;
+    // Private-network addresses (RFC 1918) and mDNS names, so devices on the
+    // same LAN can use the dev servers directly
+    if (/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(hostname)) return true;
+    if (hostname.endsWith(".local")) return true;
     if (TUNNEL_HOST_SUFFIXES.some((suffix) => hostname.endsWith(suffix))) return true;
 
     return false;

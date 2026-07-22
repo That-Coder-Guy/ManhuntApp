@@ -36,6 +36,15 @@ test('allows localhost / 127.0.0.1 on any port', () => {
     assert.equal(isAllowedOrigin('http://127.0.0.1:4173'), true);
 });
 
+test('allows private-network (LAN) origins on any port', () => {
+    assert.equal(isAllowedOrigin('http://192.168.1.50:5173'), true);
+    assert.equal(isAllowedOrigin('http://10.0.0.7:5173'), true);
+    assert.equal(isAllowedOrigin('http://172.16.4.2:5173'), true);
+    assert.equal(isAllowedOrigin('http://my-desktop.local:5173'), true);
+    // 172.32.x.x is outside the RFC 1918 172.16/12 block
+    assert.equal(isAllowedOrigin('http://172.32.0.1:5173'), false);
+});
+
 test('allows no-origin (same-origin / non-browser) requests', () => {
     assert.equal(isAllowedOrigin(undefined), true);
     assert.equal(isAllowedOrigin(''), true);

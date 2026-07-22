@@ -26,7 +26,7 @@
   --glass-bg-strong: rgba(255, 255, 255, 0.13);
   --glass-border: rgba(255, 255, 255, 0.16);
   --glass-highlight: rgba(255, 255, 255, 0.28);
-  --glass-shadow: 0 12px 36px rgba(4, 6, 16, 0.45);
+  --glass-shadow: 0 2px 8px rgba(4, 6, 16, 0.35);
   --glass-blur: blur(24px) saturate(170%);
   --glass-radius: 22px;
 
@@ -216,24 +216,26 @@ ion-content ion-button[fill="outline"] {
 
 /* ===== GLASS SEGMENT (Seeker/Hider) ===== */
 ion-segment {
-  --background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  --background: transparent;
+  background: rgba(255, 255, 255, 0.10);
   border: 1px solid var(--glass-border);
   border-radius: 999px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
-  height: 60px;
+  box-sizing: border-box;
+  height: 52px;
+  overflow: hidden;
+  position: relative;
 }
 
-/* Buttons must stretch to the segment's full height (a fixed height would
-   top-align them in the flex row); the native part centers the label. */
+/* Fill the track; the sliding thumb provides the visual inset */
 ion-segment-button {
-  --indicator-color: rgba(255, 255, 255, 0.22);
+  --indicator-color: transparent;
   --color: var(--game-muted);
   --color-checked: #ffffff;
   --border-radius: 999px;
   min-height: 0;
   height: 100%;
+  margin: 0;
   text-transform: none;
   font-weight: 600;
 }
@@ -243,42 +245,46 @@ ion-segment-button ion-label {
   margin-bottom: 0;
 }
 
+ion-segment-button::part(indicator),
 ion-segment-button::part(indicator-background) {
-  border-radius: 999px;
-  box-shadow: 0 2px 10px rgba(4, 6, 16, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.35);
-  border: 0.5px solid rgba(255, 255, 255, 0.25);
+  display: none;
 }
 
 ion-segment.role-segment::before {
   content: "";
   position: absolute;
   z-index: 0;
-  top: 3px;
-  bottom: 3px;
-  left: 3px;
-  width: calc(50% - 3px);
+  top: 5px;
+  bottom: 5px;
+  left: 5px;
+  width: calc(50% - 7.5px);
   box-sizing: border-box;
   border: 0.5px solid rgba(255, 255, 255, 0.25);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.22);
-  box-shadow: 0 2px 10px rgba(4, 6, 16, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
   transform: translateX(0);
   transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
   pointer-events: none;
 }
 
 ion-segment.role-segment--hider::before {
-  transform: translateX(100%);
+  transform: translateX(calc(100% + 5px));
 }
 
 ion-segment.role-segment ion-segment-button {
   position: relative;
   z-index: 1;
-  --indicator-color: transparent;
+  font-size: 15px;
 }
 
-ion-segment.role-segment ion-segment-button::part(indicator-background) {
-  opacity: 0;
+/* Equal gap above and below the Seeker/Hider tab bar */
+.role-switcher {
+  margin-block: 16px;
+}
+
+.role-switcher + ion-card {
+  margin-block-start: 0;
 }
 
 /* ===== GLASS MODALS & ALERTS ===== */
@@ -389,9 +395,13 @@ ion-badge {
 }
 
 /* ===== FRESHNESS / PROXIMITY CUES ===== */
+/* Beat Ionic's ion-label p color (e.g. p.sc-ion-label-ios) */
+ion-label p.player-freshness,
+ion-item p.player-freshness,
+ion-note.player-freshness,
 .player-freshness {
   font-size: 12px;
-  color: var(--game-muted);
+  color: #d7dbe8;
 }
 
 .proximity-flag {
@@ -675,6 +685,112 @@ ion-badge {
 ion-content h3 {
   font-weight: 700;
   letter-spacing: -0.01em;
+}
+
+/* Lobby page: fill the content area so the hider list can scroll internally */
+ion-content.lobby-content {
+  --overflow: hidden;
+}
+
+ion-content.lobby-content::part(scroll) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.lobby-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.lobby-body-top {
+  flex-shrink: 0;
+}
+
+.lobby-body-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Closest-seeker summary stays fixed above the scrolling list;
+   same surface and edge highlight as the player list panels */
+ion-card.closest-seeker-card {
+  flex-shrink: 0;
+  margin-inline: 0;
+  margin-block-start: 0;
+  background: rgba(255, 255, 255, 0.10);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+
+/* Player list panels (hider targets / active seekers): match the role tab
+   bar width and background; fill remaining height and scroll items inside */
+ion-card.targets-card {
+  margin-inline: 0;
+  margin-block: 0;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.10);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+
+ion-card.targets-card ion-card-header {
+  flex-shrink: 0;
+  padding-bottom: 6px;
+}
+
+ion-card.targets-card .targets-card-content {
+  /* Fade length matches scroll padding so end items can sit fully opaque */
+  --targets-fade: 16px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-top: var(--targets-fade);
+  padding-bottom: var(--targets-fade);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--targets-fade),
+    #000 calc(100% - var(--targets-fade)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--targets-fade),
+    #000 calc(100% - var(--targets-fade)),
+    transparent 100%
+  );
+}
+
+.targets-item-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+ion-item.targets-item {
+  --background: rgba(255, 255, 255, 0.06);
+  --background-hover: rgba(255, 255, 255, 0.10);
+  --border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  overflow: hidden;
 }
 
 /* Default IonNote gray is illegible on glass — lift it */

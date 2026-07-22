@@ -52,7 +52,7 @@ function PlayerNameEditor({ currentName, updatePlayer })
 
     return (
         <>
-            <IonItem>
+            <IonItem className="glass-item">
                 <IonInput
                     data-testid="name-input"
                     label="Your name"

@@ -1,7 +1,33 @@
 // Server origin. Override with VITE_API_ORIGIN (see .env.development for local
 // dev); set it to an empty string for single-origin deployments where the
 // server also serves this frontend.
-export const API_ORIGIN = import.meta.env.VITE_API_ORIGIN ?? "https://api.hankinit.work";
+function resolveApiOrigin()
+{
+    const configured = import.meta.env.VITE_API_ORIGIN ?? "https://api.hankinit.work";
+    if (!configured) return configured;
+
+    // In dev the configured origin is localhost, which other devices on the
+    // LAN can't reach. When the page was loaded from a LAN address (phone on
+    // the same network hitting the Vite host), target the API on that same
+    // host instead so those devices get a working backend too.
+    try {
+        const configuredUrl = new URL(configured);
+        const pageHost = window.location.hostname;
+        const isConfiguredLocal = configuredUrl.hostname === "localhost" || configuredUrl.hostname === "127.0.0.1";
+        const isPageLocal = pageHost === "localhost" || pageHost === "127.0.0.1";
+        const isLanHost = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(pageHost) || pageHost.endsWith(".local");
+
+        if (isConfiguredLocal && !isPageLocal && isLanHost) {
+            return `${window.location.protocol}//${pageHost}:${configuredUrl.port}`;
+        }
+    } catch {
+        // Fall through to the configured value
+    }
+
+    return configured;
+}
+
+export const API_ORIGIN = resolveApiOrigin();
 
 // Socket.IO endpoint path on the server
 export const SOCKET_PATH = "/manhunt-api/socket.io";

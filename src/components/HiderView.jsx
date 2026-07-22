@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
-    IonCard, IonCardContent, IonList, IonItem, IonLabel, IonBadge, IonNote
+    IonCard, IonCardHeader, IonCardTitle, IonCardContent,
+    IonItem, IonLabel, IonBadge, IonNote
 } from '@ionic/react';
 import { calculateDistance, formatDistance } from '../utils/geo';
 import { getTimeAgo, isStale } from '../utils/time';
@@ -49,7 +50,7 @@ function HiderView({ players, currentLocation })
 
     return (
         <>
-            <IonCard data-testid="closest-seeker">
+            <IonCard className="closest-seeker-card" data-testid="closest-seeker">
                 <IonCardContent className="ion-text-center">
                     <IonNote>Closest Seeker</IonNote>
                     <div className={`closest-distance ${closestIsDanger ? 'danger' : 'safe'}`} data-testid="closest-distance">
@@ -66,45 +67,54 @@ function HiderView({ players, currentLocation })
                 </IonCardContent>
             </IonCard>
 
-            <h3 data-testid="seekers-title">Active Seekers: {seekers.length}</h3>
-            <IonList inset data-testid="seekers-list">
-                {seekers.map((seeker) => {
-                    const distance = calculateDistance(
-                        currentLocation.latitude,
-                        currentLocation.longitude,
-                        seeker.latitude,
-                        seeker.longitude
-                    );
-                    const danger = distance !== null && distance < 100;
-                    const stale = isStale(seeker.location_last_updated) || seeker.connected === false;
+            <IonCard className="targets-card" data-testid="seekers-card">
+                <IonCardHeader>
+                    <IonCardTitle data-testid="seekers-title">
+                        Active Seekers
+                    </IonCardTitle>
+                </IonCardHeader>
+                <IonCardContent className="targets-card-content">
+                    <div className="targets-item-stack" data-testid="seekers-list">
+                        {seekers.map((seeker) => {
+                            const distance = calculateDistance(
+                                currentLocation.latitude,
+                                currentLocation.longitude,
+                                seeker.latitude,
+                                seeker.longitude
+                            );
+                            const danger = distance !== null && distance < 100;
+                            const stale = isStale(seeker.location_last_updated) || seeker.connected === false;
 
-                    return (
-                        <IonItem
-                            key={seeker.player_id}
-                            data-testid="seeker-card"
-                            className={stale ? 'player-stale' : ''}
-                        >
-                            <IonLabel>
-                                <h2>{seeker.name || `Player ${seeker.player_id}`}</h2>
-                                <p className="player-freshness">
-                                    {seeker.connected === false ? 'offline · ' : ''}
-                                    {seeker.location_last_updated
-                                        ? `updated ${getTimeAgo(seeker.location_last_updated)}`
-                                        : 'no location yet'}
-                                </p>
-                            </IonLabel>
-                            <IonBadge
-                                slot="end"
-                                className={danger ? 'distance-badge-danger' : 'distance-badge-safe'}
-                                data-testid="seeker-distance"
-                            >
-                                {danger && <span className="proximity-flag-icon" aria-label="Seeker is close">⚠ </span>}
-                                {formatDistance(distance)}
-                            </IonBadge>
-                        </IonItem>
-                    );
-                })}
-            </IonList>
+                            return (
+                                <IonItem
+                                    key={seeker.player_id}
+                                    lines="none"
+                                    data-testid="seeker-card"
+                                    className={`targets-item ${stale ? 'player-stale' : ''}`.trim()}
+                                >
+                                    <IonLabel>
+                                        <h2>{seeker.name || `Player ${seeker.player_id}`}</h2>
+                                        <p className="player-freshness">
+                                            {seeker.connected === false ? 'offline · ' : ''}
+                                            {seeker.location_last_updated
+                                                ? `updated ${getTimeAgo(seeker.location_last_updated)}`
+                                                : 'no location yet'}
+                                        </p>
+                                    </IonLabel>
+                                    <IonBadge
+                                        slot="end"
+                                        className={danger ? 'distance-badge-danger' : 'distance-badge-safe'}
+                                        data-testid="seeker-distance"
+                                    >
+                                        {danger && <span className="proximity-flag-icon" aria-label="Seeker is close">⚠ </span>}
+                                        {formatDistance(distance)}
+                                    </IonBadge>
+                                </IonItem>
+                            );
+                        })}
+                    </div>
+                </IonCardContent>
+            </IonCard>
         </>
     );
 }

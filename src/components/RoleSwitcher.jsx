@@ -44,7 +44,7 @@ function RoleSwitcher({ isSeeker, updatePlayer })
     }
 
     return (
-        <div className="ion-margin-vertical">
+        <div className="role-switcher">
             <IonSegment
                 className={`role-segment role-segment--${isSeeker ? 'seeker' : 'hider'}`}
                 value={isSeeker ? 'seeker' : 'hider'}

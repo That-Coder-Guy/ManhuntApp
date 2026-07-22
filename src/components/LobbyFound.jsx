@@ -12,6 +12,7 @@ import HiderView from './HiderView';
 import PlayerTableModal from './PlayerTableModal';
 import ShareModal from './ShareModal';
 import ConnectionBanner from './ConnectionBanner';
+import { withDummyPlayers } from '../utils/dummyPlayers';
 
 function LobbyFound({
     lobbyId,
@@ -82,6 +83,8 @@ function LobbyFound({
         return () => navigator.geolocation.clearWatch(watchId);
     }, [permissionsGranted]);
 
+    const displayPlayers = withDummyPlayers(players);
+
     async function handleLeave()
     {
         try {
@@ -135,28 +138,34 @@ function LobbyFound({
                 />
             </IonHeader>
 
-            <IonContent className="ion-padding" data-testid="lobby-content">
-                <PlayerNameEditor
-                    currentName={playerName}
-                    updatePlayer={updatePlayer}
-                />
+            <IonContent className="ion-padding lobby-content" data-testid="lobby-content">
+                <div className="lobby-body">
+                    <div className="lobby-body-top">
+                        <PlayerNameEditor
+                            currentName={playerName}
+                            updatePlayer={updatePlayer}
+                        />
 
-                <RoleSwitcher
-                    isSeeker={isSeeker}
-                    updatePlayer={updatePlayer}
-                />
+                        <RoleSwitcher
+                            isSeeker={isSeeker}
+                            updatePlayer={updatePlayer}
+                        />
+                    </div>
 
-                {isSeeker ? (
-                    <SeekerView
-                        players={players}
-                        currentLocation={currentLocation}
-                    />
-                ) : (
-                    <HiderView
-                        players={players}
-                        currentLocation={currentLocation}
-                    />
-                )}
+                    <div className="lobby-body-main">
+                        {isSeeker ? (
+                            <SeekerView
+                                players={displayPlayers}
+                                currentLocation={currentLocation}
+                            />
+                        ) : (
+                            <HiderView
+                                players={displayPlayers}
+                                currentLocation={currentLocation}
+                            />
+                        )}
+                    </div>
+                </div>
             </IonContent>
 
             <IonAlert
@@ -178,7 +187,7 @@ function LobbyFound({
             />
 
             <PlayerTableModal
-                players={players}
+                players={displayPlayers}
                 currentPlayer={{
                     player_id: player_id,
                     name: playerName,
