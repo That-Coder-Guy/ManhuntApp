@@ -4,9 +4,50 @@
    themes surfaces: translucent, blurred "glass" panels floating
    over an ambient gradient scene, capsule shapes, specular
    highlights — in the style of Apple's Liquid Glass design.
+
+   SCALING MODEL — everything is device/resolution independent:
+   • --ui-scale is the single master constant. It feeds the root
+     font-size, and every size below is expressed in rem, so
+     bumping --ui-scale rescales the entire UI uniformly.
+   • rem/em are CSS-reference units (DPI-independent) and honor the
+     user's browser font-size preference (accessibility).
+   • Cross-platform normalization (text-size-adjust, font-smoothing,
+     -webkit- prefixes) keeps Apple (WebKit) and Android (Blink)
+     rendering consistent.
    ============================================================ */
 
 :root {
+  /* ---- MASTER UI SCALE — change this one number to resize everything ---- */
+  --ui-scale: 1.12;
+
+  /* Spacing scale (rem → scales with --ui-scale via the root font-size) */
+  --space-2xs: 0.375rem;
+  --space-xs: 0.55rem;
+  --space-sm: 0.8rem;
+  --space-md: 1.1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2.1rem;
+
+  /* Corner radii — deliberately generous (the "too small" complaint) */
+  --radius-sm: 0.85rem;
+  --radius-md: 1.2rem;
+  --radius-lg: 1.65rem;
+  --radius-xl: 2rem;
+  --radius-pill: 999px;
+
+  /* Screen-edge padding — a touch more breathing room */
+  --edge-padding: 1.4rem;
+  --ion-padding: var(--edge-padding);
+
+  /* Type scale (rem) */
+  --fs-2xs: 0.78rem;
+  --fs-xs: 0.82rem;
+  --fs-sm: 0.9rem;
+  --fs-md: 1rem;
+  --fs-lg: 1.15rem;
+  --fs-xl: 1.4rem;
+  --fs-2xl: 2rem;
+
   /* Brand accent mapped onto Ionic's primary color */
   --ion-color-primary: #7c83ff;
   --ion-color-primary-rgb: 124, 131, 255;
@@ -26,9 +67,9 @@
   --glass-bg-strong: rgba(255, 255, 255, 0.13);
   --glass-border: rgba(255, 255, 255, 0.16);
   --glass-highlight: rgba(255, 255, 255, 0.28);
-  --glass-shadow: 0 2px 8px rgba(4, 6, 16, 0.35);
+  --glass-shadow: 0 0.125rem 0.5rem rgba(4, 6, 16, 0.35);
   --glass-blur: blur(24px) saturate(170%);
-  --glass-radius: 22px;
+  --glass-radius: var(--radius-lg);
 
   --ion-font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
     "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
@@ -36,6 +77,23 @@
   --ion-text-color: #f2f3f7;
   /* Items never paint their own opaque plate — the glass shell does */
   --ion-item-background: transparent;
+}
+
+/* ===== CROSS-PLATFORM NORMALIZATION ===== */
+html {
+  /* 1em here = the browser's base size (respects user zoom for a11y);
+     the scale enlarges the whole UI. Every rem below flows from this. */
+  font-size: calc(1em * var(--ui-scale));
+  /* Stop iOS Safari from auto-inflating text; Android honors it too */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  /* Match font weight/rendering across WebKit (Apple) and Blink (Android) */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 /* ===== AMBIENT SCENE (what the glass refracts) ===== */
@@ -67,12 +125,13 @@ ion-header ion-toolbar {
 }
 
 /* iOS centers titles absolutely; with three toolbar buttons a long lobby name
-   collides with them — lead-align it and reserve space for the buttons. */
+   collides with them — lead-align it and reserve (rem-scaled) space. */
 ion-toolbar ion-title {
   text-align: start;
-  padding-inline-start: 16px;
-  padding-inline-end: 158px;
+  padding-inline-start: var(--space-md);
+  padding-inline-end: 10.5rem;
   font-weight: 700;
+  font-size: var(--fs-lg);
   letter-spacing: -0.01em;
 }
 
@@ -84,12 +143,12 @@ ion-toolbar ion-buttons ion-button {
   --background: rgba(255, 255, 255, 0.10);
   --background-hover: rgba(255, 255, 255, 0.16);
   --border-color: rgba(255, 255, 255, 0.14);
-  --border-radius: 999px;
+  --border-radius: var(--radius-pill);
   --border-style: solid;
   --border-width: 1px;
-  --padding-start: 10px;
-  --padding-end: 10px;
-  margin-inline: 3px;
+  --padding-start: 0.7rem;
+  --padding-end: 0.7rem;
+  margin-inline: 0.2rem;
 }
 
 ion-toolbar ion-buttons ion-button[color="danger"] {
@@ -152,13 +211,13 @@ ion-content .glass-item {
 /* ===== GLASS INPUT FIELDS (inset + rounded) ===== */
 ion-content ion-input.glass-input {
   --background: rgba(0, 0, 0, 0.22);
-  --border-radius: 16px;
-  --padding-start: 16px;
-  --padding-end: 16px;
-  --padding-top: 12px;
-  --padding-bottom: 12px;
+  --border-radius: var(--radius-md);
+  --padding-start: 1.1rem;
+  --padding-end: 1.1rem;
+  --padding-top: 0.85rem;
+  --padding-bottom: 0.85rem;
   --highlight-color-focused: var(--ion-color-primary);
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   border: 1px solid rgba(255, 255, 255, 0.10);
   box-shadow:
     inset 0 2px 6px rgba(4, 6, 16, 0.55),
@@ -181,9 +240,10 @@ ion-content ion-input.glass-input::part(container)::after {
 
 /* ===== CAPSULE BUTTONS ===== */
 ion-content ion-button {
-  --border-radius: 999px;
+  --border-radius: var(--radius-pill);
   --box-shadow: none;
   font-weight: 600;
+  font-size: var(--fs-md);
   letter-spacing: 0.01em;
 }
 
@@ -194,9 +254,9 @@ ion-content ion-button[expand="block"] {
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid rgba(151, 157, 255, 0.45);
-  border-radius: 999px;
-  box-shadow: 0 8px 24px rgba(20, 24, 60, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.30);
-  min-height: 48px;
+  border-radius: var(--radius-pill);
+  box-shadow: 0 0.5rem 1.5rem rgba(20, 24, 60, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.30);
+  min-height: 3.1rem;
 }
 
 ion-content ion-button[expand="block"][color="success"] {
@@ -211,7 +271,7 @@ ion-content ion-button[fill="outline"] {
   --background: rgba(255, 255, 255, 0.06);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 /* ===== GLASS SEGMENT (Seeker/Hider) ===== */
@@ -219,10 +279,10 @@ ion-segment {
   --background: transparent;
   background: rgba(255, 255, 255, 0.10);
   border: 1px solid var(--glass-border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
   box-sizing: border-box;
-  height: 52px;
+  height: 3.4rem;
   overflow: hidden;
   position: relative;
 }
@@ -232,7 +292,7 @@ ion-segment-button {
   --indicator-color: transparent;
   --color: var(--game-muted);
   --color-checked: #ffffff;
-  --border-radius: 999px;
+  --border-radius: var(--radius-pill);
   min-height: 0;
   height: 100%;
   margin: 0;
@@ -254,13 +314,13 @@ ion-segment.role-segment::before {
   content: "";
   position: absolute;
   z-index: 0;
-  top: 5px;
-  bottom: 5px;
-  left: 5px;
-  width: calc(50% - 7.5px);
+  top: 0.3rem;
+  bottom: 0.3rem;
+  left: 0.3rem;
+  width: calc(50% - 0.45rem);
   box-sizing: border-box;
   border: 0.5px solid rgba(255, 255, 255, 0.25);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.22);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
   transform: translateX(0);
@@ -269,18 +329,18 @@ ion-segment.role-segment::before {
 }
 
 ion-segment.role-segment--hider::before {
-  transform: translateX(calc(100% + 5px));
+  transform: translateX(calc(100% + 0.3rem));
 }
 
 ion-segment.role-segment ion-segment-button {
   position: relative;
   z-index: 1;
-  font-size: 15px;
+  font-size: var(--fs-sm);
 }
 
 /* Equal gap above and below the Seeker/Hider tab bar */
 .role-switcher {
-  margin-block: 16px;
+  margin-block: var(--space-md);
 }
 
 .role-switcher + ion-card {
@@ -290,7 +350,7 @@ ion-segment.role-segment ion-segment-button {
 /* ===== GLASS MODALS & ALERTS ===== */
 ion-modal {
   --background: rgba(18, 20, 34, 0.62);
-  --border-radius: 26px;
+  --border-radius: var(--radius-xl);
 }
 
 ion-modal::part(content) {
@@ -303,20 +363,24 @@ ion-modal::part(content) {
 ion-modal.permissions-dialog {
   --width: min(92vw, 520px);
   --height: auto;
-  --border-radius: 22px;
+  --border-radius: var(--radius-lg);
 }
 
 ion-modal.permissions-dialog::part(content) {
   height: auto;
   max-height: 88vh;
+  /* Scroll if the dialog is taller than the (small) screen so Continue is
+     always reachable. */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 ion-modal.permissions-dialog .permissions-dialog-body {
-  padding: 0 16px 16px;
+  padding: 0 var(--space-md) var(--space-md);
 }
 
 ion-modal.permissions-dialog .permissions-dialog-body > h2 {
-  margin-block: 20px;
+  margin-block: var(--space-lg);
 }
 
 ion-modal.permissions-dialog ion-list.list-inset,
@@ -332,7 +396,7 @@ ion-modal.permissions-dialog .permissions-dialog-body > ion-button {
 }
 
 ion-modal.permissions-dialog ion-label p {
-  font-size: 13px;
+  font-size: var(--fs-xs);
 }
 
 .ion-page.permissions-dialog-background {
@@ -346,14 +410,15 @@ ion-alert .alert-wrapper {
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);
-  border-radius: 22px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
 }
 
 /* ===== GLASS BADGES ===== */
 ion-badge {
-  border-radius: 999px;
-  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  padding: 0.4rem 0.8rem;
+  font-size: var(--fs-sm);
   font-weight: 700;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -374,8 +439,8 @@ ion-badge {
 
 /* ===== CONNECTION / GPS BANNERS (inside IonHeader) ===== */
 .connection-banner {
-  padding: 6px 12px;
-  font-size: 13px;
+  padding: 0.4rem 0.8rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   text-align: center;
   backdrop-filter: blur(14px);
@@ -400,13 +465,13 @@ ion-label p.player-freshness,
 ion-item p.player-freshness,
 ion-note.player-freshness,
 .player-freshness {
-  font-size: 12px;
+  font-size: var(--fs-2xs);
   color: #d7dbe8;
 }
 
 .proximity-flag {
   display: inline-block;
-  margin-right: 6px;
+  margin-right: 0.4rem;
   font-size: 0.65em;
   font-weight: 700;
   text-transform: uppercase;
@@ -432,8 +497,8 @@ ion-note.player-freshness,
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding-top: 8px;
+  gap: var(--space-sm);
+  padding-top: var(--space-xs);
 }
 
 .compass-arrow-container {
@@ -445,7 +510,7 @@ ion-note.player-freshness,
 
 .compass-circle-interactive {
   position: relative;
-  width: min(85vw, 52vh, 420px);
+  width: min(88vw, 54vh, 27rem);
   aspect-ratio: 1;
   border-radius: 50%;
   background:
@@ -479,10 +544,11 @@ ion-note.player-freshness,
 .compass-circle-interactive.clickable { cursor: pointer; }
 
 .compass-arrow {
-  font-size: clamp(64px, 22vw, 120px);
+  font-size: clamp(4.5rem, 24vw, 8.5rem);
   color: var(--game-danger);
   transition: transform 0.1s ease-out;
   line-height: 1;
+  -webkit-filter: drop-shadow(0 4px 14px rgba(255, 93, 93, 0.45));
   filter: drop-shadow(0 4px 14px rgba(255, 93, 93, 0.45));
 }
 
@@ -491,7 +557,7 @@ ion-note.player-freshness,
   top: 8%;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 16px;
+  font-size: var(--fs-md);
   font-weight: 700;
   color: #ffb1b1;
   max-width: 80%;
@@ -507,14 +573,14 @@ ion-note.player-freshness,
   bottom: 12%;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 22px;
+  font-size: var(--fs-xl);
   font-weight: 700;
   color: #fff;
   background: rgba(255, 93, 93, 0.28);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  padding: 4px 18px;
-  border-radius: 999px;
+  padding: 0.3rem 1.15rem;
+  border-radius: var(--radius-pill);
   border: 1px solid rgba(255, 93, 93, 0.45);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.30);
 }
@@ -524,22 +590,22 @@ ion-note.player-freshness,
   bottom: 4%;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 12px;
+  font-size: var(--fs-2xs);
   white-space: nowrap;
   color: var(--game-muted);
 }
 
 .compass-activation-hint,
 .compass-unsupported-hint {
-  padding: 10px 16px;
-  font-size: 14px;
+  padding: 0.65rem 1rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   text-align: center;
   color: #dfe2ec;
   background: rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--glass-border);
   max-width: 85%;
 }
@@ -551,39 +617,39 @@ ion-note.player-freshness,
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 24px;
+  gap: var(--space-xs);
+  padding: var(--space-lg);
   text-align: center;
 }
 
 .compass-cardinal-fallback .compass-unsupported-hint {
-  font-size: 12px;
-  padding: 8px 12px;
+  font-size: var(--fs-2xs);
+  padding: 0.5rem 0.75rem;
 }
 
 .compass-cardinal-direction {
-  font-size: 32px;
+  font-size: var(--fs-2xl);
   font-weight: 700;
   color: var(--game-danger);
 }
 
 .compass-cardinal-distance {
-  font-size: 18px;
+  font-size: var(--fs-lg);
   font-weight: 600;
 }
 
 .compass-calibration-hint {
-  margin-top: 10px;
-  font-size: 12px;
+  margin-top: var(--space-sm);
+  font-size: var(--fs-2xs);
   text-align: center;
   color: var(--game-muted);
 }
 
 .compass-error-message {
-  padding: 12px 16px;
-  border-radius: 16px;
-  margin-bottom: 12px;
-  font-size: 14px;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-sm);
+  font-size: var(--fs-sm);
   border: 1px solid rgba(255, 93, 93, 0.4);
   color: #ff9d9d;
   background: rgba(255, 93, 93, 0.12);
@@ -594,8 +660,8 @@ ion-note.player-freshness,
 /* ===== SHARE / QR ===== */
 .share-qr {
   background: rgba(255, 255, 255, 0.92);
-  padding: 12px;
-  border-radius: 20px;
+  padding: 0.75rem;
+  border-radius: var(--radius-lg);
   line-height: 0;
   margin: 0 auto;
   width: fit-content;
@@ -605,14 +671,14 @@ ion-note.player-freshness,
 
 .share-qr img {
   display: block;
-  width: 240px;
+  width: 15rem;
   max-width: 70vw;
   height: auto;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
 }
 
 .share-qr-placeholder {
-  width: 240px;
+  width: 15rem;
   max-width: 70vw;
   aspect-ratio: 1;
   display: flex;
@@ -634,20 +700,20 @@ ion-note.player-freshness,
 .player-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9em;
+  font-size: var(--fs-sm);
 }
 
 .player-table th,
 .player-table td {
-  padding: 12px 10px;
+  padding: 0.75rem 0.65rem;
   text-align: left;
   border-bottom: 1px solid rgba(255, 255, 255, 0.10);
 }
 
 .player-role-badge {
   display: inline-block;
-  padding: 3px 12px;
-  border-radius: 999px;
+  padding: 0.2rem 0.75rem;
+  border-radius: var(--radius-pill);
   font-size: 0.8em;
   font-weight: 600;
   text-transform: uppercase;
@@ -684,6 +750,7 @@ ion-note.player-freshness,
 /* ===== SECTION HEADINGS & NOTES ===== */
 ion-content h3 {
   font-weight: 700;
+  font-size: var(--fs-lg);
   letter-spacing: -0.01em;
 }
 
@@ -746,12 +813,12 @@ ion-card.targets-card {
 
 ion-card.targets-card ion-card-header {
   flex-shrink: 0;
-  padding-bottom: 6px;
+  padding-bottom: var(--space-xs);
 }
 
 ion-card.targets-card .targets-card-content {
   /* Fade length matches scroll padding so end items can sit fully opaque */
-  --targets-fade: 16px;
+  --targets-fade: 1rem;
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -777,18 +844,18 @@ ion-card.targets-card .targets-card-content {
 .targets-item-stack {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-sm);
 }
 
 ion-item.targets-item {
   --background: rgba(255, 255, 255, 0.06);
   --background-hover: rgba(255, 255, 255, 0.10);
-  --border-radius: 16px;
+  --border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
   overflow: hidden;
 }
@@ -806,7 +873,7 @@ ion-content ion-note {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: var(--space-lg);
   text-align: center;
   background: #0b0d18;
   color: #f2f3f7;
