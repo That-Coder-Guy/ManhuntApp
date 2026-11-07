@@ -69,7 +69,7 @@ test('geo helpers handle missing and zero coordinates', () => {
     assert.ok(Math.abs(calculateBearing(0, 0, 0, 1) - 90) < 0.01, 'due east');
 });
 
-import { formatClock, formatDuration, describeSettings, playAreaStatus, gameClock } from '../src/utils/game.js';
+import { formatClock, formatDuration, formatArea, describeSettings, playAreaStatus, gameClock } from '../src/utils/game.js';
 import { initials } from '../src/utils/avatar.js';
 
 test('clock and duration formats', () => {
@@ -86,23 +86,31 @@ test('clock and duration formats', () => {
     assert.equal(formatDuration(7200), '2 h');
 });
 
+const square = [
+    { latitude: 39.191, longitude: -96.581 }, { latitude: 39.191, longitude: -96.579 },
+    { latitude: 39.189, longitude: -96.579 }, { latitude: 39.189, longitude: -96.581 },
+];
+
 test('settings summary', () => {
     assert.deepEqual(describeSettings({ geofence: null, time_limit_s: 0, head_start_s: 60 }),
         { playArea: 'Anywhere', timeLimit: 'No limit', headStart: '1 min' });
-    assert.equal(describeSettings({ geofence: { latitude: 0, longitude: 0, radius_m: 400 } }).playArea, '400 m radius');
+    assert.equal(describeSettings({ geofence: { points: square } }).playArea, '38,300\u202Fm² area');
+    assert.equal(formatArea(1_234_567), '1.2\u202Fkm²');
 });
 
 test('play area status', () => {
-    const fence = { latitude: 39.19, longitude: -96.58, radius_m: 100 };
+    const fence = { points: square };
     assert.equal(playAreaStatus(null, { latitude: 1, longitude: 1 }), null);
     assert.equal(playAreaStatus(fence, { latitude: null, longitude: null }), null);
-    const inside = playAreaStatus(fence, { latitude: 39.1903, longitude: -96.58 });
+    const inside = playAreaStatus(fence, { latitude: 39.1905, longitude: -96.58 });
     assert.equal(inside.outside, false);
-    assert.ok(inside.distanceToEdge > 60 && inside.distanceToEdge < 70);
-    const out = playAreaStatus(fence, { latitude: 39.192, longitude: -96.58 }); // ~222 m north
+    assert.ok(Math.abs(inside.distanceToEdge - 55.6) < 1);
+    const out = playAreaStatus(fence, { latitude: 39.193, longitude: -96.58 }); // ~222 m north of the top edge
     assert.equal(out.outside, true);
-    assert.equal(out.directionToCentre, 'S');
-    assert.ok(out.distanceToEdge > 115 && out.distanceToEdge < 130);
+    assert.equal(out.directionBack, 'S');
+    assert.ok(Math.abs(out.distanceToEdge - 222.4) < 2);
+    // East of the area: the way back is west, to the nearest edge
+    assert.equal(playAreaStatus(fence, { latitude: 39.19, longitude: -96.575 }).directionBack, 'W');
 });
 
 test('game clock phases', () => {

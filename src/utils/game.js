@@ -1,5 +1,6 @@
-import { calculateDistance, calculateBearing, formatDistance } from './geo.js';
+import { calculateBearing } from './geo.js';
 import { bearingToCardinal } from './orientation.js';
+import { pointInPolygon, nearestBoundaryPoint, polygonArea } from '../../shared/geofence.js';
 
 /** "4:05", or "1:04:05" past an hour; negative times read as 0:00 */
 export function formatClock(ms)
@@ -22,32 +23,41 @@ export function formatDuration(seconds, zero = 'None')
     return minutes ? `${hours} h ${minutes} min` : `${hours} h`;
 }
 
+/** "38,500 m²" below a square kilometre, "1.2 km²" above */
+export function formatArea(squareMetres)
+{
+    if (squareMetres < 1_000_000)
+    {
+        return `${(Math.round(squareMetres / 100) * 100).toLocaleString('en-US')}\u202Fm²`;
+    }
+    return `${(squareMetres / 1_000_000).toFixed(1)}\u202Fkm²`;
+}
+
 /** One-line descriptions of each setting, for the summary card */
 export function describeSettings(settings)
 {
     const fence = settings?.geofence;
     return {
-        playArea: fence ? `${formatDistance(fence.radius_m)} radius` : 'Anywhere',
+        playArea: fence ? `${formatArea(polygonArea(fence.points))} area` : 'Anywhere',
         timeLimit: formatDuration(settings?.time_limit_s, 'No limit'),
         headStart: formatDuration(settings?.head_start_s)
     };
 }
 
 /**
- * Where a position stands against the play area: inside or not, and the way
- * back to the centre. Null when there is no play area or no position.
+ * Where a position stands against the play area: inside or not, how far the
+ * nearest edge is, and (outside) which way leads straight back in. Null when
+ * there is no play area or no position.
  */
 export function playAreaStatus(geofence, location)
 {
     if (!geofence || location?.latitude == null || location?.longitude == null) return null;
 
-    const fromCentre = calculateDistance(geofence.latitude, geofence.longitude, location.latitude, location.longitude);
-    const outside = fromCentre > geofence.radius_m;
+    const { distance, point } = nearestBoundaryPoint(location, geofence.points);
     return {
-        outside,
-        // Inside: room to the edge. Outside: how far back in.
-        distanceToEdge: Math.abs(geofence.radius_m - fromCentre),
-        directionToCentre: bearingToCardinal(calculateBearing(location.latitude, location.longitude, geofence.latitude, geofence.longitude))
+        outside: !pointInPolygon(location, geofence.points),
+        distanceToEdge: distance,
+        directionBack: bearingToCardinal(calculateBearing(location.latitude, location.longitude, point.latitude, point.longitude))
     };
 }
 

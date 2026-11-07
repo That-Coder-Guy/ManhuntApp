@@ -226,13 +226,22 @@ test('a lobby with no host gives it to the first player; the key reclaims it', {
 
 test('host settings are validated and only change before the game', { skip }, async () => {
     const { lobbyId, host } = await hostedLobby();
-    const fence = { latitude: 39.19, longitude: -96.58, radius_m: 400 };
-    const ok = await ack(host.socket, 'update-settings', { settings: { geofence: fence, time_limit_s: 1800, head_start_s: 60 } });
+    const square = [
+        { latitude: 39.191, longitude: -96.581 }, { latitude: 39.191, longitude: -96.579 },
+        { latitude: 39.189, longitude: -96.579 }, { latitude: 39.189, longitude: -96.581 },
+    ];
+    const ok = await ack(host.socket, 'update-settings', {
+        settings: { geofence: { points: square.map((p) => ({ ...p, junk: 'dropped' })) }, time_limit_s: 1800, head_start_s: 60 }
+    });
     assert.equal(ok.status, 'success');
-    assert.deepEqual(ok.settings, { geofence: fence, time_limit_s: 1800, head_start_s: 60 });
+    assert.deepEqual(ok.settings, { geofence: { points: square }, time_limit_s: 1800, head_start_s: 60 }, 'only coordinates are kept');
 
-    for (const bad of [{ geofence: { ...fence, radius_m: 10 } }, { geofence: { ...fence, latitude: 99 } },
-        { time_limit_s: -1 }, { time_limit_s: 1.5 }, { head_start_s: 9999 }, { geofence: 'x' }]) {
+    const bowtie = [square[0], square[2], square[1], square[3]];
+    for (const bad of [{ geofence: { points: square.slice(0, 2) } }, { geofence: { points: bowtie } },
+        { geofence: { points: [...square.slice(0, 3), { latitude: 99, longitude: 0 }] } },
+        { geofence: { points: Array.from({ length: 31 }, (_, i) => ({ latitude: 39 + Math.cos(i) / 100, longitude: -96 + Math.sin(i) / 100 })) } },
+        { geofence: { points: [square[0], square[1], { latitude: 40.5, longitude: -96.58 }] } },
+        { time_limit_s: -1 }, { time_limit_s: 1.5 }, { head_start_s: 9999 }, { geofence: 'x' }, { geofence: { points: 'x' } }]) {
         assert.equal((await ack(host.socket, 'update-settings', { settings: bad })).status, 'validation_error', JSON.stringify(bad));
     }
     assert.equal(game.lobbies.get(lobbyId).settings.time_limit_s, 1800, 'bad updates change nothing');
@@ -307,7 +316,11 @@ test('out-of-bounds is flagged against the play area during a game', { skip }, a
     const { lobbyId, host } = await hostedLobby();
     const runner = await join({ lobby_id: lobbyId });
     await ack(host.socket, 'update-player', { is_seeker: true });
-    await ack(host.socket, 'update-settings', { settings: { geofence: { latitude: 39.19, longitude: -96.58, radius_m: 100 } } });
+    // ~220 m square around the host
+    await ack(host.socket, 'update-settings', { settings: { geofence: { points: [
+        { latitude: 39.191, longitude: -96.581 }, { latitude: 39.191, longitude: -96.579 },
+        { latitude: 39.189, longitude: -96.579 }, { latitude: 39.189, longitude: -96.581 },
+    ] } } });
     await ack(host.socket, 'update-location', { latitude: 39.19, longitude: -96.58 });
     await ack(runner.socket, 'update-location', { latitude: 39.2, longitude: -96.58 }); // ~1.1 km out
     await ack(host.socket, 'start-game');

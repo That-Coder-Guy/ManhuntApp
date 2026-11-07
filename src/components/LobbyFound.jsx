@@ -136,6 +136,7 @@ function LobbyFound({ lobbyId, lobby, onLeft, permissionsGranted = false })
                                     isSeeker={isSeeker}
                                     location={currentLocation}
                                     clockOffset={clockOffset}
+                                    onOpenMap={settings?.geofence ? () => setIsSettingsOpen(true) : undefined}
                                 />
                             </div>
                             <div className="lobby-body-main">

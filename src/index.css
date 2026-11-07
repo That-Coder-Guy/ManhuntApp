@@ -1677,14 +1677,6 @@ ion-list.settings-list ion-toggle {
   --track-background-checked: var(--accent);
 }
 
-ion-list.settings-list ion-range {
-  --bar-background: var(--hairline-color);
-  --bar-background-active: var(--accent);
-  --knob-background: var(--text-1);
-  --knob-size: 1.5rem;
-  padding: 0;
-}
-
 ion-list.settings-list ion-select {
   --placeholder-color: var(--text-2);
   font-size: var(--fs-body);
@@ -1706,6 +1698,129 @@ ion-list.settings-list ion-select {
 ion-toolbar ion-buttons ion-button.toolbar-primary {
   --color: var(--accent);
   font-weight: 600;
+}
+
+/* ===== PLAY AREA MAP ===== */
+.play-area-editor {
+  margin-top: var(--space-3);
+}
+
+/* Fixed height: the sheet never reflows as corners are added */
+.play-area-map {
+  height: 18rem;
+  border: var(--hairline);
+  border-radius: var(--radius-track);
+  overflow: hidden;
+  background: var(--ink-0);
+}
+
+.play-area-map.leaflet-container {
+  font-family: var(--font-sans);
+  background: var(--ink-0);
+}
+
+/* Night-tinted street map: the content stays readable, the chrome stays quiet */
+.play-area-map .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.8) contrast(0.9) saturate(0.4);
+}
+
+.play-area-map .leaflet-control-zoom {
+  border: var(--hairline);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+
+.play-area-map .leaflet-control-zoom a {
+  width: 2.25rem;
+  height: 2.25rem;
+  line-height: 2.25rem;
+  background: var(--ink-2);
+  color: var(--text-1);
+  border-bottom: var(--hairline);
+}
+
+.play-area-map .leaflet-control-attribution {
+  background: rgba(11, 13, 20, 0.75);
+  color: var(--text-3);
+  font-size: 0.625rem;
+}
+
+.play-area-map .leaflet-control-attribution a {
+  color: var(--text-2);
+}
+
+/* Corner handles: numbered blaze discs; the touch target is the full icon box */
+.pa-vertex {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pa-vertex span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--ink-1);
+  color: var(--on-accent);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 500;
+}
+
+.pa-vertex--editable span {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.pa-midpoint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pa-midpoint span {
+  display: block;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 50%;
+  background: var(--ink-1);
+  border: 2px solid var(--accent);
+}
+
+.play-area-status {
+  margin: var(--space-2) var(--space-1) 0;
+  height: 1.25rem;
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  line-height: 1.25rem;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.play-area-status--problem {
+  color: var(--negative);
+}
+
+.play-area-tools {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.play-area-tools ion-button {
+  flex: 1 1 0;
+  height: 2.25rem;
+  min-height: 0;
+  margin: 0;
+  --padding-start: var(--space-2);
+  --padding-end: var(--space-2);
+  font-size: var(--fs-caption);
 }
 
 /* ===== ACTION SHEETS (photo, player menu, select pickers) ===== */

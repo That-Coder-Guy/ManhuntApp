@@ -46,6 +46,17 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/manhunt-api/],
         runtimeCaching: [
           {
+            // Map tiles: keep what's been seen so the play-area map still
+            // draws on a weak connection (OpenStreetMap allows caching)
+            urlPattern: ({ url }) => url.hostname === 'tile.openstreetmap.org',
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'map-tiles',
+              expiration: { maxEntries: 600, maxAgeSeconds: 14 * 24 * 60 * 60 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          },
+          {
             // Game data must always be live — never served from cache
             urlPattern: ({ url }) => url.pathname.startsWith('/manhunt-api'),
             handler: 'NetworkOnly'

@@ -1,14 +1,14 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
     IonModal, IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonContent,
-    IonList, IonItem, IonLabel, IonToggle, IonRange, IonSelect, IonSelectOption, IonNote, IonToast
+    IonList, IonItem, IonLabel, IonToggle, IonSelect, IonSelectOption, IonToast
 } from '@ionic/react';
-import { formatDistance } from '../utils/geo';
-import { formatDuration } from '../utils/game';
+import PlayAreaMap from './PlayAreaMap';
+import { formatDuration, formatArea } from '../utils/game';
+import { polygonArea, polygonProblem, POLYGON_LIMITS } from '../../shared/geofence.js';
 
 const TIME_LIMITS_MIN = [0, 10, 15, 20, 30, 45, 60, 90, 120];
 const HEAD_STARTS_S = [0, 30, 60, 120, 180, 300];
-const RADIUS = { min: 100, max: 2000, step: 50, default: 400 };
 
 /**
  * Game settings. The host edits a draft and saves it; everyone else sees the
@@ -20,32 +20,42 @@ function SettingsSheet({ isOpen, onClose, settings, isHost, canEdit, currentLoca
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState('');
 
+    const mapRef = useRef(null);
+    // Each corner change is kept, so Undo can step back through them
+    const [history, setHistory] = useState([]);
+
     const editable = isHost && canEdit;
     const fence = draft?.geofence ?? null;
-    const [radius, setRadius] = useState(RADIUS.default);
     const fenceOn = fence !== null;
+    const points = fence?.points ?? [];
     const hasFix = currentLocation?.latitude != null;
+    const problem = fenceOn ? polygonProblem(points) : null;
 
     // Start each opening from what the lobby currently has
     const handleWillPresent = () =>
     {
         setDraft(settings);
-        setRadius(settings?.geofence?.radius_m ?? RADIUS.default);
+        setHistory([]);
     };
 
-    const centreHere = () => ({ latitude: currentLocation.latitude, longitude: currentLocation.longitude, radius_m: radius });
+    function setPoints(next)
+    {
+        setHistory((h) => [...h, points]);
+        setDraft((d) => ({ ...d, geofence: { points: next } }));
+    }
+
+    const undo = () =>
+    {
+        if (!history.length) return;
+        setDraft((d) => ({ ...d, geofence: { points: history[history.length - 1] } }));
+        setHistory((h) => h.slice(0, -1));
+    };
 
     function toggleFence(on)
     {
-        // The centre needs a GPS fix; without one the area stays off
-        if (on && !hasFix) return setError('Waiting for your location. Try again in a moment.');
-        setDraft((d) => ({ ...d, geofence: on ? centreHere() : null }));
-    }
-
-    function changeRadius(value)
-    {
-        setRadius(value);
-        setDraft((d) => (d.geofence ? { ...d, geofence: { ...d.geofence, radius_m: value } } : d));
+        setHistory([]);
+        // Turning it back on restores the lobby's saved area, if there was one
+        setDraft((d) => ({ ...d, geofence: on ? (settings?.geofence ?? { points: [] }) : null }));
     }
 
     async function save()
@@ -73,7 +83,7 @@ function SettingsSheet({ isOpen, onClose, settings, isHost, canEdit, currentLoca
                     <IonTitle>Game settings</IonTitle>
                     {editable && (
                         <IonButtons slot="end">
-                            <IonButton data-testid="settings-save" className="toolbar-primary" disabled={isSaving} onClick={save}>
+                            <IonButton data-testid="settings-save" className="toolbar-primary" disabled={isSaving || !!problem} onClick={save}>
                                 {isSaving ? 'Saving…' : 'Save'}
                             </IonButton>
                         </IonButtons>
@@ -93,7 +103,7 @@ function SettingsSheet({ isOpen, onClose, settings, isHost, canEdit, currentLoca
                     <IonItem>
                         <IonLabel>
                             <h2>Limit the play area</h2>
-                            <p>A circle around where you are now</p>
+                            <p>{editable ? 'Draw it on the map: tap to place corners' : 'Players outside it are flagged'}</p>
                         </IonLabel>
                         <IonToggle
                             slot="end"
@@ -104,39 +114,39 @@ function SettingsSheet({ isOpen, onClose, settings, isHost, canEdit, currentLoca
                             onIonChange={(e) => toggleFence(e.detail.checked)}
                         />
                     </IonItem>
-                    {fenceOn && (
-                        <>
-                            <IonItem>
-                                <IonLabel>
-                                    <h2>Radius</h2>
-                                </IonLabel>
-                                <IonNote slot="end" className="settings-value" data-testid="fence-radius">
-                                    {formatDistance(fence.radius_m)}
-                                </IonNote>
-                            </IonItem>
-                            <IonItem>
-                                <IonRange
-                                    aria-label="Play area radius"
-                                    data-testid="fence-range"
-                                    min={RADIUS.min}
-                                    max={RADIUS.max}
-                                    step={RADIUS.step}
-                                    value={fence.radius_m}
-                                    disabled={!editable}
-                                    onIonInput={(e) => changeRadius(e.detail.value)}
-                                />
-                            </IonItem>
-                            {editable && (
-                                <IonItem button detail={false} disabled={!hasFix} onClick={() => setDraft((d) => ({ ...d, geofence: centreHere() }))}>
-                                    <IonLabel>
-                                        <h2>Re-centre on me</h2>
-                                        <p>Use your current position as the middle</p>
-                                    </IonLabel>
-                                </IonItem>
-                            )}
-                        </>
-                    )}
                 </IonList>
+
+                {fenceOn && (
+                    <div className="play-area-editor" data-testid="play-area-editor">
+                        <PlayAreaMap
+                            ref={mapRef}
+                            points={points}
+                            onChange={setPoints}
+                            editable={editable}
+                            you={currentLocation}
+                            maxCorners={POLYGON_LIMITS.maxCorners}
+                        />
+                        <p className={`play-area-status${problem && points.length ? ' play-area-status--problem' : ''}`} data-testid="play-area-status">
+                            {problem
+                                ? (points.length ? problem : 'Tap the map to place the first corner')
+                                : `${points.length} corners · ${formatArea(polygonArea(points))}`}
+                        </p>
+                        <div className="play-area-tools">
+                            {editable && (
+                                <>
+                                    <IonButton size="small" className="button-secondary" data-testid="fence-undo" disabled={!history.length} onClick={undo}>Undo</IonButton>
+                                    <IonButton size="small" className="button-secondary" data-testid="fence-clear" disabled={!points.length} onClick={() => setPoints([])}>Clear</IonButton>
+                                </>
+                            )}
+                            <IonButton size="small" className="button-secondary" data-testid="fence-me" disabled={!hasFix} onClick={() => mapRef.current?.centreOn(currentLocation)}>
+                                Centre on me
+                            </IonButton>
+                        </div>
+                        {editable && (
+                            <p className="settings-note">Drag a corner to move it, tap it to remove it, or tap a hollow handle to add one between two corners.</p>
+                        )}
+                    </div>
+                )}
 
                 <h3 className="settings-section">Timing</h3>
                 <IonList inset className="settings-list">

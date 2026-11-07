@@ -14,7 +14,7 @@ export function SettingsRow({ settings, isHost, onOpen })
             <IonLabel>
                 <h2>Game settings</h2>
                 <p className="player-freshness" data-testid="settings-summary">
-                    {playArea} · {timeLimit} · {headStart === 'None' ? 'no head start' : `${headStart} head start`}
+                    {[playArea, timeLimit, headStart !== 'None' && `${headStart} head start`].filter(Boolean).join(' · ')}
                 </p>
             </IonLabel>
             <span slot="end" className="settings-row-action">{isHost ? 'Edit' : 'View'}</span>
@@ -26,7 +26,7 @@ export function SettingsRow({ settings, isHost, onOpen })
  * In-game status: the clock (head start, time left, or time played) and where
  * this player stands against the play area. Fixed height.
  */
-export function GameStatusCard({ game, settings, isSeeker, location, clockOffset })
+export function GameStatusCard({ game, settings, isSeeker, location, clockOffset, onOpenMap })
 {
     const now = useNow(500);
     const clock = gameClock(game, now + clockOffset);
@@ -46,7 +46,15 @@ export function GameStatusCard({ game, settings, isSeeker, location, clockOffset
     }
 
     return (
-        <IonItem lines="none" className="name-card status-card" data-testid="game-status">
+        <IonItem
+            lines="none"
+            button={!!onOpenMap}
+            detail={false}
+            className="name-card status-card"
+            data-testid="game-status"
+            onClick={onOpenMap}
+            aria-label={onOpenMap ? 'Game status. Tap to see the play area map' : undefined}
+        >
             <div className="status-row">
                 <div className="status-clock">
                     <span className="status-label">{label}</span>
@@ -61,7 +69,7 @@ export function GameStatusCard({ game, settings, isSeeker, location, clockOffset
                     ) : area.outside ? (
                         <span className="status-area status-area--out" data-testid="out-of-bounds">
                             <IonIcon icon={warningOutline} aria-hidden="true" />
-                            Outside · {formatDistance(area.distanceToEdge)} back, head {area.directionToCentre}
+                            Outside · {formatDistance(area.distanceToEdge)} back, head {area.directionBack}
                         </span>
                     ) : (
                         <span className="status-area">In play area · {formatDistance(area.distanceToEdge)} to edge</span>

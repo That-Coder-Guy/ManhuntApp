@@ -150,6 +150,25 @@ Environment knobs (server):
 - `ALLOWED_ORIGINS` — extra comma-separated origins to allow (split hosting).
 - `TRUST_ALL_ORIGINS=1` — allow any origin (disables the CORS allowlist).
 
+## Hosting a game
+
+Whoever creates a lobby is its host (the server gives the creator a secret
+host key, kept with their session). In the pregame lobby everyone sets a
+name, a small profile picture and a role; the host sets the rules and starts.
+
+- **Play area**: the host draws a polygon on a map (tap to place corners, drag
+  to move, tap a corner to remove it, tap a hollow handle to add one). Players
+  outside it are flagged to everyone and told the way back. The inside test
+  lives in `shared/geofence.js`, used by both the app and the server.
+- **Time limit** (the hiders win when it runs out) and **head start** (seekers
+  wait; hiders' positions stay hidden until it ends).
+- The host can move players between roles, hand over the host role, remove
+  players, end the game and start another round. The server enforces all of
+  this, not just the UI.
+
+Map tiles come from OpenStreetMap (free, attribution shown on the map). Tiles
+already seen are cached by the service worker for patchy connections.
+
 ## Compass / device orientation (Android & iOS)
 
 The compass arrow works across platforms via `src/hooks/useCompassHeading.js`

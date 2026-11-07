@@ -1,5 +1,8 @@
-// Pure game rules: session settings, play-area math and avatar checks.
-// No I/O here, so everything is unit-testable.
+// Pure game rules: session settings, play-area checks and avatar checks.
+// No I/O here, so everything is unit-testable. The polygon geometry is the
+// same module the app uses (shared/geofence.js), so both agree on "inside".
+
+const { polygonProblem, pointInPolygon } = require('../shared/geofence.js');
 
 const PHASE = Object.freeze({
     LOBBY: 'lobby',     // pregame: players join, set profiles, host sets rules
@@ -8,20 +11,17 @@ const PHASE = Object.freeze({
 });
 
 const LIMITS = Object.freeze({
-    radiusMinM: 50,
-    radiusMaxM: 5000,
     timeLimitMaxS: 3 * 60 * 60,
     headStartMaxS: 10 * 60,
     avatarMaxChars: 40_000, // ~30 KB image; a 96px JPEG is a few KB
 });
 
 const DEFAULT_SETTINGS = Object.freeze({
-    geofence: null,       // { latitude, longitude, radius_m } or null for no play area
+    geofence: null,       // { points: [{ latitude, longitude }, ...] } or null for no play area
     time_limit_s: 0,      // 0 = no limit
     head_start_s: 0,      // seekers wait this long after the start
 });
 
-const isCoordinate = (value, limit) => typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= limit;
 const isWholeInRange = (value, min, max) => Number.isInteger(value) && value >= min && value <= max;
 
 /**
@@ -43,14 +43,11 @@ function applySettings(current, update)
         }
         else
         {
-            if (!fence || typeof fence !== 'object') return { error: 'Play area is invalid' };
-            const { latitude, longitude, radius_m: radius } = fence;
-            if (!isCoordinate(latitude, 90) || !isCoordinate(longitude, 180)) return { error: 'Play area centre is invalid' };
-            if (!isWholeInRange(radius, LIMITS.radiusMinM, LIMITS.radiusMaxM))
-            {
-                return { error: `Play area radius must be ${LIMITS.radiusMinM}–${LIMITS.radiusMaxM} m` };
-            }
-            next.geofence = { latitude, longitude, radius_m: radius };
+            const points = fence && typeof fence === 'object' ? fence.points : undefined;
+            const problem = polygonProblem(points);
+            if (problem) return { error: problem };
+            // Keep only the coordinates, whatever else the client sent
+            next.geofence = { points: points.map(({ latitude, longitude }) => ({ latitude, longitude })) };
         }
     }
 
@@ -69,21 +66,11 @@ function applySettings(current, update)
     return { settings: next };
 }
 
-/** Great-circle distance in metres (haversine) */
-function distanceMeters(lat1, lon1, lat2, lon2)
-{
-    const rad = Math.PI / 180;
-    const dLat = (lat2 - lat1) * rad;
-    const dLon = (lon2 - lon1) * rad;
-    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLon / 2) ** 2;
-    return 6371e3 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 /** True when a player with a known position is outside the play area */
 function isOutOfBounds(geofence, player)
 {
     if (!geofence || player.latitude == null || player.longitude == null) return false;
-    return distanceMeters(geofence.latitude, geofence.longitude, player.latitude, player.longitude) > geofence.radius_m;
+    return !pointInPolygon(player, geofence.points);
 }
 
 /** A small profile picture as a base64 data URL, or null to clear it */
@@ -95,4 +82,4 @@ function isValidAvatar(avatar)
         && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(avatar);
 }
 
-module.exports = { PHASE, LIMITS, DEFAULT_SETTINGS, applySettings, distanceMeters, isOutOfBounds, isValidAvatar };
+module.exports = { PHASE, LIMITS, DEFAULT_SETTINGS, applySettings, isOutOfBounds, isValidAvatar };

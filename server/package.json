@@ -3,6 +3,9 @@
   "version": "2.0.0",
   "description": "Manhunt game API server (Socket.IO)",
   "main": "server.js",
+  "engines": {
+    "node": ">=20.19"
+  },
   "scripts": {
     "start": "node server.js"
   },
