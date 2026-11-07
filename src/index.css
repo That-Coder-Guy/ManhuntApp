@@ -1735,6 +1735,18 @@ ion-toolbar ion-buttons ion-button.toolbar-primary {
   border-bottom: var(--hairline);
 }
 
+/* Leaflet's own hover/disabled colours are light; keep the buttons on the ramp */
+.play-area-map .leaflet-control-zoom a:hover,
+.play-area-map .leaflet-control-zoom a:focus {
+  background: var(--ink-3);
+  color: var(--text-1);
+}
+
+.play-area-map .leaflet-control-zoom a.leaflet-disabled {
+  background: var(--ink-2);
+  color: var(--text-3);
+}
+
 .play-area-map .leaflet-control-attribution {
   background: rgba(11, 13, 20, 0.75);
   color: var(--text-3);
@@ -1745,8 +1757,11 @@ ion-toolbar ion-buttons ion-button.toolbar-primary {
   color: var(--text-2);
 }
 
-/* Corner handles: numbered blaze discs; the touch target is the full icon box */
-.pa-vertex {
+/* Corner handles: numbered blaze discs; the touch target is the full icon box.
+   Leaflet's stylesheet (loaded after this one) sets .leaflet-marker-icon to
+   display:block, which would pin the disc to the box's top-left corner, off
+   the polygon's vertex; the doubled class wins so the disc stays centred. */
+.leaflet-marker-icon.pa-vertex {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1772,7 +1787,7 @@ ion-toolbar ion-buttons ion-button.toolbar-primary {
   height: 1.5rem;
 }
 
-.pa-midpoint {
+.leaflet-marker-icon.pa-midpoint {
   display: flex;
   align-items: center;
   justify-content: center;
