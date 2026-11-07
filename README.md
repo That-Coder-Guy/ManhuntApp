@@ -10,6 +10,108 @@ identity for 5 minutes and resume seamlessly, stale positions are labeled
 instead of silently shown as live, and a service worker keeps the app shell
 loading without connectivity.
 
+<p align="center">
+  <img src="docs/walkthrough/hero.png" alt="Three phones running Manhunt: the pregame lobby, a seeker's compass pointing at a hider 166 m away, and a hider's list warning that a seeker is 52 m away" width="900">
+</p>
+
+## Walkthrough
+
+One round, start to finish, as five friends play it. Every screen below is the
+real app, captured at phone size (390 × 844) from a scripted game.
+
+### 1. Start a lobby
+
+<table>
+  <tr>
+    <td width="33%" valign="top"><img src="docs/walkthrough/01-home.png" alt="Home screen with Start a game and Join a game cards" width="100%"></td>
+    <td width="33%" valign="top"><img src="docs/walkthrough/02-permissions.png" alt="Before you play dialog asking for location and keep-screen-on" width="100%"></td>
+    <td width="33%" valign="top"><img src="docs/walkthrough/06-invite.png" alt="Invite sheet with a QR code and a Copy link button" width="100%"></td>
+  </tr>
+  <tr>
+    <td valign="top"><b>Create or join.</b> Name the lobby and tap <i>Create lobby</i>. Friends join with the lobby ID, a pasted invite link, or the QR button, which scans an invite with the camera.</td>
+    <td valign="top"><b>One permission.</b> Location is required; keeping the screen on is optional and never blocks you.</td>
+    <td valign="top"><b>Invite.</b> The QR button in the top bar shows a code anyone can scan with their phone camera to land straight in the lobby.</td>
+  </tr>
+</table>
+
+### 2. Gather in the lobby
+
+<table>
+  <tr>
+    <td width="33%" valign="top"><img src="docs/walkthrough/03-lobby-host.png" alt="Pregame lobby seen by the host, with a Start game button" width="100%"></td>
+    <td width="33%" valign="top"><img src="docs/walkthrough/05-lobby-guest.png" alt="Pregame lobby seen by a guest, waiting for the host" width="100%"></td>
+    <td width="33%" valign="top"><img src="docs/walkthrough/07-player-menu.png" alt="Host's menu for a player: make a seeker, make host, remove from lobby" width="100%"></td>
+  </tr>
+  <tr>
+    <td valign="top"><b>Everyone sets up.</b> A name, a small profile picture (tap the circle) and a role. The green dot means a player is connected. Only the host gets <i>Start game</i>, and only once there is a seeker and a hider.</td>
+    <td valign="top"><b>Guests wait for the host.</b> They see the same rules and players, read-only.</td>
+    <td valign="top"><b>The host is in charge.</b> The ••• menu on any player switches their role, hands over the host role, or removes them. The server enforces it, not just the app.</td>
+  </tr>
+</table>
+
+### 3. Set the rules
+
+<table>
+  <tr>
+    <td width="33%" valign="top"><img src="docs/walkthrough/04-play-area.png" alt="Game settings sheet with a six-corner play area drawn on a map, a 30 minute time limit and a 30 second head start" width="100%"></td>
+    <td valign="top">
+      <b>Draw the play area.</b> The host taps the map to place corners. Drag a corner to move it, tap it to remove it, or tap a hollow handle to add one between two corners. The area updates live, and a shape whose edges cross can't be saved.
+      <br><br>
+      <b>Time limit and head start.</b> Seekers wait out the head start while hiders' positions stay hidden. The clock starts when seekers set off; the hiders win if it runs out.
+      <br><br>
+      Everyone else can open the same sheet to see the rules and the area, but can't change them.
+    </td>
+  </tr>
+</table>
+
+### 4. Seek
+
+<table>
+  <tr>
+    <td width="33%" valign="top"><img src="docs/walkthrough/08-head-start.png" alt="Seeker during the head start: Hiders are hiding 0:26, distances hidden" width="100%"></td>
+    <td width="33%" valign="top"><img src="docs/walkthrough/09-seeker.png" alt="Seeker's list of hiders with distances; one hider marked Outside" width="100%"></td>
+    <td width="33%" valign="top"><img src="docs/walkthrough/10-compass.png" alt="Compass dial with the needle pointing at Priya, 166 m away" width="100%"></td>
+  </tr>
+  <tr>
+    <td valign="top"><b>Head start.</b> Seekers count down while hiders scatter. Hider positions are withheld by the server until it ends.</td>
+    <td valign="top"><b>The hunt.</b> Every hider with their distance and how fresh their position is. Anyone who leaves the play area is marked <i>Outside</i>.</td>
+    <td valign="top"><b>The compass.</b> Tap a hider: the needle points at them, the dial turns so N stays north, and the distance updates as you move.</td>
+  </tr>
+</table>
+
+### 5. Hide
+
+<table>
+  <tr>
+    <td width="33%" valign="top"><img src="docs/walkthrough/11-hider.png" alt="Hider's list of seekers; the closest is flagged at 52 m with a warning icon and a full red proximity bar" width="100%"></td>
+    <td width="33%" valign="top"><img src="docs/walkthrough/12-outside.png" alt="Hider outside the play area: Outside, 251 m back, head N" width="100%"></td>
+    <td width="33%" valign="top"><img src="docs/walkthrough/13-area-map.png" alt="Map of the play area with the player's position outside it" width="100%"></td>
+  </tr>
+  <tr>
+    <td valign="top"><b>Watch them close in.</b> Seekers sorted by distance, with a bar that fills as each one gets closer. Under 100 m it turns red with a warning icon.</td>
+    <td valign="top"><b>Stay in bounds.</b> Step outside the area and the status card says how far back it is and which way to go.</td>
+    <td valign="top"><b>See the area.</b> Tap the status card to open the map, framed to show both the area and you.</td>
+  </tr>
+</table>
+
+### 6. Weak signal, and the end of the round
+
+<table>
+  <tr>
+    <td width="33%" valign="top"><img src="docs/walkthrough/14-offline.png" alt="Offline banner: positions from 6 s ago, with the list still showing" width="100%"></td>
+    <td width="33%" valign="top"><img src="docs/walkthrough/15-game-over.png" alt="Game over screen with a Back to the lobby button for the host" width="100%"></td>
+    <td valign="top">
+      <b>Built for patchy signal.</b> When the connection drops, the game keeps showing the last known positions with their age, reconnects on its own and resumes the same player. Nobody is kicked out by a dead zone.
+      <br><br>
+      <b>Game over.</b> The round ends when time runs out or the host ends it. The host takes everyone back to the lobby for another round with the same group.
+    </td>
+  </tr>
+</table>
+
+<sub>The map imagery in these screenshots is a generated stand-in; the app shows
+OpenStreetMap streets. To refresh the images after a UI change, run
+`npm run screenshots` (see <a href="#regenerating-the-walkthrough-screenshots">below</a>).</sub>
+
 ## Repo layout
 
 - Repo root — React + Vite frontend (this used to be the whole repo)
@@ -168,6 +270,21 @@ name, a small profile picture and a role; the host sets the rules and starts.
 
 Map tiles come from OpenStreetMap (free, attribution shown on the map). Tiles
 already seen are cached by the service worker for patchy connections.
+
+## Regenerating the walkthrough screenshots
+
+```bash
+npm i -D playwright && npx playwright install chromium   # once
+npm run screenshots
+```
+
+`scripts/capture-walkthrough.mjs` builds the app, runs the real server on a
+free port, plays a scripted five-player game in five browser "phones" and
+writes every image above to `docs/walkthrough/`. Options:
+
+- `STUB_TILES=1` draws a stand-in street map instead of loading OpenStreetMap
+  (for machines that can't reach it).
+- `--no-build` reuses the current `dist/`.
 
 ## Compass / device orientation (Android & iOS)
 

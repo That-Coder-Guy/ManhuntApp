@@ -1503,10 +1503,6 @@ ion-content .name-card.settings-row {
   text-overflow: ellipsis;
 }
 
-.settings-row-action {
-  font-size: var(--fs-body);
-  color: var(--text-2);
-}
 
 /* The last block above the list keeps one group gap before it */
 .lobby-body-top > :last-child {

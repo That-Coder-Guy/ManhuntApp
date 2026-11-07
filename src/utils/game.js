@@ -38,7 +38,7 @@ export function describeSettings(settings)
 {
     const fence = settings?.geofence;
     return {
-        playArea: fence ? `${formatArea(polygonArea(fence.points))} area` : 'Anywhere',
+        playArea: fence ? formatArea(polygonArea(fence.points)) : 'Anywhere',
         timeLimit: formatDuration(settings?.time_limit_s, 'No limit'),
         headStart: formatDuration(settings?.head_start_s)
     };

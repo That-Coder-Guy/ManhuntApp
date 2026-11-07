@@ -10,6 +10,7 @@
     "build:selfhost": "VITE_API_ORIGIN= vite build",
     "serve": "node server/server.js",
     "tunnel": "node scripts/tunnel.cjs",
+    "screenshots": "node scripts/capture-walkthrough.mjs",
     "lint": "eslint .",
     "test": "node --test \"tests/**/*.test.js\"",
     "preview": "vite preview"

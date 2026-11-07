@@ -94,7 +94,7 @@ const square = [
 test('settings summary', () => {
     assert.deepEqual(describeSettings({ geofence: null, time_limit_s: 0, head_start_s: 60 }),
         { playArea: 'Anywhere', timeLimit: 'No limit', headStart: '1 min' });
-    assert.equal(describeSettings({ geofence: { points: square } }).playArea, '38,300\u202Fm² area');
+    assert.equal(describeSettings({ geofence: { points: square } }).playArea, '38,300\u202Fm²');
     assert.equal(formatArea(1_234_567), '1.2\u202Fkm²');
 });
 

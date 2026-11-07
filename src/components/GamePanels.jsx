@@ -10,14 +10,20 @@ export function SettingsRow({ settings, isHost, onOpen })
 {
     const { playArea, timeLimit, headStart } = describeSettings(settings);
     return (
-        <IonItem button detail className="name-card settings-row" data-testid="settings-row" onClick={onOpen}>
+        <IonItem
+            button
+            detail
+            className="name-card settings-row"
+            data-testid="settings-row"
+            aria-label={isHost ? 'Edit game settings' : 'View game settings'}
+            onClick={onOpen}
+        >
             <IonLabel>
                 <h2>Game settings</h2>
                 <p className="player-freshness" data-testid="settings-summary">
                     {[playArea, timeLimit, headStart !== 'None' && `${headStart} head start`].filter(Boolean).join(' · ')}
                 </p>
             </IonLabel>
-            <span slot="end" className="settings-row-action">{isHost ? 'Edit' : 'View'}</span>
         </IonItem>
     );
 }

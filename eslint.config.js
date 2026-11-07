@@ -19,6 +19,19 @@ export default defineConfig([
     },
   },
   {
+    // Node scripts that also drive a browser (page.evaluate callbacks)
+    files: ['scripts/**/*.mjs'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 2022,
+      globals: { ...globals.node, ...globals.browser },
+      sourceType: 'module',
+    },
+    rules: {
+      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]', argsIgnorePattern: '^_' }],
+    },
+  },
+  {
     files: ['tests/**/*.js'],
     extends: [js.configs.recommended],
     languageOptions: {
