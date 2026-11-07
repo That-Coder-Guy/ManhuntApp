@@ -45,7 +45,8 @@ function requestError(message, status)
 }
 
 /**
- * Create a lobby and resolve with `{ lobby_id }`. Rejects with
+ * Create a lobby and resolve with `{ lobby_id, host_key }`. The host key is
+ * what makes the creator the host, so it is stored with the session. Rejects with
  * status 'network_error' (offline, timed out) or 'http_error' (the server
  * answered, but not with a lobby).
  */
@@ -69,7 +70,7 @@ export async function createLobby(lobbyName)
     }
 
     const data = response.ok ? await response.json().catch(() => null) : null;
-    if (typeof data?.lobby_id !== 'string')
+    if (typeof data?.lobby_id !== 'string' || typeof data?.host_key !== 'string')
     {
         throw requestError(`Unexpected response (HTTP ${response.status})`, 'http_error');
     }

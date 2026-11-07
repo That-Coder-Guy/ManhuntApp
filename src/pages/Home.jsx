@@ -10,6 +10,7 @@ import BrandMark from '../components/BrandMark.jsx';
 import { createLobby } from '../utils/api.js';
 import QrScanModal from '../components/QrScanModal.jsx';
 import { parseLobbyId, lobbyPath } from '../utils/lobbyLink.js';
+import { updateSession } from '../utils/session.js';
 
 function Home()
 {
@@ -27,7 +28,9 @@ function Home()
 
         setIsCreating(true);
         try {
-            const { lobby_id: lobbyId } = await createLobby(name);
+            const { lobby_id: lobbyId, host_key: hostKey } = await createLobby(name);
+            // The key is what makes this player the host once they join
+            updateSession(lobbyId, { hostKey });
             navigate(lobbyPath(lobbyId));
         } catch (error) {
             console.error('Error creating lobby:', error);

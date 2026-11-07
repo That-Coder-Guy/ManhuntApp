@@ -1,8 +1,9 @@
 /**
- * Per-lobby player tokens in localStorage, so a reload or a dropped
- * connection resumes the same player. Every access is guarded: storage can
- * be full, disabled or throw in private browsing, and a missing session must
- * only ever mean "join as a new player".
+ * Per-lobby session in localStorage: the player token (so a reload or a
+ * dropped connection resumes the same player) and, for the creator, the host
+ * key. Every access is guarded: storage can be full, disabled or throw in
+ * private browsing, and a missing session must only ever mean "join as a new
+ * player".
  */
 
 const PREFIX = 'manhunt_lobby_';
@@ -10,14 +11,26 @@ const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const MAX_SESSIONS = 10;
 
 const keyFor = (lobbyId) => `${PREFIX}${lobbyId}`;
+const optionalString = (value) => value === undefined || typeof value === 'string';
 
 function read(key)
 {
     try {
         const data = JSON.parse(localStorage.getItem(key));
-        return data && typeof data.playerToken === 'string' && Number.isFinite(data.timestamp) ? data : null;
+        const valid = data && Number.isFinite(data.timestamp)
+            && optionalString(data.playerToken) && optionalString(data.hostKey);
+        return valid ? data : null;
     } catch {
         return null;
+    }
+}
+
+function write(key, data)
+{
+    try {
+        localStorage.setItem(key, JSON.stringify({ ...data, timestamp: Date.now() }));
+    } catch {
+        // Not fatal: the game works, it just can't resume after a reload
     }
 }
 
@@ -51,23 +64,29 @@ function prune()
         .forEach(({ key }) => remove(key));
 }
 
-/** The saved token for this lobby, or null */
-export function loadPlayerToken(lobbyId)
+/** `{ playerToken, hostKey }` for this lobby; either may be null */
+export function loadSession(lobbyId)
 {
     prune();
-    return read(keyFor(lobbyId))?.playerToken ?? null;
+    const data = read(keyFor(lobbyId));
+    return { playerToken: data?.playerToken ?? null, hostKey: data?.hostKey ?? null };
 }
 
-export function savePlayerToken(lobbyId, playerToken)
+/** Merge fields into this lobby's session */
+export function updateSession(lobbyId, patch)
 {
-    try {
-        localStorage.setItem(keyFor(lobbyId), JSON.stringify({ playerToken, timestamp: Date.now() }));
-    } catch {
-        // Not fatal: the game works, it just can't resume after a reload
-    }
+    const key = keyFor(lobbyId);
+    write(key, { ...read(key), ...patch });
 }
 
-export function clearPlayerToken(lobbyId)
+/**
+ * Forget the player token. The host key is kept unless `everything` is set,
+ * so a creator whose player expired still gets the host role back on rejoin.
+ */
+export function clearSession(lobbyId, { everything = false } = {})
 {
-    remove(keyFor(lobbyId));
+    const key = keyFor(lobbyId);
+    const hostKey = read(key)?.hostKey;
+    if (everything || !hostKey) remove(key);
+    else write(key, { hostKey });
 }

@@ -3,7 +3,7 @@ import {
     IonItem, IonLabel, IonNote, IonIcon
 } from '@ionic/react';
 import { warningOutline } from 'ionicons/icons';
-import FixDot from './FixDot';
+import Avatar from './Avatar';
 import { formatDistance } from '../utils/geo';
 import { playerFreshness, playerName } from '../utils/players';
 
@@ -31,10 +31,10 @@ export function PlayerListCard({ title, count, emptyText, testIds, children })
 }
 
 /**
- * One player: fix dot, name, freshness line and distance. Optionally a
+ * One player: picture with fix dot, name, freshness line and distance. Optionally a
  * "close" flag and a proximity bar (hider view), or a tap target (seeker view).
  */
-export function PlayerRow({ player, distance, now, danger = false, proximity = null, onClick, testIds })
+export function PlayerRow({ player, avatar, distance, now, danger = false, proximity = null, onClick, testIds })
 {
     const { fresh, offline, label } = playerFreshness(player, now);
 
@@ -47,10 +47,14 @@ export function PlayerRow({ player, distance, now, danger = false, proximity = n
             className={`targets-item${fresh ? '' : ' player-stale'}${danger ? ' targets-item--danger' : ''}`}
             onClick={onClick}
         >
-            <FixDot fresh={fresh} offline={offline} />
+            <Avatar name={playerName(player)} src={avatar} dot={{ fresh, offline }} className="row-avatar" />
             <IonLabel>
                 <h2 data-testid={testIds.name}>{playerName(player)}</h2>
-                <p className="player-freshness">{label}</p>
+                <p className="player-freshness">
+                    {/* Out of bounds leads the line, so it is never the part cut off */}
+                    {player.out_of_bounds && <span className="meta-warning" data-testid="row-out-of-bounds">Outside · </span>}
+                    {label}
+                </p>
             </IonLabel>
             <span
                 slot="end"

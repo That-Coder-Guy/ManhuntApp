@@ -7,29 +7,31 @@ import PlayerError from '../components/PlayerError';
 import PermissionsGate from '../components/PermissionsGate';
 import useWakeLock from '../hooks/useWakeLock';
 import useLobbySocket, { JOIN_STATE } from '../hooks/useLobbySocket';
-import { loadPlayerToken, savePlayerToken, clearPlayerToken } from '../utils/session';
+import { loadSession, updateSession, clearSession } from '../utils/session';
 
 function LobbySession({ lobbyId })
 {
     // Read once per lobby (the route keys this component by lobby ID)
-    const [initialToken] = useState(() => loadPlayerToken(lobbyId));
+    const [credentials] = useState(() => loadSession(lobbyId));
     const [permissionsGranted, setPermissionsGranted] = useState(false);
 
-    const saveSession = useCallback((joined) => savePlayerToken(lobbyId, joined.player_token), [lobbyId]);
-    const clearSession = useCallback(() =>
+    const saveSession = useCallback((joined) => updateSession(lobbyId, { playerToken: joined.player_token }), [lobbyId]);
+    const forgetSession = useCallback(() =>
     {
-        clearPlayerToken(lobbyId);
+        clearSession(lobbyId, { everything: true });
         setPermissionsGranted(false);
     }, [lobbyId]);
 
-    const lobby = useLobbySocket(lobbyId, initialToken, saveSession);
+    const lobby = useLobbySocket(lobbyId, credentials, saveSession);
     const { joinState } = lobby;
     const wakeLock = useWakeLock(joinState === JOIN_STATE.JOINED);
 
     useEffect(() =>
     {
-        // A dead token can't be resumed: forget it so the next visit joins fresh
-        if (joinState === JOIN_STATE.PLAYER_TIMED_OUT) clearPlayerToken(lobbyId);
+        // A dead token can't be resumed: forget it so the next visit joins
+        // fresh (a creator keeps their host key)
+        if (joinState === JOIN_STATE.PLAYER_TIMED_OUT) clearSession(lobbyId);
+        if (joinState === JOIN_STATE.KICKED) clearSession(lobbyId, { everything: true });
         if (joinState !== JOIN_STATE.JOINED) setPermissionsGranted(false);
     }, [joinState, lobbyId]);
 
@@ -43,16 +45,8 @@ function LobbySession({ lobbyId })
                 <>
                     <LobbyFound
                         lobbyId={lobbyId}
-                        lobbyName={lobby.lobbyName}
-                        selfPlayer={lobby.selfPlayer}
-                        players={lobby.players}
-                        connectionState={lobby.connectionState}
-                        lastSyncTime={lobby.lastSyncTime}
-                        lastLocationSentAt={lobby.lastLocationSentAt}
-                        updateLocation={lobby.updateLocation}
-                        updatePlayer={lobby.updatePlayer}
-                        leaveLobby={lobby.leaveLobby}
-                        onClearSession={clearSession}
+                        lobby={lobby}
+                        onLeft={forgetSession}
                         permissionsGranted={permissionsGranted}
                     />
                     <PermissionsGate
@@ -68,6 +62,9 @@ function LobbySession({ lobbyId })
         case JOIN_STATE.PLAYER_TIMED_OUT:
             return <PlayerError lobbyId={lobbyId} />;
 
+        case JOIN_STATE.KICKED:
+            return <PlayerError lobbyId={lobbyId} kicked />;
+
         default:
             return <LobbyError />;
     }
@@ -76,7 +73,7 @@ function LobbySession({ lobbyId })
 function Lobby()
 {
     const { lobby_id: lobbyId } = useParams();
-    // Keyed so moving between lobbies remounts with that lobby's own token
+    // Keyed so moving between lobbies remounts with that lobby's own session
     return <LobbySession key={lobbyId} lobbyId={lobbyId} />;
 }
 

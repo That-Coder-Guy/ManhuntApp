@@ -22,7 +22,7 @@ const sockets = [];
 
 before(async () => {
     if (skip) return;
-    game = createGameServer({ distDir: null, broadcastIntervalMs: 20, maxPlayersPerLobby: 3 });
+    game = createGameServer({ distDir: null, broadcastIntervalMs: 20, maxPlayersPerLobby: 3, cleanupIntervalMs: 60_000 });
     await new Promise((resolve) => game.server.listen(0, '127.0.0.1', resolve));
     base = `http://127.0.0.1:${game.server.address().port}`;
 });
@@ -53,12 +53,23 @@ function join(auth) {
     });
 }
 
-const ack = (socket, event, payload) => socket.timeout(2000).emitWithAck(event, payload);
+const ack = (socket, event, payload = {}) => socket.timeout(2000).emitWithAck(event, payload);
+// This player's own entry in the snapshot sent with `joined`
+const me = (joined) => joined.data.state.players.find((p) => p.player_id === joined.data.player_id);
+// Resolve with the next lobby-state matching a predicate
+function nextState(socket, predicate = () => true, timeoutMs = 3000) {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => { socket.off('lobby-state', handler); reject(new Error('no matching lobby-state')); }, timeoutMs);
+        function handler(state) { if (predicate(state)) { clearTimeout(timer); socket.off('lobby-state', handler); resolve(state); } }
+        socket.on('lobby-state', handler);
+    });
+}
 
 test('creates a lobby and rejects a missing or malformed name', { skip }, async () => {
     const ok = await createLobby('  Riverside  ');
     assert.equal(ok.status, 200);
     assert.match(ok.body.lobby_id, /^[0-9a-f-]{36}$/);
+    assert.ok(ok.body.host_key.length >= 24, 'creator gets a host key');
     assert.equal(game.lobbies.get(ok.body.lobby_id).lobby_name, 'Riverside');
 
     assert.equal((await createLobby('   ')).status, 400);
@@ -74,7 +85,7 @@ test('joins, then resumes the same identity with the token', { skip }, async () 
     const { body } = await createLobby();
     const first = await join({ lobby_id: body.lobby_id });
     assert.equal(first.event, 'joined');
-    assert.equal(first.data.player_data.name, 'Player 1');
+    assert.equal(me(first).name, 'Player 1');
 
     first.socket.disconnect();
     await new Promise((r) => setTimeout(r, 50));
@@ -83,8 +94,8 @@ test('joins, then resumes the same identity with the token', { skip }, async () 
 
     const again = await join({ lobby_id: body.lobby_id, player_token: first.data.player_token });
     assert.equal(again.event, 'joined');
-    assert.equal(again.data.player_data.player_id, first.data.player_data.player_id);
-    assert.equal(again.data.player_data.connected, true);
+    assert.equal(again.data.player_id, first.data.player_id);
+    assert.equal(me(again).connected, true);
 });
 
 test('prototype-like lobby IDs and tokens are rejected and the server survives', { skip }, async () => {
@@ -178,4 +189,182 @@ test('cleanup expires disconnected players and abandoned lobbies', { skip }, asy
     game.lobbies.get(empty.lobby_id).created_at = 0;
     game.cleanupExpired();
     assert.equal(game.lobbies.has(empty.lobby_id), false, 'never-joined lobby removed');
+});
+
+// ---------- Host authority, phases, settings, avatars ----------
+
+async function hostedLobby() {
+    const { body } = await createLobby('Hosted');
+    const host = await join({ lobby_id: body.lobby_id, host_key: body.host_key });
+    return { lobbyId: body.lobby_id, hostKey: body.host_key, host };
+}
+
+test('the creator\'s host key makes them host; others cannot use host actions', { skip }, async () => {
+    const { lobbyId, host } = await hostedLobby();
+    assert.equal(me(host).is_host, true);
+    assert.equal(host.data.state.host_id, host.data.player_id);
+
+    const guest = await join({ lobby_id: lobbyId });
+    assert.equal(me(guest).is_host, false);
+    for (const [event, payload] of [['update-settings', { settings: { time_limit_s: 60 } }], ['start-game', {}],
+        ['kick-player', { player_id: host.data.player_id }], ['set-role', { player_id: 1, is_seeker: true }],
+        ['transfer-host', { player_id: guest.data.player_id }], ['end-game', {}], ['reset-game', {}]]) {
+        assert.equal((await ack(guest.socket, event, payload)).status, 'forbidden', event);
+    }
+    // A wrong key grants nothing
+    const imposter = await join({ lobby_id: lobbyId, host_key: 'not-the-key' });
+    assert.equal(me(imposter).is_host, false);
+});
+
+test('a lobby with no host gives it to the first player; the key reclaims it', { skip }, async () => {
+    const { body } = await createLobby();
+    const first = await join({ lobby_id: body.lobby_id });
+    assert.equal(me(first).is_host, true, 'nobody used the key, so the first player hosts');
+    const creator = await join({ lobby_id: body.lobby_id, host_key: body.host_key });
+    assert.equal(me(creator).is_host, true, 'creator reclaims with the key');
+});
+
+test('host settings are validated and only change before the game', { skip }, async () => {
+    const { lobbyId, host } = await hostedLobby();
+    const fence = { latitude: 39.19, longitude: -96.58, radius_m: 400 };
+    const ok = await ack(host.socket, 'update-settings', { settings: { geofence: fence, time_limit_s: 1800, head_start_s: 60 } });
+    assert.equal(ok.status, 'success');
+    assert.deepEqual(ok.settings, { geofence: fence, time_limit_s: 1800, head_start_s: 60 });
+
+    for (const bad of [{ geofence: { ...fence, radius_m: 10 } }, { geofence: { ...fence, latitude: 99 } },
+        { time_limit_s: -1 }, { time_limit_s: 1.5 }, { head_start_s: 9999 }, { geofence: 'x' }]) {
+        assert.equal((await ack(host.socket, 'update-settings', { settings: bad })).status, 'validation_error', JSON.stringify(bad));
+    }
+    assert.equal(game.lobbies.get(lobbyId).settings.time_limit_s, 1800, 'bad updates change nothing');
+
+    // Partial update keeps the rest
+    await ack(host.socket, 'update-settings', { settings: { geofence: null } });
+    assert.deepEqual(game.lobbies.get(lobbyId).settings, { geofence: null, time_limit_s: 1800, head_start_s: 60 });
+});
+
+test('starting needs both roles, then locks self role changes', { skip }, async () => {
+    const { lobbyId, host } = await hostedLobby();
+    const guest = await join({ lobby_id: lobbyId });
+    assert.equal((await ack(host.socket, 'start-game')).status, 'need_both_roles');
+
+    await ack(host.socket, 'update-player', { is_seeker: true });
+    assert.equal((await ack(host.socket, 'start-game')).status, 'success');
+    assert.equal(game.lobbies.get(lobbyId).phase, 'playing');
+
+    assert.equal((await ack(guest.socket, 'update-player', { is_seeker: true })).status, 'role_locked');
+    assert.equal((await ack(guest.socket, 'update-player', { name: 'Still fine' })).status, 'success', 'names can change');
+    // The host can still move people (a caught hider joins the seekers)
+    assert.equal((await ack(host.socket, 'set-role', { player_id: guest.data.player_id, is_seeker: true })).status, 'success');
+    assert.equal(game.lobbies.get(lobbyId).players.get(guest.data.player_token).is_seeker, true);
+    assert.equal((await ack(host.socket, 'update-settings', { settings: { time_limit_s: 60 } })).status, 'wrong_phase');
+});
+
+test('positions are hidden before the game and hiders stay hidden during the head start', { skip }, async () => {
+    const { lobbyId, host } = await hostedLobby();
+    const hider = await join({ lobby_id: lobbyId });
+    await ack(host.socket, 'update-player', { is_seeker: true });
+    await ack(hider.socket, 'update-location', { latitude: 39.19, longitude: -96.58 });
+    await ack(host.socket, 'update-location', { latitude: 39.2, longitude: -96.58 });
+
+    assert.ok(game.lobbies.get(lobbyId).players.get(hider.data.player_token).latitude, 'server stores the position');
+    // Force a fresh push, then check nobody's position is in it
+    const pregameState = nextState(host.socket, (s) => s.players.some((p) => p.name === 'Pregame'));
+    await ack(hider.socket, 'update-player', { name: 'Pregame' });
+    assert.ok((await pregameState).players.every((p) => p.latitude === null && p.longitude === null), 'no positions shared pregame');
+
+    await ack(host.socket, 'update-settings', { settings: { head_start_s: 1 } });
+    await ack(host.socket, 'start-game');
+    const during = await nextState(host.socket, (s) => s.phase === 'playing');
+    const hiderDuring = during.players.find((p) => p.player_id === hider.data.player_id);
+    const seekerDuring = during.players.find((p) => p.player_id === host.data.player_id);
+    assert.equal(hiderDuring.latitude, null, 'hider hidden during head start');
+    assert.equal(seekerDuring.latitude, 39.2, 'seekers are visible to hiders');
+
+    const after = await nextState(host.socket, (s) => s.players.find((p) => p.player_id === hider.data.player_id).latitude !== null, 3000);
+    assert.equal(after.players.find((p) => p.player_id === hider.data.player_id).latitude, 39.19, 'revealed after head start');
+});
+
+test('the time limit ends the game for the hiders; the host can end and reset', { skip }, async () => {
+    const { lobbyId, host } = await hostedLobby();
+    await join({ lobby_id: lobbyId });
+    await ack(host.socket, 'update-player', { is_seeker: true });
+    await ack(host.socket, 'update-settings', { settings: { time_limit_s: 1 } });
+    await ack(host.socket, 'start-game');
+    const ended = await nextState(host.socket, (s) => s.phase === 'ended', 4000);
+    assert.deepEqual(ended.game.result, { reason: 'time_up', winner: 'hiders' });
+
+    assert.equal((await ack(host.socket, 'reset-game')).status, 'success');
+    assert.equal(game.lobbies.get(lobbyId).phase, 'lobby');
+    assert.equal(game.lobbies.get(lobbyId).game, null);
+
+    await ack(host.socket, 'update-settings', { settings: { time_limit_s: 0 } });
+    await ack(host.socket, 'start-game');
+    assert.equal((await ack(host.socket, 'end-game')).status, 'success');
+    assert.equal(game.lobbies.get(lobbyId).game.result.reason, 'host_ended');
+});
+
+test('out-of-bounds is flagged against the play area during a game', { skip }, async () => {
+    const { lobbyId, host } = await hostedLobby();
+    const runner = await join({ lobby_id: lobbyId });
+    await ack(host.socket, 'update-player', { is_seeker: true });
+    await ack(host.socket, 'update-settings', { settings: { geofence: { latitude: 39.19, longitude: -96.58, radius_m: 100 } } });
+    await ack(host.socket, 'update-location', { latitude: 39.19, longitude: -96.58 });
+    await ack(runner.socket, 'update-location', { latitude: 39.2, longitude: -96.58 }); // ~1.1 km out
+    await ack(host.socket, 'start-game');
+    const state = await nextState(host.socket, (s) => s.phase === 'playing');
+    assert.equal(state.players.find((p) => p.player_id === runner.data.player_id).out_of_bounds, true);
+    assert.equal(state.players.find((p) => p.player_id === host.data.player_id).out_of_bounds, false);
+});
+
+test('the host can remove a player, who is told why', { skip }, async () => {
+    const { lobbyId, host } = await hostedLobby();
+    const guest = await join({ lobby_id: lobbyId });
+    const told = new Promise((resolve) => guest.socket.once('fatal-error', resolve));
+    assert.equal((await ack(host.socket, 'kick-player', { player_id: host.data.player_id })).status, 'validation_error', 'not yourself');
+    assert.equal((await ack(host.socket, 'kick-player', { player_id: guest.data.player_id })).status, 'success');
+    assert.equal((await told).status, 'kicked');
+    assert.equal(game.lobbies.get(lobbyId).players.has(guest.data.player_token), false);
+    const back = await join({ lobby_id: lobbyId, player_token: guest.data.player_token });
+    assert.equal(back.data.status, 'invalid_player_token', 'their old identity is gone');
+});
+
+test('the host role moves on when the host leaves or hands it over', { skip }, async () => {
+    const { lobbyId, host } = await hostedLobby();
+    const second = await join({ lobby_id: lobbyId });
+    const third = await join({ lobby_id: lobbyId });
+
+    assert.equal((await ack(host.socket, 'transfer-host', { player_id: third.data.player_id })).status, 'success');
+    const lobby = game.lobbies.get(lobbyId);
+    assert.equal(lobby.host_token, third.data.player_token);
+    assert.equal((await ack(host.socket, 'start-game')).status, 'forbidden', 'old host lost authority');
+
+    await ack(third.socket, 'leave-lobby');
+    assert.equal(lobby.host_token, host.data.player_token, 'earliest remaining player hosts');
+    void second;
+});
+
+test('profile pictures are validated and delivered separately from state', { skip }, async () => {
+    const { lobbyId, host } = await hostedLobby();
+    const watcher = await join({ lobby_id: lobbyId });
+    const picture = 'data:image/jpeg;base64,' + Buffer.from('fake-jpeg-bytes').toString('base64');
+
+    const pushed = new Promise((resolve) => watcher.socket.once('avatar', resolve));
+    assert.equal((await ack(host.socket, 'set-avatar', { avatar: picture })).status, 'success');
+    assert.deepEqual(await pushed, { player_id: host.data.player_id, avatar: picture });
+
+    for (const bad of ['http://evil/x.png', 'data:image/svg+xml;base64,PHN2Zz4=', 'data:image/png;base64,' + 'A'.repeat(50_000), 42]) {
+        assert.equal((await ack(host.socket, 'set-avatar', { avatar: bad })).status, 'validation_error');
+    }
+
+    const state = await nextState(watcher.socket);
+    assert.ok(!JSON.stringify(state).includes('base64'), 'pictures are not in the per-second state');
+    assert.equal(state.players.find((p) => p.player_id === host.data.player_id).avatar_rev, 1);
+
+    // A newcomer gets everyone's picture once, on join
+    const late = connect(base, { path: SOCKET_PATH, auth: { lobby_id: lobbyId }, reconnection: false, transports: ['websocket'] });
+    sockets.push(late);
+    const avatars = await new Promise((resolve) => late.once('avatars', resolve));
+    assert.equal(avatars.avatars[host.data.player_id], picture);
+
+    assert.equal((await ack(host.socket, 'set-avatar', { avatar: null })).status, 'success', 'can be cleared');
 });

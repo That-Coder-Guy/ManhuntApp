@@ -1,9 +1,11 @@
 import {
     IonModal, IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonContent
 } from '@ionic/react';
-import PlayerTable from './PlayerTable';
+import LobbyPlayers from './LobbyPlayers';
 
-function PlayerTableModal({ players, currentPlayer, isOpen, onClose }) {
+// Everyone in the lobby, mid-game; the host can still move or remove people
+function PlayerTableModal({ isOpen, onClose, ...listProps })
+{
     return (
         <IonModal isOpen={isOpen} onDidDismiss={onClose} data-testid="players-modal">
             <IonHeader>
@@ -15,7 +17,7 @@ function PlayerTableModal({ players, currentPlayer, isOpen, onClose }) {
                 </IonToolbar>
             </IonHeader>
             <IonContent className="ion-padding">
-                <PlayerTable players={players} currentPlayer={currentPlayer} />
+                <LobbyPlayers {...listProps} />
             </IonContent>
         </IonModal>
     );

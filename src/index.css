@@ -205,6 +205,10 @@ ion-toolbar ion-title {
   font-weight: 500;
 }
 
+ion-toolbar.toolbar--four ion-title {
+  padding-inline-end: 11rem;
+}
+
 ion-toolbar ion-buttons ion-button {
   --color: var(--text-2);
   --background: transparent;
@@ -222,6 +226,12 @@ ion-toolbar ion-buttons ion-button {
 
 ion-toolbar ion-buttons ion-button ion-icon {
   font-size: var(--icon-size);
+}
+
+/* Sheets follow the iOS pattern: centred title between the bar's buttons */
+ion-modal ion-toolbar ion-title {
+  text-align: center;
+  padding-inline: 6rem;
 }
 
 /* Text buttons in sheet toolbars ("Close") */
@@ -1302,84 +1312,6 @@ ion-item.share-id-row ion-note {
   color: var(--text-3);
 }
 
-/* ===== PLAYERS SHEET ===== */
-.player-table {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-  font-size: var(--fs-body);
-  line-height: 1.25rem;
-}
-
-.player-table th {
-  padding: var(--space-2);
-  text-align: left;
-  font-size: var(--fs-meta);
-  line-height: 1rem;
-  font-weight: 400;
-  color: var(--text-3);
-  border-bottom: var(--hairline);
-}
-
-.player-table td {
-  height: var(--row-height);
-  padding: 0 var(--space-2);
-  border-bottom: var(--hairline);
-  vertical-align: middle;
-}
-
-.player-table th:nth-child(2),
-.player-table td:nth-child(2) {
-  width: 5rem;
-}
-
-.player-table th.time-cell,
-.player-table td.time-cell {
-  width: 5.5rem;
-  text-align: right;
-}
-
-.player-name-wrap {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.player-name-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-1);
-}
-
-.player-stale .player-name-text {
-  color: var(--text-2);
-}
-
-.current-player-indicator {
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-  font-size: var(--fs-meta);
-  color: var(--text-3);
-}
-
-.player-role-cell {
-  color: var(--text-2);
-}
-
-.time-cell {
-  font-family: var(--font-mono);
-  font-size: var(--fs-meta);
-  color: var(--text-3);
-  white-space: nowrap;
-}
-
-.no-players-cell {
-  color: var(--text-3);
-}
-
 /* ===== ERROR BOUNDARY FALLBACK ===== */
 .fatal-error-screen {
   min-height: 100dvh;
@@ -1409,6 +1341,380 @@ ion-item.share-id-row ion-note {
   background: var(--accent);
   color: var(--on-accent);
   font: 500 var(--fs-body) var(--font-sans);
+}
+
+/* ===== AVATARS ===== */
+.avatar {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--ink-4);
+}
+
+.avatar--lg {
+  width: 4rem;
+  height: 4rem;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.avatar-initials {
+  font-size: var(--fs-meta);
+  line-height: 1rem;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.avatar--lg .avatar-initials {
+  font-size: var(--fs-heading);
+  line-height: 1.75rem;
+}
+
+/* The fix dot sits on the picture's lower edge, ringed in the row colour */
+.avatar-dot {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: flex;
+  padding: 2px;
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+
+ion-item.targets-item .avatar-dot .fix-dot {
+  margin: 0;
+}
+
+.row-avatar {
+  margin-inline-end: var(--space-3);
+}
+
+.row-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Name and "you" share the line: the name ellipsizes, the tag never moves */
+ion-item.lobby-player-row ion-label h2 {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.you-tag {
+  flex-shrink: 0;
+  margin-inline-start: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  font-weight: 400;
+  color: var(--text-3);
+}
+
+.meta-warning {
+  color: var(--negative);
+}
+
+ion-item.targets-item ion-button.row-menu-btn {
+  --color: var(--text-2);
+  --padding-start: 0;
+  --padding-end: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin: 0;
+}
+
+/* ===== PREGAME: profile card ===== */
+.profile-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  height: 100%;
+  padding: 0 var(--card-pad);
+  box-sizing: border-box;
+}
+
+.profile-row .name-field {
+  flex: 1 1 auto;
+  padding: 0;
+}
+
+.profile-avatar-btn {
+  position: relative;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+
+.profile-avatar-btn.is-busy {
+  opacity: 0.5;
+}
+
+.profile-avatar-hint {
+  position: absolute;
+  left: 50%;
+  bottom: -2px;
+  transform: translateX(-50%);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-small);
+  background: var(--ink-1);
+  border: var(--hairline);
+  font-size: var(--fs-meta);
+  line-height: 1rem;
+  color: var(--text-2);
+}
+
+/* ===== PREGAME: settings summary row ===== */
+ion-content .name-card.settings-row {
+  --min-height: calc(var(--row-height) - 2px);
+  --padding-start: var(--space-4);
+  --inner-padding-end: var(--space-3);
+  --detail-icon-color: var(--text-3);
+  --detail-icon-opacity: 1;
+  height: var(--row-height);
+}
+
+.settings-row ion-label h2 {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: 1.25rem;
+  font-weight: 500;
+  color: var(--text-1);
+}
+
+.settings-row ion-label p {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-row-action {
+  font-size: var(--fs-body);
+  color: var(--text-2);
+}
+
+/* The last block above the list keeps one group gap before it */
+.lobby-body-top > :last-child {
+  margin-bottom: var(--space-3);
+}
+
+/* ===== IN GAME: status card ===== */
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  width: 100%;
+  height: 100%;
+  padding: 0 var(--space-4);
+  box-sizing: border-box;
+}
+
+.status-clock,
+.status-side {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* The clock keeps its width; the side column takes what is left */
+.status-clock {
+  flex-shrink: 0;
+}
+
+.status-side {
+  flex: 1 1 auto;
+  align-items: flex-end;
+  gap: var(--space-1);
+  text-align: right;
+}
+
+.status-label,
+.status-area {
+  font-size: var(--fs-meta);
+  line-height: 1rem;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.status-value {
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 2rem;
+  line-height: 2.5rem;
+  font-weight: 500;
+  color: var(--text-1);
+}
+
+.status-role {
+  font-size: var(--fs-body);
+  line-height: 1.25rem;
+  font-weight: 500;
+  color: var(--text-1);
+}
+
+.status-area {
+  /* Up to two lines, so the way back ("head S") is never the part cut off */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  color: var(--text-2);
+}
+
+.status-area--out {
+  color: var(--negative);
+}
+
+.status-area ion-icon {
+  margin-inline-end: var(--space-1);
+  font-size: var(--fs-meta);
+  vertical-align: -2px;
+}
+
+/* ===== GAME OVER ===== */
+ion-card.game-over-card ion-card-title {
+  font-size: var(--fs-heading);
+  line-height: 1.75rem;
+}
+
+.game-over-result {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-title) !important;
+  line-height: 1.5rem;
+  color: var(--text-1) !important;
+}
+
+/* ===== FOOTER BAR: the host's next step, or what everyone waits for ===== */
+ion-footer.phase-footer-bar {
+  background: var(--ink-1);
+  border-top: var(--hairline);
+  box-shadow: none;
+}
+
+.phase-footer {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  /* Same height whether it holds a button and hint or one line of text */
+  min-height: 4.5rem;
+  padding: var(--space-3) var(--edge-padding-right) calc(var(--space-3) + var(--ion-safe-area-bottom, 0px)) var(--edge-padding-left);
+}
+
+.phase-footer ion-button {
+  margin: 0;
+}
+
+.phase-footer-hint,
+.phase-footer-waiting {
+  margin: var(--space-2) 0 0;
+  height: 1.25rem;
+  text-align: center;
+  font-size: var(--fs-caption);
+  line-height: 1.25rem;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.phase-footer-waiting {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--text-2);
+}
+
+/* ===== SETTINGS SHEET ===== */
+.settings-section {
+  margin: var(--space-5) var(--space-1) var(--space-2);
+  font-size: var(--fs-caption);
+  line-height: 1.25rem;
+  font-weight: 500;
+  color: var(--text-3);
+}
+
+.settings-content .settings-section:first-of-type {
+  margin-top: var(--space-2);
+}
+
+ion-modal ion-list.settings-list ion-item {
+  --padding-start: var(--space-4);
+  --inner-padding-end: var(--space-4);
+  --min-height: var(--control-height);
+}
+
+ion-list.settings-list ion-label h2 {
+  font-size: var(--fs-body);
+  line-height: 1.25rem;
+  font-weight: 500;
+  color: var(--text-1);
+}
+
+ion-list.settings-list ion-label p {
+  font-size: var(--fs-caption);
+  color: var(--text-2);
+}
+
+ion-list.settings-list ion-toggle {
+  --track-background-checked: var(--accent);
+}
+
+ion-list.settings-list ion-range {
+  --bar-background: var(--hairline-color);
+  --bar-background-active: var(--accent);
+  --knob-background: var(--text-1);
+  --knob-size: 1.5rem;
+  padding: 0;
+}
+
+ion-list.settings-list ion-select {
+  --placeholder-color: var(--text-2);
+  font-size: var(--fs-body);
+}
+
+.settings-value {
+  font-family: var(--font-mono);
+  font-size: var(--fs-body);
+  color: var(--text-1);
+}
+
+.settings-note {
+  margin: var(--space-3) var(--space-1) 0;
+  font-size: var(--fs-caption);
+  line-height: 1.25rem;
+  color: var(--text-3);
+}
+
+ion-toolbar ion-buttons ion-button.toolbar-primary {
+  --color: var(--accent);
+  font-weight: 600;
+}
+
+/* ===== ACTION SHEETS (photo, player menu, select pickers) ===== */
+ion-action-sheet {
+  --background: var(--ink-2);
+  --button-background-hover: var(--ink-3);
+  --button-background-activated: var(--ink-4);
+  --button-color: var(--text-1);
+  --color: var(--text-2);
 }
 
 /* ===== MOTION PREFERENCE ===== */

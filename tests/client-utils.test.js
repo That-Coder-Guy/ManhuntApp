@@ -68,3 +68,54 @@ test('geo helpers handle missing and zero coordinates', () => {
     assert.ok(Math.abs(calculateBearing(39.19, -96.58, 39.2, -96.58)) < 0.01, 'due north');
     assert.ok(Math.abs(calculateBearing(0, 0, 0, 1) - 90) < 0.01, 'due east');
 });
+
+import { formatClock, formatDuration, describeSettings, playAreaStatus, gameClock } from '../src/utils/game.js';
+import { initials } from '../src/utils/avatar.js';
+
+test('clock and duration formats', () => {
+    assert.equal(formatClock(0), '0:00');
+    assert.equal(formatClock(-5000), '0:00');
+    assert.equal(formatClock(65_000), '1:05');
+    assert.equal(formatClock(64_001), '1:05', 'rounds up so it never shows 0:00 early');
+    assert.equal(formatClock(3_725_000), '1:02:05');
+    assert.equal(formatDuration(0), 'None');
+    assert.equal(formatDuration(0, 'No limit'), 'No limit');
+    assert.equal(formatDuration(45), '45 s');
+    assert.equal(formatDuration(1800), '30 min');
+    assert.equal(formatDuration(5400), '1 h 30 min');
+    assert.equal(formatDuration(7200), '2 h');
+});
+
+test('settings summary', () => {
+    assert.deepEqual(describeSettings({ geofence: null, time_limit_s: 0, head_start_s: 60 }),
+        { playArea: 'Anywhere', timeLimit: 'No limit', headStart: '1 min' });
+    assert.equal(describeSettings({ geofence: { latitude: 0, longitude: 0, radius_m: 400 } }).playArea, '400 m radius');
+});
+
+test('play area status', () => {
+    const fence = { latitude: 39.19, longitude: -96.58, radius_m: 100 };
+    assert.equal(playAreaStatus(null, { latitude: 1, longitude: 1 }), null);
+    assert.equal(playAreaStatus(fence, { latitude: null, longitude: null }), null);
+    const inside = playAreaStatus(fence, { latitude: 39.1903, longitude: -96.58 });
+    assert.equal(inside.outside, false);
+    assert.ok(inside.distanceToEdge > 60 && inside.distanceToEdge < 70);
+    const out = playAreaStatus(fence, { latitude: 39.192, longitude: -96.58 }); // ~222 m north
+    assert.equal(out.outside, true);
+    assert.equal(out.directionToCentre, 'S');
+    assert.ok(out.distanceToEdge > 115 && out.distanceToEdge < 130);
+});
+
+test('game clock phases', () => {
+    const game = { started_at: 0, head_start_ends_at: 60_000, ends_at: 660_000 };
+    assert.deepEqual(gameClock(game, 10_000), { kind: 'head_start', remainingMs: 50_000 });
+    assert.deepEqual(gameClock(game, 70_000), { kind: 'limit', remainingMs: 590_000 });
+    assert.deepEqual(gameClock({ ...game, ends_at: null }, 70_000), { kind: 'open', elapsedMs: 10_000 });
+    assert.equal(gameClock(null, 0), null);
+});
+
+test('initials for placeholder avatars', () => {
+    assert.equal(initials('Maya'), 'MA');
+    assert.equal(initials('Maya Lopez'), 'ML');
+    assert.equal(initials('  ana  de  la cruz '), 'AC');
+    assert.equal(initials(''), '?');
+});

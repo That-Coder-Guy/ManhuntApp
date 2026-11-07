@@ -12,7 +12,7 @@ const TEST_IDS = {
     row: 'target-card', name: 'target-name', distance: 'target-distance'
 };
 
-function SeekerView({ players, currentLocation })
+function SeekerView({ players, avatars = {}, currentLocation })
 {
     const now = useNow();
     const [selectedId, setSelectedId] = useState(null);
@@ -55,6 +55,7 @@ function SeekerView({ players, currentLocation })
                 <PlayerRow
                     key={hider.player_id}
                     player={hider}
+                    avatar={avatars[hider.player_id]}
                     distance={distanceTo(hider)}
                     now={now}
                     onClick={() => setSelectedId(hider.player_id)}

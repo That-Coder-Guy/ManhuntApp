@@ -15,7 +15,7 @@ const TEST_IDS = {
     row: 'seeker-card', distance: 'seeker-distance'
 };
 
-function HiderView({ players, currentLocation })
+function HiderView({ players, avatars = {}, currentLocation })
 {
     const now = useNow();
 
@@ -34,6 +34,7 @@ function HiderView({ players, currentLocation })
                 <PlayerRow
                     key={seeker.player_id}
                     player={seeker}
+                    avatar={avatars[seeker.player_id]}
                     distance={distance}
                     now={now}
                     danger={distance !== null && distance < DANGER_DISTANCE_M}
