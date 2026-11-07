@@ -63,15 +63,12 @@
   --list-item-height: 4rem;
   /* Sized for the label line + input chip stacked inside the row */
   --name-row-height: 5.3rem;
-<<<<<<< HEAD
   /* Page-level input chips, and the diameter of the round buttons beside them */
   --field-height: 2.65rem;
-=======
   /* The input chip's own height, and the trailing strip permanently reserved
      inside it for the Save button, so the button appearing never resizes it */
   --name-input-height: 2.9rem;
   --name-save-slot: 4.4rem;
->>>>>>> 934654d75c813c050608b36bdb381f5ceed22d08
   --calibration-hint-slot: 2.2rem;
 
   /* Type scale (rem) */
