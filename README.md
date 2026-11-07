@@ -63,32 +63,91 @@ Notes:
   falls back to HTTP long-polling.
 - Lobby state is in-memory only: restarting the server ends all live games.
 
-## Play over the internet (ngrok)
+## Play over the internet (Cloudflare Tunnel)
 
-To play with friends who aren't on your Wi-Fi, expose the whole app — frontend,
-API, and websocket — through one public URL:
+To play with friends who aren't on your Wi-Fi, expose the whole app (frontend,
+API and websocket) through one public HTTPS URL. HTTPS is required: phones only
+allow location, keep-screen-on, the camera and the iOS compass on secure pages.
+
+Cloudflare Tunnel is free, has no bandwidth cap for an app like this, supports
+WebSockets, and needs no router port forwarding.
 
 ```bash
 npm run tunnel
 ```
 
-This builds for single-origin, starts the server, opens an `ngrok` tunnel to it,
-and prints the public `https://…` URL. Open that on your phone, then use the
-in-app **Invite** button (QR code / link) to get everyone else in.
+This builds for single-origin, starts the server, opens a Cloudflare **quick
+tunnel**, and prints a random `https://….trycloudflare.com` URL. Open it on
+your phone, then use the in-app **Invite** button (QR code / link) to get
+everyone else in. The URL changes every run and needs no Cloudflare account.
 
-Prerequisites: the [ngrok CLI](https://ngrok.com/download) installed and authed
-once with `ngrok config add-authtoken <your-token>`.
+For a **permanent URL on your own domain**, create a named tunnel (below) and
+run `TUNNEL_TOKEN=<token> PUBLIC_URL=https://manhunt.yourdomain.com npm run tunnel`.
+
+Prerequisite: the `cloudflared` CLI
+([downloads](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)).
+
+## Host on a Raspberry Pi
+
+A Pi 5 (or a Pi 4) runs the whole app comfortably. The server serves the built
+frontend itself, so there is one process and one port.
+
+**1. Install Node 22 and the app**
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs git
+
+git clone https://github.com/That-Coder-Guy/ManhuntApp.git ~/ManhuntApp
+cd ~/ManhuntApp
+npm ci && npm --prefix server ci
+npm run build:selfhost
+```
+
+**2. Run it on boot** with the included systemd unit (edit `User` and the
+paths in it if your user isn't `pi`):
+
+```bash
+sudo cp deploy/manhunt.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now manhunt
+curl http://localhost:3001/manhunt-api/health   # {"status":"success"}
+```
+
+**3. Put it online with a named Cloudflare tunnel** (needs a domain on your
+free Cloudflare account):
+
+```bash
+curl -L -o cloudflared.deb \
+  https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64.deb
+sudo dpkg -i cloudflared.deb
+```
+
+In the Cloudflare dashboard: **Zero Trust → Networks → Tunnels → Create a
+tunnel → Cloudflared**. Copy the install command it shows
+(`sudo cloudflared service install <token>`) and run it on the Pi; that keeps
+the tunnel running on boot. Then add a **public hostname** such as
+`manhunt.yourdomain.com` with service `http://localhost:3001`.
+
+No domain? `cloudflared tunnel --url http://localhost:3001` gives a free quick
+tunnel instead, with a random URL that changes when it restarts.
+
+**Updating**
+
+```bash
+cd ~/ManhuntApp && git pull
+npm ci && npm --prefix server ci && npm run build:selfhost
+sudo systemctl restart manhunt
+```
 
 Notes:
-- ngrok's free tier shows a one-time "You are about to visit…" interstitial on
-  first load — tap **Visit Site** and the app loads normally.
-- The server auto-accepts tunnel origins (`*.ngrok-free.app`, `*.ngrok.app`,
-  `*.ngrok-free.dev`, `*.ngrok.io`, `*.trycloudflare.com`) so a fresh random URL
-  just works.
+- Restarting the server ends live games (lobbies are in memory).
+- A single-origin deployment works on any hostname; the origin allowlist only
+  matters for split hosting.
 
 Environment knobs (server):
 - `PORT` — server port (default `3001`).
-- `ALLOWED_ORIGINS` — extra comma-separated origins to allow.
+- `ALLOWED_ORIGINS` — extra comma-separated origins to allow (split hosting).
 - `TRUST_ALL_ORIGINS=1` — allow any origin (disables the CORS allowlist).
 
 ## Compass / device orientation (Android & iOS)

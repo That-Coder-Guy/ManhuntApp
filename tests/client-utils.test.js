@@ -10,7 +10,7 @@ const ID = '7b5a6422-5028-40b0-8fef-22301dfc7e97';
 test('parseLobbyId accepts bare IDs and invite links', () => {
     assert.equal(parseLobbyId(ID), ID);
     assert.equal(parseLobbyId(`  ${ID.toUpperCase()}  `), ID);
-    assert.equal(parseLobbyId(`https://abc.ngrok-free.app/lobby/${ID}`), ID);
+    assert.equal(parseLobbyId(`https://tame-otter-plays-42.trycloudflare.com/lobby/${ID}`), ID);
     assert.equal(parseLobbyId(`http://localhost:3001/lobby/${ID}?ref=qr#x`), ID);
     assert.equal(parseLobbyId(`/lobby/${encodeURIComponent(ID)}`), ID);
 });

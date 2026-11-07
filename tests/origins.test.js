@@ -22,11 +22,8 @@ function withEnv(vars, fn)
     }
 }
 
-test('allows a fresh ngrok tunnel origin', () => {
-    assert.equal(isAllowedOrigin('https://abc123.ngrok-free.app'), true);
-    assert.equal(isAllowedOrigin('https://tame-otter-42.ngrok.app'), true);
-    assert.equal(isAllowedOrigin('https://foo.ngrok-free.dev'), true);
-    assert.equal(isAllowedOrigin('https://foo.ngrok.io'), true);
+test('allows a fresh Cloudflare quick-tunnel origin', () => {
+    assert.equal(isAllowedOrigin('https://tame-otter-plays-42.trycloudflare.com'), true);
     assert.equal(isAllowedOrigin('https://foo.trycloudflare.com'), true);
 });
 
@@ -53,7 +50,9 @@ test('allows no-origin (same-origin / non-browser) requests', () => {
 test('rejects an arbitrary third-party origin by default', () => {
     withEnv({ TRUST_ALL_ORIGINS: undefined, ALLOWED_ORIGINS: undefined }, () => {
         assert.equal(isAllowedOrigin('https://evil.example.com'), false);
-        assert.equal(isAllowedOrigin('https://ngrok-free.app.evil.com'), false);
+        assert.equal(isAllowedOrigin('https://trycloudflare.com.evil.com'), false);
+        // ngrok is no longer auto-allowed
+        assert.equal(isAllowedOrigin('https://abc123.ngrok-free.app'), false);
     });
 });
 
@@ -76,6 +75,7 @@ test('TRUST_ALL_ORIGINS=1 allows anything', () => {
 });
 
 test('subdomain-suffix check is anchored (no substring bypass)', () => {
-    // ".ngrok.app" must be a real suffix, not appear mid-host
-    assert.equal(isAllowedOrigin('https://ngrok.app.attacker.com'), false);
+    // ".trycloudflare.com" must be a real suffix, not appear mid-host
+    assert.equal(isAllowedOrigin('https://x.trycloudflare.com.attacker.com'), false);
+    assert.equal(isAllowedOrigin('https://eviltrycloudflare.com'), false);
 });

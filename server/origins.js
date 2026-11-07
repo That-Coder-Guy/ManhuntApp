@@ -7,16 +7,13 @@ const BASE_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173"
 ];
 
-// Hostnames of common tunnelling services. Auto-allowing these lets `npm run
-// tunnel` work with a fresh, random ngrok URL without editing config. It's
-// low-risk for a casual game (joining still requires a live lobby ID / token),
-// and the server is meant to be tunnelled ad hoc. Set TRUST_ALL_ORIGINS=1 to
-// disable origin checks entirely.
+// Cloudflare quick-tunnel hostnames. Origin checks only matter when the
+// frontend and server are on different origins (split hosting, or the Vite dev
+// server through a tunnel): a single-origin deployment works on any hostname.
+// Auto-allowing these lets a fresh random URL work without config; it's
+// low-risk for a casual game (joining still needs a live lobby ID). Set
+// TRUST_ALL_ORIGINS=1 to disable origin checks entirely.
 const TUNNEL_HOST_SUFFIXES = [
-    ".ngrok-free.app",
-    ".ngrok.app",
-    ".ngrok-free.dev",
-    ".ngrok.io",
     ".trycloudflare.com"
 ];
 

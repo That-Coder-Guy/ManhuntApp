@@ -59,12 +59,6 @@ export default defineConfig({
     // Leading-dot entries match any subdomain of that suffix.
     // Note: single-origin (`npm run tunnel`) is the recommended way to expose
     // the app publicly, since it tunnels the frontend + API + socket together.
-    allowedHosts: [
-      '.ngrok-free.app',
-      '.ngrok.app',
-      '.ngrok-free.dev',
-      '.ngrok.io',
-      '.trycloudflare.com',
-    ],
+    allowedHosts: ['.trycloudflare.com'],
   },
 })
