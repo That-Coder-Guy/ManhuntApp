@@ -23,7 +23,7 @@ function makePlayer(index, isSeeker)
     };
 }
 
-export const DUMMY_PLAYERS = [
+const DUMMY_PLAYERS = [
     ...Array.from({ length: 12 }, (_, i) => makePlayer(i + 1, false)),
     ...Array.from({ length: 12 }, (_, i) => makePlayer(i + 1, true))
 ];

@@ -1,23 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { IonSegment, IonSegmentButton, IonLabel, IonToast } from '@ionic/react';
 
 function RoleSwitcher({ isSeeker, updatePlayer })
 {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
-    const errorTimerRef = useRef(null);
-
-    useEffect(() => () =>
-    {
-        if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
-    }, []);
-
-    function showError(message)
-    {
-        setError(message);
-        if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
-        errorTimerRef.current = setTimeout(() => setError(''), 5000);
-    }
+    // IonSegment keeps its own selection; remount it to snap back after a failure
+    const [resetKey, setResetKey] = useState(0);
 
     async function handleRoleChange(newIsSeeker)
     {
@@ -25,20 +14,15 @@ function RoleSwitcher({ isSeeker, updatePlayer })
 
         setIsLoading(true);
         setError('');
-        try
-        {
+        try {
             await updatePlayer({ is_seeker: newIsSeeker });
-        }
-        catch (err)
-        {
-            // Never kick the player over a role change — show the problem inline
-            console.error('Error updating role:', err);
-            showError(err.status === 'network_error'
+        } catch (err) {
+            setResetKey((k) => k + 1);
+            // Never kick the player over a role change; say what happened
+            setError(err.status === 'network_error'
                 ? "Couldn't update role — check your connection and try again."
                 : "Couldn't update your role. Try again.");
-        }
-        finally
-        {
+        } finally {
             setIsLoading(false);
         }
     }
@@ -46,6 +30,7 @@ function RoleSwitcher({ isSeeker, updatePlayer })
     return (
         <div className="role-switcher">
             <IonSegment
+                key={resetKey}
                 className={`role-segment role-segment--${isSeeker ? 'seeker' : 'hider'}`}
                 value={isSeeker ? 'seeker' : 'hider'}
                 disabled={isLoading}

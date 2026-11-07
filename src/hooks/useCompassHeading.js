@@ -10,6 +10,18 @@ export const COMPASS_STATUS = {
 
 const PERMISSION_STORAGE_KEY = 'manhunt_compass_permission';
 
+// Remembered iOS grant, so later visits can re-request silently; storage
+// can be unavailable, which just means "ask"
+function readSavedPermission()
+{
+    try { return localStorage.getItem(PERMISSION_STORAGE_KEY); } catch { return null; }
+}
+
+function savePermission(value)
+{
+    try { localStorage.setItem(PERMISSION_STORAGE_KEY, value); } catch { /* not remembered */ }
+}
+
 // If listeners are attached but no usable event arrives in this window, the
 // device has no absolute orientation source (e.g. no magnetometer)
 const DETECTION_TIMEOUT_MS = 3000;
@@ -67,11 +79,9 @@ function useCompassHeading()
     {
         if (typeof window === 'undefined') return COMPASS_STATUS.UNSUPPORTED;
         if (!window.DeviceOrientationEvent) return COMPASS_STATUS.UNSUPPORTED;
-        if (permissionRequestRequired()) {
-            return localStorage.getItem(PERMISSION_STORAGE_KEY) === 'denied'
-                ? COMPASS_STATUS.DENIED
-                : COMPASS_STATUS.UNKNOWN;
-        }
+        // A denial is never remembered across visits: one mis-tap must not
+        // lock the compass away for good, so iOS always starts at 'unknown'
+        if (permissionRequestRequired()) return COMPASS_STATUS.UNKNOWN;
         return COMPASS_STATUS.GRANTED; // no permission gate — listen immediately
     });
     // 'webkit' | 'absolute' | 'fallback-absolute' | 'none' — which event source won
@@ -191,10 +201,9 @@ function useCompassHeading()
         try {
             const permissionState = await DeviceOrientationEvent.requestPermission();
             if (permissionState === 'granted') {
-                localStorage.setItem(PERMISSION_STORAGE_KEY, 'granted');
+                savePermission('granted');
                 setStatus(COMPASS_STATUS.GRANTED);
             } else {
-                localStorage.setItem(PERMISSION_STORAGE_KEY, 'denied');
                 setStatus(COMPASS_STATUS.DENIED);
             }
         } catch (error) {
@@ -209,7 +218,7 @@ function useCompassHeading()
     useEffect(() =>
     {
         if (status === COMPASS_STATUS.UNKNOWN &&
-            localStorage.getItem(PERMISSION_STORAGE_KEY) === 'granted') {
+            readSavedPermission() === 'granted') {
             requestPermission();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps

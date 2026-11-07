@@ -19,14 +19,10 @@ function PlayerNameEditor({ currentName, updatePlayer })
 
     async function handleSave()
     {
+        // Length is capped by the input's maxlength (and again by the server)
         if (!trimmed)
         {
             setError('Enter a name');
-            return;
-        }
-        if (trimmed.length > MAX_NAME_LENGTH)
-        {
-            setError(`Name must be ${MAX_NAME_LENGTH} characters or less`);
             return;
         }
 
@@ -38,8 +34,7 @@ function PlayerNameEditor({ currentName, updatePlayer })
         }
         catch (err)
         {
-            // Never kick the player over a name change — show the problem inline
-            console.error('Error updating name:', err);
+            // Never kick the player over a name change; say what happened
             setError(err.status === 'network_error'
                 ? "Couldn't reach the server — check your connection and try again."
                 : "Couldn't save your name. Try again.");

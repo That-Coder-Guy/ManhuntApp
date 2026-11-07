@@ -17,26 +17,58 @@ export const CONNECTION_STATE = {
     RECONNECTING: 'reconnecting'
 };
 
-// Give up on the *initial* join after this many failed connection attempts.
-// Reconnections after a successful join retry forever.
+// Give up on the *initial* join after this many failed attempts.
+// After a successful join, reconnection retries forever.
 const MAX_INITIAL_CONNECT_ATTEMPTS = 5;
 
-// Send at most one location update per interval; extra fixes coalesce into a trailing send
+// At most one location upload per interval; newer fixes replace queued ones
 const LOCATION_SEND_INTERVAL_MS = 2000;
 
-const ACTION_ACK_TIMEOUT_MS = 8000;
+const ACK_TIMEOUT_MS = 8000;
+const LEAVE_TIMEOUT_MS = 3000;
+
+function networkError(message)
+{
+    const error = new Error(message);
+    error.status = 'network_error';
+    return error;
+}
 
 /**
- * Manages the Socket.IO connection for a lobby: joining/resuming with a player
- * token, receiving pushed lobby state, and sending location/player updates.
- * Transient disconnects are handled internally with automatic reconnection —
- * only fatal statuses (lobby gone, token expired) surface through joinState.
+ * Emit and wait for the server's acknowledgement. Rejects with
+ * status 'network_error' when offline or timed out, or with the server's
+ * status when it answers with anything but success.
+ */
+async function emitWithAck(socket, event, payload, timeoutMs = ACK_TIMEOUT_MS)
+{
+    if (!socket?.connected) throw networkError('Not connected');
+
+    let response;
+    try {
+        response = await socket.timeout(timeoutMs).emitWithAck(event, payload);
+    } catch {
+        throw networkError('Request timed out');
+    }
+
+    if (response?.status !== 'success')
+    {
+        const error = new Error(response?.description || 'Request failed');
+        error.status = response?.status || 'error';
+        throw error;
+    }
+    return response;
+}
+
+/**
+ * The Socket.IO connection for one lobby: join or resume with a player token,
+ * receive pushed lobby state, and send location and player updates.
+ * Transient disconnects are handled here with automatic reconnection; only
+ * fatal outcomes (lobby gone, token expired, can't connect at all) surface
+ * through joinState.
  */
 function useLobbySocket(lobbyId, initialToken, onJoined)
 {
     const socketRef = useRef(null);
-    const selfIdRef = useRef(null);
-    const hasJoinedRef = useRef(false);
     const onJoinedRef = useRef(onJoined);
     onJoinedRef.current = onJoined;
 
@@ -48,221 +80,147 @@ function useLobbySocket(lobbyId, initialToken, onJoined)
     const [lastSyncTime, setLastSyncTime] = useState(null);
     const [lastLocationSentAt, setLastLocationSentAt] = useState(null);
 
-    // Location send throttling
-    const lastLocationAttemptRef = useRef(0);
-    const pendingLocationRef = useRef(null);
-    const trailingTimerRef = useRef(null);
+    // Location upload: the newest fix, when one was last sent, and a pending send
+    const latestLocationRef = useRef(null);
+    const lastSendAttemptRef = useRef(0);
+    const sendTimerRef = useRef(null);
+
+    const sendLatestLocation = useCallback(() =>
+    {
+        const socket = socketRef.current;
+        const location = latestLocationRef.current;
+        // While disconnected, nothing is queued: the newest fix is re-sent on rejoin
+        if (!socket?.connected || !location) return;
+
+        lastSendAttemptRef.current = Date.now();
+        emitWithAck(socket, 'update-location', location)
+            .then(() => setLastLocationSentAt(Date.now()))
+            .catch(() => { /* the next fix or rejoin retries */ });
+    }, []);
 
     useEffect(() =>
     {
         if (!lobbyId) return undefined;
 
+        // Per-connection state: a new lobby or token starts from scratch
+        let hasJoined = false;
+        let stopped = false; // gave up, or the server ended this session
         let failedAttempts = 0;
+        let selfId = null;
+        setJoinState(JOIN_STATE.CONNECTING);
+        setPlayers([]);
 
-        // Empty API_ORIGIN means the server also serves this frontend (same origin)
+        // Empty API_ORIGIN means this server also serves the frontend
         const socket = io(API_ORIGIN || window.location.origin, {
             path: SOCKET_PATH,
-            auth: {
-                lobby_id: lobbyId,
-                player_token: initialToken || undefined
-            },
-            reconnection: true,
+            auth: { lobby_id: lobbyId, player_token: initialToken || undefined },
             reconnectionDelayMax: 10000,
             timeout: 10000
         });
         socketRef.current = socket;
-        // Debug handle for field debugging and tests
-        window.__manhuntSocket = socket;
+        window.__manhuntSocket = socket; // debug handle for field testing and e2e
 
-        socket.on('connect', () =>
-        {
-            setConnectionState(CONNECTION_STATE.CONNECTED);
-        });
-
-        socket.on('disconnect', () =>
-        {
-            setConnectionState(CONNECTION_STATE.RECONNECTING);
-        });
+        socket.on('connect', () => setConnectionState(CONNECTION_STATE.CONNECTED));
+        socket.on('disconnect', () => setConnectionState(CONNECTION_STATE.RECONNECTING));
 
         socket.on('connect_error', () =>
         {
             setConnectionState(CONNECTION_STATE.RECONNECTING);
-
-            // Before the first successful join there is nothing to resume, so
-            // surface persistent failures instead of spinning forever.
-            if (!hasJoinedRef.current)
+            // Before the first join there is nothing to resume, so stop
+            // retrying and say so rather than spin forever
+            if (!hasJoined && ++failedAttempts >= MAX_INITIAL_CONNECT_ATTEMPTS)
             {
-                failedAttempts += 1;
-                if (failedAttempts >= MAX_INITIAL_CONNECT_ATTEMPTS)
-                {
-                    setJoinState(JOIN_STATE.ERROR);
-                    socket.disconnect();
-                }
+                stopped = true;
+                setJoinState(JOIN_STATE.ERROR);
+                socket.disconnect();
             }
         });
 
+        // Sent on every (re)connection
         socket.on('joined', (data) =>
         {
             // Reconnections must resume this identity, not create a new player
             socket.auth.player_token = data.player_token;
-            hasJoinedRef.current = true;
-            selfIdRef.current = data.player_data?.player_id ?? null;
+            hasJoined = true;
+            selfId = data.player_data?.player_id ?? null;
 
             setLobbyName(data.lobby_name);
             setSelfPlayer(data.player_data);
             setJoinState(JOIN_STATE.JOINED);
             setLastSyncTime(Date.now());
+            onJoinedRef.current?.(data);
 
-            if (onJoinedRef.current)
-            {
-                onJoinedRef.current(data);
-            }
+            // A stationary phone may not report a new GPS fix for a long time;
+            // re-send the last one so the server isn't left with a stale position
+            sendLatestLocation();
         });
 
         socket.on('lobby-state', (data) =>
         {
-            const allPlayers = data?.players || [];
-            setPlayers(allPlayers.filter(player => player.player_id !== selfIdRef.current));
+            const all = Array.isArray(data?.players) ? data.players : [];
+            const self = all.find((p) => p.player_id === selfId);
+            if (self) setSelfPlayer(self);
+            setPlayers(all.filter((p) => p.player_id !== selfId));
             setLastSyncTime(Date.now());
         });
 
         socket.on('fatal-error', (data) =>
         {
-            const status = data?.status;
-            if (status === 'lobby_not_found')
-            {
-                setJoinState(JOIN_STATE.LOBBY_NOT_FOUND);
-            }
-            else if (status === 'invalid_player_token')
-            {
-                setJoinState(JOIN_STATE.PLAYER_TIMED_OUT);
-            }
-            else
-            {
-                setJoinState(JOIN_STATE.ERROR);
-            }
+            const fatal = {
+                lobby_not_found: JOIN_STATE.LOBBY_NOT_FOUND,
+                invalid_player_token: JOIN_STATE.PLAYER_TIMED_OUT
+            };
+            stopped = true;
+            setJoinState(fatal[data?.status] ?? JOIN_STATE.ERROR);
             socket.disconnect();
         });
 
-        // Reconnect immediately when the browser regains connectivity instead
-        // of waiting out the current backoff delay
-        const handleOnline = () =>
-        {
-            if (!socket.connected)
-            {
-                socket.connect();
-            }
-        };
+        // Reconnect as soon as the browser is back online, not after the backoff
+        const handleOnline = () => { if (!socket.connected && !stopped) socket.connect(); };
         window.addEventListener('online', handleOnline);
 
         return () =>
         {
             window.removeEventListener('online', handleOnline);
-            if (trailingTimerRef.current)
-            {
-                clearTimeout(trailingTimerRef.current);
-                trailingTimerRef.current = null;
-            }
+            clearTimeout(sendTimerRef.current);
+            sendTimerRef.current = null;
             socket.disconnect();
             socketRef.current = null;
+            if (window.__manhuntSocket === socket) delete window.__manhuntSocket;
         };
-    }, [lobbyId, initialToken]);
-
-    const sendLocation = useCallback((location) =>
-    {
-        const socket = socketRef.current;
-        // Drop stale fixes while disconnected — only the latest position matters
-        if (!socket || !socket.connected) return;
-
-        lastLocationAttemptRef.current = Date.now();
-        socket.emit('update-location', location, (response) =>
-        {
-            if (response?.status === 'success')
-            {
-                setLastLocationSentAt(Date.now());
-            }
-        });
-    }, []);
+    }, [lobbyId, initialToken, sendLatestLocation]);
 
     const updateLocation = useCallback((latitude, longitude) =>
     {
-        const location = { latitude, longitude };
-        const elapsed = Date.now() - lastLocationAttemptRef.current;
+        latestLocationRef.current = { latitude, longitude };
+        if (sendTimerRef.current) return; // a send is already scheduled and will pick this up
 
-        if (elapsed >= LOCATION_SEND_INTERVAL_MS)
+        const wait = Math.max(0, LOCATION_SEND_INTERVAL_MS - (Date.now() - lastSendAttemptRef.current));
+        sendTimerRef.current = setTimeout(() =>
         {
-            sendLocation(location);
-            return;
-        }
+            sendTimerRef.current = null;
+            sendLatestLocation();
+        }, wait);
+    }, [sendLatestLocation]);
 
-        pendingLocationRef.current = location;
-        if (!trailingTimerRef.current)
-        {
-            trailingTimerRef.current = setTimeout(() =>
-            {
-                trailingTimerRef.current = null;
-                if (pendingLocationRef.current)
-                {
-                    sendLocation(pendingLocationRef.current);
-                    pendingLocationRef.current = null;
-                }
-            }, LOCATION_SEND_INTERVAL_MS - elapsed);
-        }
-    }, [sendLocation]);
-
-    const updatePlayer = useCallback((updates) =>
+    const updatePlayer = useCallback(async (updates) =>
     {
-        return new Promise((resolve, reject) =>
-        {
-            const socket = socketRef.current;
-            if (!socket || !socket.connected)
-            {
-                const error = new Error('Not connected');
-                error.status = 'network_error';
-                reject(error);
-                return;
-            }
-
-            socket.timeout(ACTION_ACK_TIMEOUT_MS).emit('update-player', updates, (timeoutError, response) =>
-            {
-                if (timeoutError)
-                {
-                    const error = new Error('Request timed out');
-                    error.status = 'network_error';
-                    reject(error);
-                    return;
-                }
-                if (response?.status !== 'success')
-                {
-                    const error = new Error(response?.description || 'Update failed');
-                    error.status = response?.status || 'error';
-                    reject(error);
-                    return;
-                }
-                setSelfPlayer(response.player_data);
-                resolve(response);
-            });
-        });
+        const response = await emitWithAck(socketRef.current, 'update-player', updates);
+        setSelfPlayer(response.player_data);
+        return response;
     }, []);
 
-    const leaveLobby = useCallback(() =>
+    // Best effort: leaving must work offline too, so it never rejects
+    const leaveLobby = useCallback(async () =>
     {
-        return new Promise((resolve) =>
-        {
-            const socket = socketRef.current;
-            if (!socket || !socket.connected)
-            {
-                if (socket) socket.disconnect();
-                resolve();
-                return;
-            }
-
-            socket.timeout(3000).emit('leave-lobby', {}, () =>
-            {
-                socket.disconnect();
-                resolve();
-            });
-        });
+        const socket = socketRef.current;
+        try {
+            await emitWithAck(socket, 'leave-lobby', {}, LEAVE_TIMEOUT_MS);
+        } catch {
+            // Offline or no answer: the server expires the player after its grace period
+        } finally {
+            socket?.disconnect();
+        }
     }, []);
 
     return {

@@ -1,138 +1,76 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
- * Requests a screen wake lock while `enabled` is true and supported by the browser.
- * Releases the lock automatically when the component unmounts or when the page
- * becomes hidden.
+ * Keeps the screen on once the player asks for it (`requestWakeLock`, called
+ * from a tap), for as long as `enabled` is true. Browsers drop the lock
+ * whenever the page is hidden, so it is taken back when the page returns.
+ * Failures reject the request; the caller decides how to show them.
  */
-function useWakeLock(enabled = true) {
-  const wakeLockRef = useRef(null);
-  const alertShownRef = useRef(false);
-  const hasUserInitiatedRef = useRef(false);
-  const isCancelledRef = useRef(false);
-  const isSupported = typeof navigator !== 'undefined' && 'wakeLock' in navigator;
-  const [isActive, setIsActive] = useState(false);
+function useWakeLock(enabled = true)
+{
+    const isSupported = typeof navigator !== 'undefined' && 'wakeLock' in navigator;
+    const [isActive, setIsActive] = useState(false);
 
-  const releaseWakeLock = useCallback(async () => {
-    if (!wakeLockRef.current) {
-      return;
-    }
+    const lockRef = useRef(null);
+    const pendingRef = useRef(null); // in-flight request, so taps can't stack locks
+    const wantedRef = useRef(false); // the player turned it on
 
-    try {
-      await wakeLockRef.current.release();
-    } catch (error) {
-      console.warn('[WakeLock] Failed to release screen wake lock:', error);
-    } finally {
-      wakeLockRef.current = null;
-      setIsActive(false);
-    }
-  }, []);
+    const acquire = useCallback(() =>
+    {
+        if (lockRef.current) return Promise.resolve(lockRef.current);
+        if (pendingRef.current) return pendingRef.current;
 
-  const requestWakeLock = useCallback(async () => {
-    if (!enabled) {
-      throw new Error('Wake Lock request ignored because it is currently disabled.');
-    }
+        pendingRef.current = navigator.wakeLock.request('screen')
+            .then((lock) =>
+            {
+                lockRef.current = lock;
+                setIsActive(true);
+                lock.addEventListener('release', () =>
+                {
+                    if (lockRef.current !== lock) return;
+                    lockRef.current = null;
+                    setIsActive(false);
+                });
+                return lock;
+            })
+            .finally(() => { pendingRef.current = null; });
 
-    if (!isSupported) {
-      throw new Error('Screen Wake Lock API is not supported on this device.');
-    }
+        return pendingRef.current;
+    }, []);
 
-    try {
-      if (wakeLockRef.current) {
-        await wakeLockRef.current.release();
-        wakeLockRef.current = null;
-      }
+    const requestWakeLock = useCallback(() =>
+    {
+        if (!isSupported) return Promise.reject(new Error('Screen Wake Lock is not supported on this device'));
+        if (!enabled) return Promise.reject(new Error('Wake lock is not available right now'));
+        wantedRef.current = true;
+        return acquire();
+    }, [isSupported, enabled, acquire]);
 
-      const lock = await navigator.wakeLock.request('screen');
-      wakeLockRef.current = lock;
-      hasUserInitiatedRef.current = true;
-      alertShownRef.current = false;
-      setIsActive(true);
+    useEffect(() =>
+    {
+        if (!enabled || !isSupported) return undefined;
 
-      lock.addEventListener('release', () => {
-        wakeLockRef.current = null;
-        setIsActive(false);
+        const handleVisibility = () =>
+        {
+            if (document.visibilityState === 'visible' && wantedRef.current)
+            {
+                acquire().catch((error) => console.warn('[WakeLock] Could not re-acquire:', error));
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibility);
 
-        if (
-          !isCancelledRef.current &&
-          enabled &&
-          document.visibilityState === 'visible' &&
-          hasUserInitiatedRef.current
-        ) {
-          requestWakeLock().catch(() => {
-            /* noop - error already handled in requestWakeLock */
-          });
-        }
-      });
+        return () =>
+        {
+            document.removeEventListener('visibilitychange', handleVisibility);
+            wantedRef.current = false;
+            const lock = lockRef.current;
+            lockRef.current = null;
+            setIsActive(false);
+            lock?.release().catch(() => { /* already released */ });
+        };
+    }, [enabled, isSupported, acquire]);
 
-      return lock;
-    } catch (error) {
-      wakeLockRef.current = null;
-      setIsActive(false);
-      console.warn('[WakeLock] Failed to acquire screen wake lock:', error);
-      if (
-        !alertShownRef.current &&
-        !isCancelledRef.current &&
-        typeof window !== 'undefined' &&
-        typeof window.alert === 'function'
-      ) {
-        alertShownRef.current = true;
-        window.alert('Unable to keep the screen awake. Please ensure your device allows screen wake locks and try again.');
-      }
-      throw error;
-    }
-  }, [enabled, isSupported]);
-
-  useEffect(() => {
-    isCancelledRef.current = false;
-
-    if (!enabled) {
-      releaseWakeLock().catch(() => {
-        /* ignore */
-      });
-      return () => {
-        isCancelledRef.current = true;
-        releaseWakeLock().catch(() => {
-          /* ignore */
-        });
-      };
-    }
-
-    function handleVisibilityChange() {
-      if (!enabled) {
-        return;
-      }
-
-      if (document.visibilityState === 'visible') {
-        if (!wakeLockRef.current && hasUserInitiatedRef.current) {
-          requestWakeLock().catch(() => {
-            /* error already handled */
-          });
-        }
-      } else {
-        releaseWakeLock().catch(() => {
-          /* ignore */
-        });
-      }
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      isCancelledRef.current = true;
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      releaseWakeLock().catch(() => {
-        /* ignore */
-      });
-    };
-  }, [enabled, releaseWakeLock, requestWakeLock]);
-
-  return {
-    isSupported,
-    isActive,
-    requestWakeLock,
-    releaseWakeLock,
-  };
+    return { isSupported, isActive, requestWakeLock };
 }
 
 export default useWakeLock;

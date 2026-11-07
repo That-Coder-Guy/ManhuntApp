@@ -9,11 +9,7 @@ import { qrCodeOutline } from 'ionicons/icons';
 import BrandMark from '../components/BrandMark.jsx';
 import { createLobby } from '../utils/api.js';
 import QrScanModal from '../components/QrScanModal.jsx';
-
-// Lobby IDs are server-generated UUIDs. Scanned codes are checked against this
-// so pointing the camera at an unrelated QR reports a clear error instead of
-// sending the player to a lobby that was never going to exist.
-const LOBBY_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { parseLobbyId, lobbyPath } from '../utils/lobbyLink.js';
 
 function Home()
 {
@@ -26,16 +22,13 @@ function Home()
 
     async function createLobbyClick()
     {
-        if (!newLobbyName.trim())
-        {
-            setToast('Name the lobby first');
-            return;
-        }
+        const name = newLobbyName.trim();
+        if (!name) return setToast('Name the lobby first');
 
         setIsCreating(true);
         try {
-            const data = await createLobby(newLobbyName.trim());
-            navigate(`/lobby/${encodeURIComponent(data.lobby_id)}`);
+            const { lobby_id: lobbyId } = await createLobby(name);
+            navigate(lobbyPath(lobbyId));
         } catch (error) {
             console.error('Error creating lobby:', error);
             setToast("Couldn't create the lobby. Check your connection and try again.");
@@ -44,46 +37,23 @@ function Home()
         }
     }
 
-    // Accept either a bare lobby ID or a full invite URL (…/lobby/<id>)
-    function extractLobbyId(input)
-    {
-        const trimmed = input.trim();
-        const match = trimmed.match(/\/lobby\/([^/?#]+)/);
-        const raw = match ? match[1] : trimmed;
-        try {
-            return decodeURIComponent(raw);
-        } catch {
-            return raw;
-        }
-    }
-
     function joinLobbyClick()
     {
-        const lobbyId = extractLobbyId(joinLobbyId);
-        if (!lobbyId)
-        {
-            setToast('Enter a lobby ID or invite link');
-        }
-        else
-        {
-            navigate(`/lobby/${encodeURIComponent(lobbyId)}`);
-        }
+        if (!joinLobbyId.trim()) return setToast('Enter a lobby ID or invite link');
+
+        const lobbyId = parseLobbyId(joinLobbyId);
+        if (!lobbyId) return setToast("That isn't a lobby ID or invite link");
+        navigate(lobbyPath(lobbyId));
     }
 
-    // Invite codes encode the join URL, so a scan joins straight away — the
-    // same thing that happens when the phone's own camera opens the link.
+    // Invite codes encode the join URL, so a scan joins straight away, the
+    // same as when the phone's own camera opens the link
     function handleScan(scannedText)
     {
-        const lobbyId = extractLobbyId(scannedText);
-        if (!LOBBY_ID_PATTERN.test(lobbyId))
-        {
-            setIsScannerOpen(false);
-            setToast("That QR code isn't a Manhunt invite");
-            return;
-        }
-
         setIsScannerOpen(false);
-        navigate(`/lobby/${encodeURIComponent(lobbyId)}`);
+        const lobbyId = parseLobbyId(scannedText);
+        if (!lobbyId) return setToast("That QR code isn't a Manhunt invite");
+        navigate(lobbyPath(lobbyId));
     }
 
     return (

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     IonPage, IonHeader, IonToolbar, IonTitle, IonContent,
@@ -13,6 +13,7 @@ import PlayerTableModal from './PlayerTableModal';
 import ShareModal from './ShareModal';
 import ConnectionBanner from './ConnectionBanner';
 import { withDummyPlayers } from '../utils/dummyPlayers';
+import useGeolocation from '../hooks/useGeolocation';
 
 function LobbyFound({
     lobbyId,
@@ -32,69 +33,20 @@ function LobbyFound({
     const navigate = useNavigate();
     const { player_id, name: playerName, is_seeker: isSeeker } = selfPlayer || {};
 
-    // Current GPS position (kept locally so own distances work even offline)
-    const [currentLocation, setCurrentLocation] = useState({
-        latitude: null,
-        longitude: null
-    });
-    const [gpsError, setGpsError] = useState(false);
+    const { location: currentLocation, gpsError } = useGeolocation(permissionsGranted, updateLocation);
 
     const [isPlayerTableOpen, setIsPlayerTableOpen] = useState(false);
     const [isShareOpen, setIsShareOpen] = useState(false);
     const [isLeaveConfirmOpen, setIsLeaveConfirmOpen] = useState(false);
 
-    // Keep the latest updateLocation without retriggering the geolocation watch
-    const updateLocationRef = useRef(updateLocation);
-    updateLocationRef.current = updateLocation;
-
-    // Continuously watch the device position once permissions are granted.
-    // GPS often works when the network doesn't: local state always updates,
-    // while uploads are throttled/dropped by the socket hook as needed.
-    useEffect(() =>
-    {
-        if (!permissionsGranted) return undefined;
-
-        if (!navigator.geolocation)
-        {
-            setGpsError(true);
-            return undefined;
-        }
-
-        const watchId = navigator.geolocation.watchPosition(
-            (position) =>
-            {
-                setGpsError(false);
-                const { latitude, longitude } = position.coords;
-                setCurrentLocation({ latitude, longitude });
-                updateLocationRef.current(latitude, longitude);
-            },
-            (error) =>
-            {
-                console.warn('Geolocation error:', error);
-                setGpsError(true);
-            },
-            {
-                enableHighAccuracy: true,
-                maximumAge: 5000,
-                timeout: 15000
-            }
-        );
-
-        return () => navigator.geolocation.clearWatch(watchId);
-    }, [permissionsGranted]);
-
     const displayPlayers = withDummyPlayers(players);
 
+    // leaveLobby never rejects: offline, the server just expires the player
     async function handleLeave()
     {
-        try {
-            await leaveLobby();
-        } catch (error) {
-            console.error('Error leaving lobby:', error);
-        } finally {
-            onClearSession();
-            navigate('/');
-        }
+        await leaveLobby();
+        onClearSession();
+        navigate('/');
     }
 
     return (

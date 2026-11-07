@@ -23,6 +23,9 @@ npm --prefix server install  # backend deps
 
 npm run dev:server           # API + socket server on http://localhost:3001
 npm run dev                  # Vite dev server (points at localhost:3001 via .env.development)
+
+npm test                     # unit tests + socket-level server tests (needs the backend deps)
+npm run lint
 ```
 
 ## How the protocol works

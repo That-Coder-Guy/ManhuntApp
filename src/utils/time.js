@@ -1,24 +1,24 @@
+// A position older than this is shown as stale
+export const STALE_AFTER_MS = 30_000;
+
 /**
- * Format an epoch-milliseconds timestamp as a short "time ago" string
+ * Short relative time for an epoch-ms timestamp: "just now", "12s ago",
+ * "4m ago", "2h ago", or "—" when there is none.
  */
-export function getTimeAgo(epochTimestamp)
+export function getTimeAgo(epochTimestamp, now = Date.now())
 {
     if (!epochTimestamp) return '—';
 
-    const secondsAgo = Math.floor((Date.now() - epochTimestamp) / 1000);
-
-    // Future timestamps (clock sync issues) read as fresh
+    const secondsAgo = Math.floor((now - epochTimestamp) / 1000);
+    // Future timestamps (clock skew between devices) read as fresh
     if (secondsAgo < 5) return 'just now';
     if (secondsAgo < 60) return `${secondsAgo}s ago`;
     if (secondsAgo < 3600) return `${Math.floor(secondsAgo / 60)}m ago`;
     return `${Math.floor(secondsAgo / 3600)}h ago`;
 }
 
-/**
- * True when a location timestamp is older than the given threshold (default 30s)
- */
-export function isStale(epochTimestamp, thresholdMs = 30_000)
+/** True when a location timestamp is missing or older than the threshold */
+export function isStale(epochTimestamp, thresholdMs = STALE_AFTER_MS, now = Date.now())
 {
-    if (!epochTimestamp) return true;
-    return Date.now() - epochTimestamp > thresholdMs;
+    return !epochTimestamp || now - epochTimestamp > thresholdMs;
 }

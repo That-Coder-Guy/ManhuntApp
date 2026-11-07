@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { lobbyPath } from '../utils/lobbyLink';
 import {
     IonPage, IonContent, IonCard, IonCardHeader, IonCardTitle,
     IonCardContent, IonButton
@@ -20,7 +21,7 @@ function PlayerError({ lobbyId }) {
                             <IonButton
                                 data-testid="rejoin-btn"
                                 expand="block"
-                                onClick={() => { window.location.href = `/lobby/${lobbyId}`; }}
+                                onClick={() => { window.location.assign(lobbyPath(lobbyId)); }}
                             >
                                 Rejoin lobby
                             </IonButton>

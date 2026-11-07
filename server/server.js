@@ -8,40 +8,32 @@ const { v4: uuidv4 } = require('uuid');
 
 const { isAllowedOrigin } = require('./origins');
 
-// cors' `origin` accepts a (origin, callback) => callback(err, allow) function;
-// Socket.IO uses the same cors package, so one function serves both.
+const API_PREFIX = '/manhunt-api';
+const SOCKET_PATH = `${API_PREFIX}/socket.io`;
+
+const DEFAULTS = {
+    disconnectGraceMs: 5 * 60 * 1000, // keep a dropped player resumable this long
+    lobbyGraceMs: 10 * 1000,          // a new, empty lobby waits this long for its creator
+    cleanupIntervalMs: 30 * 1000,     // sweep for expired players and lobbies
+    broadcastIntervalMs: 1000,        // at most one lobby-state push per lobby per second
+    maxPlayersPerLobby: 50,
+    maxNameLength: 30,
+};
+
+// cors' `origin` option takes (origin, callback); Socket.IO uses the same package
 function corsOrigin(origin, callback)
 {
     callback(null, isAllowedOrigin(origin));
 }
 
-const app = express();
-app.use(cors({
-    origin: corsOrigin,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
-}));
-app.use(express.json());
+const isString = (value) => typeof value === 'string' && value.length > 0;
+const isCoordinate = (value, limit) => typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= limit;
 
-const server = http.createServer(app);
-const io = new Server(server, {
-    path: '/manhunt-api/socket.io',
-    cors: {
-        origin: corsOrigin,
-        methods: ['GET', 'POST'],
-        credentials: true
-    }
-});
-
-const lobbies = {};
-
-// Timeout configuration
-const DISCONNECT_GRACE_PERIOD = 5 * 60 * 1000; // Keep disconnected players for 5 minutes
-const CLEANUP_CHECK_INTERVAL = 30 * 1000;      // Sweep for expired players/lobbies every 30 seconds
-const LOBBY_GRACE_PERIOD = 10 * 1000;          // Empty-lobby grace period so creators can join
-const BROADCAST_MIN_INTERVAL = 1000;           // At most one lobby-state broadcast per second per lobby
-const MAX_NAME_LENGTH = 30;
+// Call a Socket.IO acknowledgement if the client sent one
+function reply(ack, payload)
+{
+    if (typeof ack === 'function') ack(payload);
+}
 
 function publicPlayerData(player)
 {
@@ -56,308 +48,288 @@ function publicPlayerData(player)
     };
 }
 
-// Broadcast the full player list to everyone in the lobby, throttled per lobby.
-// If a broadcast just went out, coalesce further changes into one trailing send.
-function scheduleBroadcast(lobby_id)
+/**
+ * Build the game server without listening, so tests can run it on a random
+ * port and shut it down cleanly.
+ *
+ * State lives in Maps, never plain objects: lobby IDs and player tokens come
+ * straight from clients, and a key like "__proto__" or "constructor" must look
+ * up nothing rather than Object.prototype.
+ */
+function createGameServer(options = {})
 {
-    const lobby = lobbies[lobby_id];
-    if (!lobby) return;
+    const config = { ...DEFAULTS, ...options };
 
-    if (lobby.broadcast_timer)
+    const app = express();
+    app.use(cors({
+        origin: corsOrigin,
+        methods: ['GET', 'POST', 'OPTIONS'],
+        allowedHeaders: ['Content-Type'],
+        credentials: true
+    }));
+    app.use(express.json({ limit: '10kb' }));
+
+    const server = http.createServer(app);
+    const io = new Server(server, {
+        path: SOCKET_PATH,
+        cors: { origin: corsOrigin, methods: ['GET', 'POST'], credentials: true }
+    });
+
+    /** @type {Map<string, {lobby_name: string, next_player_id: number, players: Map<string, object>, created_at: number, broadcastTimer: NodeJS.Timeout|null, broadcastPending: boolean}>} */
+    const lobbies = new Map();
+
+    function emitLobbyState(lobbyId)
     {
-        lobby.broadcast_pending = true;
-        return;
+        const lobby = lobbies.get(lobbyId);
+        if (!lobby) return;
+        const players = [...lobby.players.values()].map(publicPlayerData);
+        io.to(lobbyId).emit('lobby-state', { players });
     }
 
-    emitLobbyState(lobby_id);
-    lobby.broadcast_timer = setTimeout(() =>
+    // Push the player list now, or — if one went out within the interval —
+    // once more when the interval ends, so bursts collapse into one update
+    function scheduleBroadcast(lobbyId)
     {
-        lobby.broadcast_timer = null;
-        if (lobby.broadcast_pending && lobbies[lobby_id])
+        const lobby = lobbies.get(lobbyId);
+        if (!lobby) return;
+
+        if (lobby.broadcastTimer)
         {
-            lobby.broadcast_pending = false;
-            scheduleBroadcast(lobby_id);
+            lobby.broadcastPending = true;
+            return;
         }
-    }, BROADCAST_MIN_INTERVAL);
-}
 
-function emitLobbyState(lobby_id)
-{
-    const lobby = lobbies[lobby_id];
-    if (!lobby) return;
-
-    const players = Object.values(lobby.player_data).map(publicPlayerData);
-    io.to(lobby_id).emit('lobby-state', { players });
-}
-
-function deleteLobby(lobby_id)
-{
-    const lobby = lobbies[lobby_id];
-    if (!lobby) return;
-
-    if (lobby.broadcast_timer)
-    {
-        clearTimeout(lobby.broadcast_timer);
-    }
-    delete lobbies[lobby_id];
-    console.log(`Removed lobby ${lobby_id}`);
-}
-
-// Periodic sweep: remove players whose disconnect grace period expired,
-// then remove lobbies that have been empty past the lobby grace period.
-function cleanupExpired()
-{
-    const now = Date.now();
-
-    for (const lobby_id of Object.keys(lobbies))
-    {
-        const lobby = lobbies[lobby_id];
-        let changed = false;
-
-        for (const [token, player] of Object.entries(lobby.player_data))
+        emitLobbyState(lobbyId);
+        lobby.broadcastTimer = setTimeout(() =>
         {
-            if (!player.connected && now - player.disconnected_at >= DISCONNECT_GRACE_PERIOD)
+            lobby.broadcastTimer = null;
+            if (lobby.broadcastPending)
             {
-                delete lobby.player_data[token];
-                changed = true;
-                console.log(`Removed player ${player.player_id} from lobby ${lobby_id} (disconnect grace expired)`);
+                lobby.broadcastPending = false;
+                scheduleBroadcast(lobbyId);
+            }
+        }, config.broadcastIntervalMs);
+    }
+
+    function deleteLobby(lobbyId)
+    {
+        const lobby = lobbies.get(lobbyId);
+        if (!lobby) return;
+        clearTimeout(lobby.broadcastTimer);
+        lobbies.delete(lobbyId);
+    }
+
+    // The one way a player leaves: an empty lobby goes with them
+    function removePlayer(lobbyId, token)
+    {
+        const lobby = lobbies.get(lobbyId);
+        if (!lobby || !lobby.players.delete(token)) return;
+
+        if (lobby.players.size === 0) deleteLobby(lobbyId);
+        else scheduleBroadcast(lobbyId);
+    }
+
+    function cleanupExpired()
+    {
+        const now = Date.now();
+        for (const [lobbyId, lobby] of lobbies)
+        {
+            for (const [token, player] of lobby.players)
+            {
+                if (!player.connected && now - player.disconnected_at >= config.disconnectGraceMs)
+                {
+                    removePlayer(lobbyId, token);
+                }
+            }
+            // Lobbies nobody ever joined
+            if (lobbies.has(lobbyId) && lobby.players.size === 0 && now - lobby.created_at >= config.lobbyGraceMs)
+            {
+                deleteLobby(lobbyId);
             }
         }
-
-        if (Object.keys(lobby.player_data).length === 0)
-        {
-            if (now - lobby.created_at >= LOBBY_GRACE_PERIOD)
-            {
-                deleteLobby(lobby_id);
-            }
-        }
-        else if (changed)
-        {
-            scheduleBroadcast(lobby_id);
-        }
     }
-}
+    const cleanupTimer = setInterval(cleanupExpired, config.cleanupIntervalMs);
+    cleanupTimer.unref();
 
-// --- Create Lobby (REST, happens before any socket exists) ---
-app.post("/manhunt-api/create-lobby", (req, res) =>
-{
-    const { lobby_name } = req.body;
-    if (typeof lobby_name !== 'string' || !lobby_name.trim())
+    // --- REST: lobby creation happens before any socket exists ---
+    app.post(`${API_PREFIX}/create-lobby`, (req, res) =>
     {
-        return res.status(400).json({
-            status: "missing_parameter",
-            description: "lobby_name parameter was not provided."
+        const lobbyName = req.body?.lobby_name;
+        if (typeof lobbyName !== 'string' || !lobbyName.trim())
+        {
+            return res.status(400).json({ status: 'missing_parameter', description: 'lobby_name is required.' });
+        }
+
+        const lobbyId = uuidv4();
+        lobbies.set(lobbyId, {
+            lobby_name: lobbyName.trim().slice(0, config.maxNameLength),
+            next_player_id: 1,
+            players: new Map(),
+            created_at: Date.now(),
+            broadcastTimer: null,
+            broadcastPending: false
         });
-    }
-
-    const lobby_id = uuidv4();
-    lobbies[lobby_id] = {
-        lobby_name: lobby_name.trim().slice(0, MAX_NAME_LENGTH),
-        next_player_id: 1,
-        player_data: {},
-        created_at: Date.now(),
-        broadcast_timer: null,
-        broadcast_pending: false
-    };
-
-    res.json({
-        status: "success",
-        lobby_id: lobby_id
+        res.json({ status: 'success', lobby_id: lobbyId });
     });
-});
 
-app.get("/manhunt-api/health", (req, res) =>
-{
-    res.json({ status: "success" });
-});
+    app.get(`${API_PREFIX}/health`, (req, res) => res.json({ status: 'success' }));
 
-function isValidLatitude(value)
-{
-    return typeof value === 'number' && Number.isFinite(value) && value >= -90 && value <= 90;
-}
-
-function isValidLongitude(value)
-{
-    return typeof value === 'number' && Number.isFinite(value) && value >= -180 && value <= 180;
-}
-
-io.on('connection', (socket) =>
-{
-    const auth = socket.handshake.auth || {};
-    const lobby_id = auth.lobby_id;
-    const provided_token = auth.player_token;
-
-    const lobby = lobby_id ? lobbies[lobby_id] : undefined;
-    if (!lobby)
+    // Malformed JSON and the like: answer in the API's own shape, not HTML
+    app.use(API_PREFIX, (err, req, res, next) =>
     {
-        socket.emit('fatal-error', { status: 'lobby_not_found', description: 'Lobby does not exist' });
-        socket.disconnect(true);
-        return;
-    }
+        if (res.headersSent) return next(err);
+        res.status(err.status || 400).json({ status: 'bad_request', description: 'Invalid request.' });
+    });
 
-    let player_token;
-    let player;
-
-    if (provided_token)
+    // --- Socket.IO: join/resume, then live updates ---
+    io.on('connection', (socket) =>
     {
-        player = lobby.player_data[provided_token];
-        if (!player)
+        const { lobby_id: lobbyId, player_token: providedToken } = socket.handshake.auth || {};
+
+        function fail(status, description)
         {
-            // Token exists but the player was removed (grace period expired or they left).
-            // Let the client decide whether to rejoin as a new player.
-            socket.emit('fatal-error', {
-                status: 'invalid_player_token',
-                description: 'A player with this token does not exist in the lobby.'
-            });
+            socket.emit('fatal-error', { status, description });
             socket.disconnect(true);
-            return;
-        }
-        player_token = provided_token;
-    }
-    else
-    {
-        player_token = uuidv4();
-        const player_id = lobby.next_player_id++;
-        player = {
-            player_id: player_id,
-            name: `Player ${player_id}`,
-            is_seeker: false,
-            latitude: null,
-            longitude: null,
-            location_last_updated: null,
-            connected: true,
-            disconnected_at: null,
-            socket_id: null
-        };
-        lobby.player_data[player_token] = player;
-    }
-
-    // Join / resume
-    player.connected = true;
-    player.disconnected_at = null;
-    player.socket_id = socket.id;
-    socket.join(lobby_id);
-
-    socket.emit('joined', {
-        lobby_name: lobby.lobby_name,
-        player_token: player_token,
-        player_data: publicPlayerData(player)
-    });
-    scheduleBroadcast(lobby_id);
-
-    // Guard against events arriving after the player left or was removed
-    function currentPlayer()
-    {
-        const currentLobby = lobbies[lobby_id];
-        return currentLobby ? currentLobby.player_data[player_token] : undefined;
-    }
-
-    socket.on('update-location', (data, ack) =>
-    {
-        const p = currentPlayer();
-        if (!p)
-        {
-            if (typeof ack === 'function') ack({ status: 'invalid_player_token' });
-            return;
         }
 
-        const { latitude, longitude } = data || {};
-        if (!isValidLatitude(latitude) || !isValidLongitude(longitude))
+        const lobby = isString(lobbyId) ? lobbies.get(lobbyId) : undefined;
+        if (!lobby) return fail('lobby_not_found', 'Lobby does not exist.');
+
+        let token;
+        let player;
+        if (providedToken)
         {
-            if (typeof ack === 'function') ack({ status: 'validation_error' });
-            return;
+            player = isString(providedToken) ? lobby.players.get(providedToken) : undefined;
+            // Removed after the grace period, or left: the client decides whether to rejoin fresh
+            if (!player) return fail('invalid_player_token', 'No player with this token is in the lobby.');
+            token = providedToken;
+        }
+        else
+        {
+            if (lobby.players.size >= config.maxPlayersPerLobby) return fail('lobby_full', 'This lobby is full.');
+
+            token = uuidv4();
+            const playerId = lobby.next_player_id++;
+            player = {
+                player_id: playerId,
+                name: `Player ${playerId}`,
+                is_seeker: false,
+                latitude: null,
+                longitude: null,
+                location_last_updated: null,
+                connected: true,
+                disconnected_at: null,
+                socket_id: null
+            };
+            lobby.players.set(token, player);
         }
 
-        p.latitude = latitude;
-        p.longitude = longitude;
-        p.location_last_updated = Date.now();
-        scheduleBroadcast(lobby_id);
+        player.connected = true;
+        player.disconnected_at = null;
+        player.socket_id = socket.id;
+        socket.join(lobbyId);
 
-        if (typeof ack === 'function') ack({ status: 'success' });
-    });
+        socket.emit('joined', {
+            lobby_name: lobby.lobby_name,
+            player_token: token,
+            player_data: publicPlayerData(player)
+        });
+        scheduleBroadcast(lobbyId);
 
-    socket.on('update-player', (data, ack) =>
-    {
-        const p = currentPlayer();
-        if (!p)
+        // The player can be removed (left elsewhere, grace expired) while this
+        // socket is still open, so every event re-resolves it
+        const currentPlayer = () => lobbies.get(lobbyId)?.players.get(token);
+
+        socket.on('update-location', (data, ack) =>
         {
-            if (typeof ack === 'function') ack({ status: 'invalid_player_token' });
-            return;
-        }
+            const p = currentPlayer();
+            if (!p) return reply(ack, { status: 'invalid_player_token' });
 
-        const { name, is_seeker } = data || {};
-        let updated = false;
-
-        if (typeof name === 'string' && name.trim().length > 0)
-        {
-            p.name = name.trim().slice(0, MAX_NAME_LENGTH);
-            updated = true;
-        }
-        if (typeof is_seeker === 'boolean')
-        {
-            p.is_seeker = is_seeker;
-            updated = true;
-        }
-
-        if (!updated)
-        {
-            if (typeof ack === 'function') ack({ status: 'validation_error' });
-            return;
-        }
-
-        scheduleBroadcast(lobby_id);
-        if (typeof ack === 'function') ack({ status: 'success', player_data: publicPlayerData(p) });
-    });
-
-    socket.on('leave-lobby', (...args) =>
-    {
-        const ack = typeof args[args.length - 1] === 'function' ? args[args.length - 1] : undefined;
-        const currentLobby = lobbies[lobby_id];
-        if (currentLobby && currentLobby.player_data[player_token])
-        {
-            delete currentLobby.player_data[player_token];
-            if (Object.keys(currentLobby.player_data).length === 0)
+            const { latitude, longitude } = data || {};
+            if (!isCoordinate(latitude, 90) || !isCoordinate(longitude, 180))
             {
-                deleteLobby(lobby_id);
+                return reply(ack, { status: 'validation_error' });
             }
-            else
-            {
-                scheduleBroadcast(lobby_id);
-            }
-        }
-        if (typeof ack === 'function') ack({ status: 'success' });
-        socket.disconnect(true);
+
+            p.latitude = latitude;
+            p.longitude = longitude;
+            p.location_last_updated = Date.now();
+            scheduleBroadcast(lobbyId);
+            reply(ack, { status: 'success' });
+        });
+
+        socket.on('update-player', (data, ack) =>
+        {
+            const p = currentPlayer();
+            if (!p) return reply(ack, { status: 'invalid_player_token' });
+
+            const { name, is_seeker: isSeeker } = data || {};
+            const hasName = typeof name === 'string' && name.trim().length > 0;
+            const hasRole = typeof isSeeker === 'boolean';
+            if (!hasName && !hasRole) return reply(ack, { status: 'validation_error' });
+
+            if (hasName) p.name = name.trim().slice(0, config.maxNameLength);
+            if (hasRole) p.is_seeker = isSeeker;
+
+            scheduleBroadcast(lobbyId);
+            reply(ack, { status: 'success', player_data: publicPlayerData(p) });
+        });
+
+        socket.on('leave-lobby', (...args) =>
+        {
+            // The ack is always the last argument, whatever payload came first
+            removePlayer(lobbyId, token);
+            reply(args[args.length - 1], { status: 'success' });
+            socket.disconnect(true);
+        });
+
+        socket.on('disconnect', () =>
+        {
+            const p = currentPlayer();
+            // Ignore a stale socket that a newer connection already replaced
+            if (!p || p.socket_id !== socket.id) return;
+
+            p.connected = false;
+            p.disconnected_at = Date.now();
+            p.socket_id = null;
+            scheduleBroadcast(lobbyId);
+        });
     });
 
-    socket.on('disconnect', () =>
+    // Serve the built frontend (single-origin deployment) when dist/ exists
+    const distDir = options.distDir ?? path.join(__dirname, '..', 'dist');
+    if (distDir && fs.existsSync(distDir))
     {
-        const p = currentPlayer();
-        // Ignore disconnects from stale sockets replaced by a newer connection
-        if (!p || p.socket_id !== socket.id) return;
+        app.use(express.static(distDir));
+        app.get(/^\/(?!manhunt-api).*/, (req, res) => res.sendFile(path.join(distDir, 'index.html')));
+    }
 
-        p.connected = false;
-        p.disconnected_at = Date.now();
-        p.socket_id = null;
-        scheduleBroadcast(lobby_id);
-    });
-});
-
-// Serve the built frontend (single-origin deployment) when dist/ exists.
-const distDir = path.join(__dirname, '..', 'dist');
-if (fs.existsSync(distDir))
-{
-    app.use(express.static(distDir));
-    app.get(/^\/(?!manhunt-api).*/, (req, res) =>
+    function close()
     {
-        res.sendFile(path.join(distDir, 'index.html'));
-    });
-    console.log(`Serving frontend from ${distDir}`);
+        clearInterval(cleanupTimer);
+        for (const lobbyId of [...lobbies.keys()]) deleteLobby(lobbyId);
+        return new Promise((resolve) => io.close(() => resolve()));
+    }
+
+    return { app, server, io, lobbies, cleanupExpired, close, distDir };
 }
 
-const PORT = process.env.PORT || 3001;
-server.listen(PORT, '0.0.0.0', () =>
+if (require.main === module)
 {
-    console.log(`API listening on http://0.0.0.0:${PORT}`);
-});
+    const { server, distDir, close } = createGameServer();
+    const port = Number(process.env.PORT) || 3001;
 
-setInterval(cleanupExpired, CLEANUP_CHECK_INTERVAL);
+    server.listen(port, '0.0.0.0', () =>
+    {
+        console.log(`API listening on http://0.0.0.0:${port}`);
+        if (fs.existsSync(distDir)) console.log(`Serving frontend from ${distDir}`);
+    });
+
+    // Let in-flight sockets close cleanly on Ctrl-C / container stop
+    for (const signal of ['SIGINT', 'SIGTERM'])
+    {
+        process.on(signal, () => close().finally(() => process.exit(0)));
+    }
+}
+
+module.exports = { createGameServer, SOCKET_PATH, DEFAULTS };

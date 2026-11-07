@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import useCompassHeading, { COMPASS_STATUS } from '../hooks/useCompassHeading';
 import { calculateBearing, formatDistance } from '../utils/geo';
 import { bearingToCardinal } from '../utils/orientation';
-import { getTimeAgo, isStale } from '../utils/time';
+import { playerFreshness } from '../utils/players';
+import useNow from '../hooks/useNow';
 import FixDot from './FixDot';
 
 /**
@@ -50,25 +51,18 @@ const CARDINALS = [
     { label: 'W', angle: 270 },
 ];
 
-function CompassArrow({ targetLatitude, targetLongitude, currentLocation, targetName, distance, locationLastUpdated, isDisconnected, onClick })
+function CompassArrow({ target, targetName, currentLocation, distance, onClick })
 {
     const { heading, status, source, requestPermission } = useCompassHeading();
+    const now = useNow();
 
     // Bearing to the target from true north (null when either position is missing)
     const targetBearing = calculateBearing(
         currentLocation.latitude,
         currentLocation.longitude,
-        targetLatitude,
-        targetLongitude
+        target.latitude,
+        target.longitude
     );
-
-    // Tick every second so the freshness line stays current
-    const [, setTick] = useState(0);
-    useEffect(() =>
-    {
-        const intervalId = setInterval(() => setTick(t => t + 1), 1000);
-        return () => clearInterval(intervalId);
-    }, []);
 
     const isLive = status === COMPASS_STATUS.GRANTED;
     const isFallback = status === COMPASS_STATUS.UNSUPPORTED;
@@ -84,25 +78,23 @@ function CompassArrow({ targetLatitude, targetLongitude, currentLocation, target
     const roseRotation = useUnwrappedAngle(rawRose);
     const showNeedle = (isLive || isFallback) && rawNeedle !== null;
 
-    const fresh = !isDisconnected && !isStale(locationLastUpdated);
-    const freshness = `${isDisconnected ? 'Offline · ' : ''}${
-        locationLastUpdated ? `updated ${getTimeAgo(locationLastUpdated)}` : 'no location yet'
-    }`;
+    const { fresh, offline, label: freshness } = playerFreshness(target, now);
 
     const handleCompassInteraction = (event) => {
-        if (status === COMPASS_STATUS.UNKNOWN) {
+        // Not yet asked, or refused this session: a tap asks (again)
+        if (status === COMPASS_STATUS.UNKNOWN || status === COMPASS_STATUS.DENIED) {
             event?.stopPropagation?.();
             requestPermission();
             return;
         }
-        if (typeof onClick === 'function') onClick(event);
+        onClick?.(event);
     };
 
     return (
         <div className="compass-arrow-container">
             {status === COMPASS_STATUS.DENIED && (
                 <div className="compass-error-message compass-error-denied">
-                    Compass access is off. Turn it on in your browser settings to use the needle.
+                    Compass access is off. Tap the dial to ask again, or allow motion access in your browser settings.
                 </div>
             )}
 
@@ -181,7 +173,7 @@ function CompassArrow({ targetLatitude, targetLongitude, currentLocation, target
             {/* Readout under the dial, always the same lines so nothing shifts */}
             <div className="compass-readout">
                 <div className="compass-player-name">
-                    <FixDot fresh={fresh} offline={isDisconnected} />
+                    <FixDot fresh={fresh} offline={offline} />
                     <span className="compass-player-name-text">{targetName}</span>
                 </div>
                 <div className="compass-distance-display">{formatDistance(distance)}</div>

@@ -37,52 +37,41 @@ const API_BASE = `${API_ORIGIN}/manhunt-api`;
 // How long to wait before giving up on a REST request
 const REQUEST_TIMEOUT_MS = 8000;
 
-/**
- * API response status codes
- */
-export const API_RESPONSE_STATUS = {
-    SUCCESS: 'success',
-    LOBBY_NOT_FOUND: 'lobby_not_found',
-    INVALID_PLAYER_TOKEN: 'invalid_player_token',
-    HTTP_ERROR: 'http_error',
-    NETWORK_ERROR: 'network_error'
-};
+function requestError(message, status)
+{
+    const error = new Error(message);
+    error.status = status;
+    return error;
+}
 
 /**
- * Create a new lobby
- * @param {string} lobbyName - Name of the lobby
- * @returns {Promise<object>} - { lobby_id }
+ * Create a lobby and resolve with `{ lobby_id }`. Rejects with
+ * status 'network_error' (offline, timed out) or 'http_error' (the server
+ * answered, but not with a lobby).
  */
 export async function createLobby(lobbyName)
 {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
+    let response;
     try {
-        const response = await fetch(`${API_BASE}/create-lobby`, {
+        response = await fetch(`${API_BASE}/create-lobby`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ lobby_name: lobbyName }),
             signal: controller.signal
         });
-
-        if (!response.ok)
-        {
-            const error = new Error(`HTTP Status Code ${response.status}`);
-            error.status = API_RESPONSE_STATUS.HTTP_ERROR;
-            throw error;
-        }
-
-        return await response.json();
-    } catch (error) {
-        if (!error.status)
-        {
-            const networkError = new Error('Network error - please check your internet connection');
-            networkError.status = API_RESPONSE_STATUS.NETWORK_ERROR;
-            throw networkError;
-        }
-        throw error;
+    } catch {
+        throw requestError('Network error: check your connection', 'network_error');
     } finally {
         clearTimeout(timeoutId);
     }
+
+    const data = response.ok ? await response.json().catch(() => null) : null;
+    if (typeof data?.lobby_id !== 'string')
+    {
+        throw requestError(`Unexpected response (HTTP ${response.status})`, 'http_error');
+    }
+    return data;
 }

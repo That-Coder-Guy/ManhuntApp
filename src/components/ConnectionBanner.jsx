@@ -1,26 +1,17 @@
-import { useEffect, useState } from 'react';
 import { CONNECTION_STATE } from '../hooks/useLobbySocket';
+import useNow from '../hooks/useNow';
 import { getTimeAgo } from '../utils/time';
 import FixDot from './FixDot';
 
 /**
- * Slim status strips rendered inside the page's fixed IonHeader while the
- * socket is reconnecting or GPS is lost. Hidden entirely when healthy.
+ * Slim status strips inside the page's fixed IonHeader while the socket is
+ * reconnecting or GPS is lost. Renders nothing when healthy.
  */
 function ConnectionBanner({ connectionState, lastSyncTime, gpsError })
 {
     const reconnecting = connectionState !== CONNECTION_STATE.CONNECTED;
-
-    // Tick every second while visible so the "last update" label stays current
-    const [, setTick] = useState(0);
-    useEffect(() =>
-    {
-        if (!reconnecting) return undefined;
-        const intervalId = setInterval(() => setTick(t => t + 1), 1000);
-        return () => clearInterval(intervalId);
-    }, [reconnecting]);
-
-    if (!reconnecting && !gpsError) return null;
+    // Only tick while the "positions from Xs ago" line is on screen
+    const now = useNow(1000, reconnecting);
 
     return (
         <>
@@ -29,7 +20,7 @@ function ConnectionBanner({ connectionState, lastSyncTime, gpsError })
                     <FixDot fresh={false} offline />
                     <span>
                         {navigator.onLine === false ? 'Offline' : 'Reconnecting'}
-                        {lastSyncTime ? ` · positions from ${getTimeAgo(lastSyncTime)}` : ' · showing last positions'}
+                        {lastSyncTime ? ` · positions from ${getTimeAgo(lastSyncTime, now)}` : ' · showing last positions'}
                     </span>
                 </div>
             )}

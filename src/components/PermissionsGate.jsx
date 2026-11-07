@@ -1,163 +1,92 @@
 import { useEffect, useState } from 'react';
-import {
-    IonModal, IonList, IonItem, IonLabel, IonToggle,
-    IonNote, IonButton
-} from '@ionic/react';
+import { IonModal, IonList, IonItem, IonLabel, IonToggle, IonNote, IonButton } from '@ionic/react';
 
 const STATUS_LABELS = {
-    prompt: 'Pending',
-    requesting: 'Requesting…',
-    granted: 'Granted',
-    denied: 'Denied',
-    unsupported: 'Unsupported',
+    prompt: 'Off',
+    requesting: 'Asking…',
+    granted: 'On',
+    denied: 'Blocked',
+    unsupported: 'Not available on this device',
 };
 
-function PermissionsGate({
-    isOpen,
-    onComplete,
-    requestWakeLock,
-    isWakeLockSupported,
-    isWakeLockActive,
-}) {
-    const isBrowser = typeof window !== 'undefined';
-    const isLocationSupported = isBrowser && 'geolocation' in navigator;
+const LOCATION_DENIED_HELP = 'Blocked · allow location for this site in your browser settings';
 
-    const [locationStatus, setLocationStatus] = useState('prompt');
-    const [wakeLockStatus, setWakeLockStatus] = useState(
-        isWakeLockSupported ? 'prompt' : 'unsupported'
-    );
-    const [isContinuing, setIsContinuing] = useState(false);
+const hasGeolocation = () => typeof navigator !== 'undefined' && 'geolocation' in navigator;
 
-    useEffect(() => {
-        if (!isBrowser) {
-            return;
-        }
+/** Location permission as 'prompt' | 'requesting' | 'granted' | 'denied' | 'unsupported' */
+function useLocationPermission()
+{
+    const [status, setStatus] = useState(() => (hasGeolocation() ? 'prompt' : 'unsupported'));
 
-        let geoPermissionStatus;
+    // Reflect the browser's current answer, and follow changes made in settings
+    useEffect(() =>
+    {
+        if (!hasGeolocation() || !navigator.permissions?.query) return undefined;
+
+        let permission;
         let cancelled = false;
+        const apply = (state) => { if (!cancelled) setStatus(state === 'granted' || state === 'denied' ? state : 'prompt'); };
 
-        function applyGeolocationState(state) {
-            if (cancelled) return;
+        navigator.permissions.query({ name: 'geolocation' })
+            .then((result) =>
+            {
+                permission = result;
+                apply(result.state);
+                result.onchange = () => apply(result.state);
+            })
+            .catch(() => { /* older browsers: stay on 'prompt' until the player taps */ });
 
-            if (state === 'granted') {
-                setLocationStatus('granted');
-            } else if (state === 'denied') {
-                setLocationStatus('denied');
-            } else {
-                setLocationStatus('prompt');
-            }
-        }
-
-        if (isLocationSupported && navigator.permissions?.query) {
-            navigator.permissions
-                .query({ name: 'geolocation' })
-                .then((status) => {
-                    if (cancelled) return;
-                    geoPermissionStatus = status;
-                    applyGeolocationState(status.state);
-                    status.onchange = () => applyGeolocationState(status.state);
-                })
-                .catch(() => {
-                    if (navigator.geolocation) {
-                        navigator.geolocation.getCurrentPosition(
-                            () => applyGeolocationState('granted'),
-                            () => applyGeolocationState('denied')
-                        );
-                    }
-                });
-        } else if (!isLocationSupported) {
-            setLocationStatus('unsupported');
-        }
-
-        return () => {
+        return () =>
+        {
             cancelled = true;
-            if (geoPermissionStatus) {
-                geoPermissionStatus.onchange = null;
-            }
+            if (permission) permission.onchange = null;
         };
-    }, [isBrowser, isLocationSupported]);
+    }, []);
 
-    useEffect(() => {
-        if (!isWakeLockSupported) {
-            setWakeLockStatus('unsupported');
-        }
-    }, [isWakeLockSupported]);
-
-    useEffect(() => {
-        if (!isWakeLockSupported) {
-            return;
-        }
-
-        if (isWakeLockActive) {
-            setWakeLockStatus('granted');
-        } else if (wakeLockStatus === 'granted') {
-            setWakeLockStatus('prompt');
-        }
-    }, [isWakeLockSupported, isWakeLockActive, wakeLockStatus]);
-
-    const locationGranted = locationStatus === 'granted';
-    const wakeLockGranted = !isWakeLockSupported || wakeLockStatus === 'granted';
-
-    // Location is required (distances/directions depend on it); keep-screen-on
-    // is a recommended convenience and must never block starting the game.
-    const canContinue = locationGranted;
-
-    const handleLocationToggle = () => {
-        if (!isLocationSupported) {
-            setLocationStatus('unsupported');
-            return;
-        }
-        if (locationStatus === 'requesting' || locationStatus === 'granted') {
-            return;
-        }
-
-        setLocationStatus('requesting');
+    const request = () =>
+    {
+        if (!hasGeolocation() || status === 'requesting' || status === 'granted') return;
+        setStatus('requesting');
         navigator.geolocation.getCurrentPosition(
-            () => setLocationStatus('granted'),
-            () => setLocationStatus('denied'),
+            () => setStatus('granted'),
+            () => setStatus('denied'),
             { enableHighAccuracy: true, maximumAge: 10_000, timeout: 10_000 }
         );
     };
 
-    const handleWakeLockToggle = async () => {
-        if (!isWakeLockSupported) {
-            setWakeLockStatus('unsupported');
-            return;
-        }
-        if (wakeLockStatus === 'requesting' || wakeLockStatus === 'granted') {
-            return;
-        }
+    return [status, request];
+}
 
-        setWakeLockStatus('requesting');
+function PermissionsGate({ isOpen, onComplete, requestWakeLock, isWakeLockSupported, isWakeLockActive })
+{
+    const [locationStatus, requestLocation] = useLocationPermission();
+    // Only the request's own progress is local; "on" comes from the hook
+    const [wakeRequest, setWakeRequest] = useState('idle');
+
+    const wakeStatus = !isWakeLockSupported ? 'unsupported'
+        : isWakeLockActive ? 'granted'
+        : wakeRequest === 'idle' ? 'prompt'
+        : wakeRequest;
+
+    const handleWakeLockToggle = async () =>
+    {
+        if (!isWakeLockSupported || isWakeLockActive || wakeRequest === 'requesting') return;
+        setWakeRequest('requesting');
         try {
             await requestWakeLock();
-            setWakeLockStatus('granted');
+            setWakeRequest('idle');
         } catch (error) {
-            console.error('[Permissions] Wake lock request failed:', error);
-            setWakeLockStatus('denied');
+            console.warn('[Permissions] Wake lock request failed:', error);
+            setWakeRequest('denied');
         }
     };
 
-    const handleContinue = () => {
-        if (!canContinue || isContinuing) {
-            return;
-        }
-        setIsContinuing(true);
-        onComplete();
-    };
-
-    // Reset the continue latch when the gate reopens
-    useEffect(() => {
-        if (isOpen) setIsContinuing(false);
-    }, [isOpen]);
+    // Location is required (distances and directions depend on it); keeping
+    // the screen on is a convenience and never blocks starting the game
+    const canContinue = locationStatus === 'granted';
 
     return (
-        <IonModal
-            isOpen={isOpen}
-            backdropDismiss={false}
-            cssClass="permissions-dialog"
-            data-testid="gate-modal"
-        >
+        <IonModal isOpen={isOpen} backdropDismiss={false} cssClass="permissions-dialog" data-testid="gate-modal">
             <div className="permissions-dialog-body">
                 <h2>Before you play</h2>
 
@@ -167,20 +96,16 @@ function PermissionsGate({
                             <h3>Location <IonNote className="permission-requirement">Required</IonNote></h3>
                             <p>Shows distances and directions to other players</p>
                             <IonNote className="permission-status" data-testid="location-status">
-                                {STATUS_LABELS[locationStatus] || locationStatus}
+                                {locationStatus === 'denied' ? LOCATION_DENIED_HELP : STATUS_LABELS[locationStatus]}
                             </IonNote>
                         </IonLabel>
                         <IonToggle
                             slot="end"
                             data-testid="toggle-location"
                             aria-label="Enable location"
-                            checked={locationGranted}
-                            disabled={
-                                locationGranted ||
-                                locationStatus === 'requesting' ||
-                                locationStatus === 'unsupported'
-                            }
-                            onClick={handleLocationToggle}
+                            checked={locationStatus === 'granted'}
+                            disabled={['granted', 'requesting', 'unsupported'].includes(locationStatus)}
+                            onClick={requestLocation}
                         />
                     </IonItem>
 
@@ -189,19 +114,15 @@ function PermissionsGate({
                             <h3>Keep screen on <IonNote className="permission-requirement">Optional</IonNote></h3>
                             <p>Stops your screen sleeping while you play</p>
                             <IonNote className="permission-status" data-testid="wake-status">
-                                {STATUS_LABELS[wakeLockStatus] || wakeLockStatus}
+                                {STATUS_LABELS[wakeStatus]}
                             </IonNote>
                         </IonLabel>
                         <IonToggle
                             slot="end"
                             data-testid="toggle-wake"
                             aria-label="Keep screen on"
-                            checked={wakeLockGranted && isWakeLockSupported}
-                            disabled={
-                                wakeLockStatus === 'requesting' ||
-                                wakeLockStatus === 'unsupported' ||
-                                !isWakeLockSupported
-                            }
+                            checked={wakeStatus === 'granted'}
+                            disabled={wakeStatus === 'unsupported' || wakeStatus === 'requesting'}
                             onClick={handleWakeLockToggle}
                         />
                     </IonItem>
@@ -211,8 +132,8 @@ function PermissionsGate({
                     data-testid="gate-continue"
                     expand="block"
                     className="ion-margin-top"
-                    disabled={!canContinue || isContinuing}
-                    onClick={handleContinue}
+                    disabled={!canContinue}
+                    onClick={onComplete}
                 >
                     {canContinue ? 'Continue' : 'Allow location to continue'}
                 </IonButton>
