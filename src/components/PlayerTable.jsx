@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getTimeAgo } from '../utils/time';
+import { getTimeAgo, isStale } from '../utils/time';
+import FixDot from './FixDot';
 
 function PlayerTable({ players, currentPlayer })
 {
@@ -26,7 +27,7 @@ function PlayerTable({ players, currentPlayer })
                     <tr>
                         <th>Name</th>
                         <th>Role</th>
-                        <th>Last Updated</th>
+                        <th className="time-cell">Updated</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -37,24 +38,33 @@ function PlayerTable({ players, currentPlayer })
                             </td>
                         </tr>
                     ) : (
-                        allPlayers.map((player, index) => (
-                            <tr
-                                key={player.player_id || 'current'}
-                                className={`${index === 0 && currentPlayer ? 'current-player-row' : ''} ${player.connected === false ? 'player-stale' : ''}`.trim()}
-                            >
-                                <td className="player-name-cell">
-                                    {player.name || `Player ${player.player_id}`}
-                                    {index === 0 && currentPlayer && <span className="current-player-indicator"> (You)</span>}
-                                    {player.connected === false && <span className="player-offline-indicator"> (offline)</span>}
-                                </td>
-                                <td>
-                                    <span className={`player-role-badge ${player.is_seeker ? 'seeker' : 'hider'}`}>
+                        allPlayers.map((player, index) => {
+                            const isYou = index === 0 && !!currentPlayer;
+                            const offline = player.connected === false;
+                            return (
+                                <tr
+                                    key={player.player_id || 'current'}
+                                    className={`${isYou ? 'current-player-row' : ''} ${offline ? 'player-stale' : ''}`.trim()}
+                                >
+                                    <td className="player-name-cell">
+                                        <span className="player-name-wrap">
+                                            <FixDot
+                                                fresh={!offline && !isStale(player.location_last_updated)}
+                                                offline={offline}
+                                            />
+                                            <span className="player-name-text">
+                                                {player.name || `Player ${player.player_id}`}
+                                            </span>
+                                            {isYou && <span className="current-player-indicator">you</span>}
+                                        </span>
+                                    </td>
+                                    <td className="player-role-cell">
                                         {player.is_seeker ? 'Seeker' : 'Hider'}
-                                    </span>
-                                </td>
-                                <td className="time-cell">{getTimeAgo(player.location_last_updated)}</td>
-                            </tr>
-                        ))
+                                    </td>
+                                    <td className="time-cell">{getTimeAgo(player.location_last_updated)}</td>
+                                </tr>
+                            );
+                        })
                     )}
                 </tbody>
             </table>

@@ -173,7 +173,7 @@ function QrScanModal({ isOpen, onClose, onScan })
         >
             <IonHeader>
                 <IonToolbar>
-                    <IonTitle>Scan Lobby QR</IonTitle>
+                    <IonTitle>Scan invite</IonTitle>
                     <IonButtons slot="end">
                         <IonButton data-testid="qr-scan-close" onClick={onClose}>Close</IonButton>
                     </IonButtons>
@@ -203,7 +203,7 @@ function QrScanModal({ isOpen, onClose, onScan })
 
                 {status === SCAN_STATUS.SCANNING && (
                     <IonNote className="qr-scan-hint">
-                        Point the camera at the invite QR code.
+                        Point the camera at the invite QR code
                     </IonNote>
                 )}
 
@@ -214,7 +214,7 @@ function QrScanModal({ isOpen, onClose, onScan })
                         className="ion-margin-top"
                         onClick={startCamera}
                     >
-                        Try Again
+                        Try again
                     </IonButton>
                 )}
             </IonContent>

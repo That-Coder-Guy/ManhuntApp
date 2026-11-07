@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CONNECTION_STATE } from '../hooks/useLobbySocket';
 import { getTimeAgo } from '../utils/time';
+import FixDot from './FixDot';
 
 /**
  * Slim status strips rendered inside the page's fixed IonHeader while the
@@ -25,14 +26,17 @@ function ConnectionBanner({ connectionState, lastSyncTime, gpsError })
         <>
             {reconnecting && (
                 <div className="connection-banner connection-banner-offline" role="status" data-testid="offline-banner">
-                    {navigator.onLine === false ? 'Offline' : 'Reconnecting…'}
-                    {' · last positions'}
-                    {lastSyncTime ? ` · ${getTimeAgo(lastSyncTime)}` : ''}
+                    <FixDot fresh={false} offline />
+                    <span>
+                        {navigator.onLine === false ? 'Offline' : 'Reconnecting'}
+                        {lastSyncTime ? ` · positions from ${getTimeAgo(lastSyncTime)}` : ' · showing last positions'}
+                    </span>
                 </div>
             )}
             {gpsError && (
                 <div className="connection-banner connection-banner-gps" role="status" data-testid="gps-banner">
-                    GPS signal lost
+                    <FixDot fresh={false} />
+                    <span>GPS signal lost · your position isn't updating</span>
                 </div>
             )}
         </>

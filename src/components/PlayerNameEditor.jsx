@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { IonItem, IonInput, IonButton, IonNote } from '@ionic/react';
+import { IonItem, IonInput, IonButton, IonNote, IonToast } from '@ionic/react';
 
 const MAX_NAME_LENGTH = 30;
 
@@ -21,7 +21,7 @@ function PlayerNameEditor({ currentName, updatePlayer })
     {
         if (!trimmed)
         {
-            setError('Name cannot be empty');
+            setError('Enter a name');
             return;
         }
         if (trimmed.length > MAX_NAME_LENGTH)
@@ -42,7 +42,7 @@ function PlayerNameEditor({ currentName, updatePlayer })
             console.error('Error updating name:', err);
             setError(err.status === 'network_error'
                 ? "Couldn't reach the server — check your connection and try again."
-                : 'Failed to update name. Please try again.');
+                : "Couldn't save your name. Try again.");
         }
         finally
         {
@@ -52,7 +52,7 @@ function PlayerNameEditor({ currentName, updatePlayer })
 
     return (
         <>
-            <IonItem className="glass-item">
+            <IonItem className="name-card">
                 {/* Label sits in the row container, outside the input chip */}
                 <div className="name-field">
                     <IonNote className="name-field-label">Your name</IonNote>
@@ -84,11 +84,15 @@ function PlayerNameEditor({ currentName, updatePlayer })
                     </div>
                 </div>
             </IonItem>
-            {error && (
-                <IonNote color="danger" data-testid="name-error" style={{ display: 'block', padding: '4px 16px' }}>
-                    {error}
-                </IonNote>
-            )}
+            {/* A toast, not an inline note, so an error never changes the
+                height of the cards on the page */}
+            <IonToast
+                isOpen={!!error}
+                message={error}
+                duration={4000}
+                data-testid="name-error"
+                onDidDismiss={() => setError('')}
+            />
         </>
     );
 }

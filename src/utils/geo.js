@@ -47,7 +47,9 @@ export function calculateBearing(lat1, lon1, lat2, lon2)
  */
 export function formatDistance(distance)
 {
-    if (distance == null) return 'Unknown';
-    if (distance < 1000) return `${Math.round(distance)}m`;
-    return `${(distance / 1000).toFixed(2)}km`;
+    // One format everywhere: whole metres, then kilometres to one decimal,
+    // with a thin no-break space before the unit
+    if (distance == null) return '—';
+    if (distance < 1000) return `${Math.round(distance)}\u202Fm`;
+    return `${(distance / 1000).toFixed(1)}\u202Fkm`;
 }

@@ -159,14 +159,14 @@ function PermissionsGate({
             data-testid="gate-modal"
         >
             <div className="permissions-dialog-body">
-                <h2>Enable Permissions</h2>
+                <h2>Before you play</h2>
 
                 <IonList inset>
                     <IonItem>
                         <IonLabel>
-                            <h3>Location <IonNote color="danger">(required)</IonNote></h3>
-                            <p>Needed to show distances and directions to other players.</p>
-                            <IonNote data-testid="location-status">
+                            <h3>Location <IonNote className="permission-requirement">Required</IonNote></h3>
+                            <p>Shows distances and directions to other players</p>
+                            <IonNote className="permission-status" data-testid="location-status">
                                 {STATUS_LABELS[locationStatus] || locationStatus}
                             </IonNote>
                         </IonLabel>
@@ -186,9 +186,9 @@ function PermissionsGate({
 
                     <IonItem>
                         <IonLabel>
-                            <h3>Keep screen on <IonNote>(optional)</IonNote></h3>
-                            <p>Stops your screen sleeping while you play.</p>
-                            <IonNote data-testid="wake-status">
+                            <h3>Keep screen on <IonNote className="permission-requirement">Optional</IonNote></h3>
+                            <p>Stops your screen sleeping while you play</p>
+                            <IonNote className="permission-status" data-testid="wake-status">
                                 {STATUS_LABELS[wakeLockStatus] || wakeLockStatus}
                             </IonNote>
                         </IonLabel>
@@ -214,7 +214,7 @@ function PermissionsGate({
                     disabled={!canContinue || isContinuing}
                     onClick={handleContinue}
                 >
-                    {canContinue ? 'Continue' : 'Waiting for permissions'}
+                    {canContinue ? 'Continue' : 'Allow location to continue'}
                 </IonButton>
             </div>
         </IonModal>

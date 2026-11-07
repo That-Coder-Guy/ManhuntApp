@@ -3,12 +3,12 @@
  */
 export function getTimeAgo(epochTimestamp)
 {
-    if (!epochTimestamp) return 'N/A';
+    if (!epochTimestamp) return '—';
 
     const secondsAgo = Math.floor((Date.now() - epochTimestamp) / 1000);
 
     // Future timestamps (clock sync issues) read as fresh
-    if (secondsAgo < 5) return 'Just now';
+    if (secondsAgo < 5) return 'just now';
     if (secondsAgo < 60) return `${secondsAgo}s ago`;
     if (secondsAgo < 3600) return `${Math.floor(secondsAgo / 60)}m ago`;
     return `${Math.floor(secondsAgo / 3600)}h ago`;

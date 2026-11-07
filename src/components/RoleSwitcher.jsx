@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { IonSegment, IonSegmentButton, IonLabel, IonNote } from '@ionic/react';
+import { IonSegment, IonSegmentButton, IonLabel, IonToast } from '@ionic/react';
 
 function RoleSwitcher({ isSeeker, updatePlayer })
 {
@@ -35,7 +35,7 @@ function RoleSwitcher({ isSeeker, updatePlayer })
             console.error('Error updating role:', err);
             showError(err.status === 'network_error'
                 ? "Couldn't update role — check your connection and try again."
-                : 'Failed to update role. Please try again.');
+                : "Couldn't update your role. Try again.");
         }
         finally
         {
@@ -58,11 +58,14 @@ function RoleSwitcher({ isSeeker, updatePlayer })
                     <IonLabel>Hider</IonLabel>
                 </IonSegmentButton>
             </IonSegment>
-            {error && (
-                <IonNote color="danger" data-testid="role-error" style={{ display: 'block', padding: '6px 4px' }}>
-                    {error}
-                </IonNote>
-            )}
+            {/* A toast, so an error never shifts the list below */}
+            <IonToast
+                isOpen={!!error}
+                message={error}
+                duration={4000}
+                data-testid="role-error"
+                onDidDismiss={() => setError('')}
+            />
         </div>
     );
 }

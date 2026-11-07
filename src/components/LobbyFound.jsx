@@ -122,7 +122,6 @@ function LobbyFound({
                         </IonButton>
                         <IonButton
                             data-testid="leave-btn"
-                            color="danger"
                             onClick={() => setIsLeaveConfirmOpen(true)}
                             aria-label="Leave lobby"
                         >

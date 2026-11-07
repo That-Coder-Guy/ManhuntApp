@@ -8,7 +8,7 @@ function PlayerTableModal({ players, currentPlayer, isOpen, onClose }) {
         <IonModal isOpen={isOpen} onDidDismiss={onClose} data-testid="players-modal">
             <IonHeader>
                 <IonToolbar>
-                    <IonTitle>Players in Lobby</IonTitle>
+                    <IonTitle>Players</IonTitle>
                     <IonButtons slot="end">
                         <IonButton data-testid="players-close" onClick={onClose}>Close</IonButton>
                     </IonButtons>

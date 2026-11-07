@@ -30,7 +30,7 @@ class ErrorBoundary extends Component
             return (
                 <div className="fatal-error-screen">
                     <div>
-                        <h1>Something Went Wrong</h1>
+                        <h1>Something went wrong</h1>
                         <p>
                             The app hit an unexpected error. Reload to jump back into the game —
                             your session is saved.

@@ -13,29 +13,29 @@ function LobbyError() {
                 <div className="page-column">
                     <IonCard className="ion-margin-top">
                         <IonCardHeader>
-                            <IonCardTitle>Unable to Join Lobby</IonCardTitle>
+                            <IonCardTitle>Can't join this lobby</IonCardTitle>
                         </IonCardHeader>
                         <IonCardContent>
-                            <p>We couldn't connect you to the lobby. This might be caused by:</p>
+                            <p>The lobby didn't answer. Usually it's one of these:</p>
                             <ul>
-                                <li>Temporary network issues</li>
-                                <li>Server downtime</li>
-                                <li>An invalid or expired lobby ID</li>
+                                <li>Weak or no signal</li>
+                                <li>The game server is down</li>
+                                <li>The lobby ID is wrong or the lobby has ended</li>
                             </ul>
                             <IonButton
                                 data-testid="retry-btn"
                                 expand="block"
                                 onClick={() => window.location.reload()}
                             >
-                                Try Again
+                                Try again
                             </IonButton>
                             <IonButton
                                 data-testid="home-btn"
                                 expand="block"
-                                fill="outline"
+                                className="button-secondary"
                                 onClick={() => navigate('/')}
                             >
-                                Go Home
+                                Go home
                             </IonButton>
                         </IonCardContent>
                     </IonCard>

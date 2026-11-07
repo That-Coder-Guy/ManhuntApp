@@ -64,15 +64,15 @@ function ShareModal({ lobbyId, isOpen, onClose })
         <IonModal isOpen={isOpen} onDidDismiss={onClose} data-testid="share-modal">
             <IonHeader>
                 <IonToolbar>
-                    <IonTitle>Invite Players</IonTitle>
+                    <IonTitle>Invite players</IonTitle>
                     <IonButtons slot="end">
                         <IonButton data-testid="share-close" onClick={onClose}>Close</IonButton>
                     </IonButtons>
                 </IonToolbar>
             </IonHeader>
             <IonContent className="ion-padding">
-                <p className="ion-text-center">
-                    Scan this QR code or share the link to join this lobby.
+                <p className="share-lede">
+                    Friends scan the code or open the link to join
                 </p>
 
                 <div className="share-qr">
@@ -84,20 +84,20 @@ function ShareModal({ lobbyId, isOpen, onClose })
                 <div className="ion-margin-top">
                     {canShare && (
                         <IonButton data-testid="share-native" expand="block" onClick={handleShare}>
-                            Share…
+                            Share link
                         </IonButton>
                     )}
                     <IonButton
                         data-testid="share-copy"
                         expand="block"
-                        color="success"
+                        className={canShare ? 'button-secondary' : undefined}
                         onClick={() => copyToClipboard(joinUrl, setCopied)}
                     >
-                        {copied ? 'Link copied!' : 'Copy link'}
+                        {copied ? 'Link copied' : 'Copy link'}
                     </IonButton>
                 </div>
 
-                <IonItem lines="none" className="ion-margin-top">
+                <IonItem lines="none" className="ion-margin-top share-id-row">
                     <IonLabel>
                         <IonNote>Lobby ID</IonNote>
                         <p className="share-id-value" data-testid="share-id">{lobbyId}</p>
@@ -105,7 +105,7 @@ function ShareModal({ lobbyId, isOpen, onClose })
                     <IonButton
                         data-testid="share-id-copy"
                         slot="end"
-                        fill="outline"
+                        fill="clear"
                         size="small"
                         onClick={() => copyToClipboard(lobbyId, setIdCopied)}
                     >

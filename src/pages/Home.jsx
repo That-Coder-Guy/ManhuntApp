@@ -6,6 +6,7 @@ import {
     IonInput, IonButton, IonIcon, IonToast
 } from '@ionic/react';
 import { qrCodeOutline } from 'ionicons/icons';
+import BrandMark from '../components/BrandMark.jsx';
 import { createLobby } from '../utils/api.js';
 import QrScanModal from '../components/QrScanModal.jsx';
 
@@ -27,7 +28,7 @@ function Home()
     {
         if (!newLobbyName.trim())
         {
-            setToast('Please enter a lobby name first!');
+            setToast('Name the lobby first');
             return;
         }
 
@@ -37,7 +38,7 @@ function Home()
             navigate(`/lobby/${encodeURIComponent(data.lobby_id)}`);
         } catch (error) {
             console.error('Error creating lobby:', error);
-            setToast('Failed to create lobby. Please check your connection and try again.');
+            setToast("Couldn't create the lobby. Check your connection and try again.");
         } finally {
             setIsCreating(false);
         }
@@ -61,7 +62,7 @@ function Home()
         const lobbyId = extractLobbyId(joinLobbyId);
         if (!lobbyId)
         {
-            setToast('Please enter a lobby ID or invite link first!');
+            setToast('Enter a lobby ID or invite link');
         }
         else
         {
@@ -77,7 +78,7 @@ function Home()
         if (!LOBBY_ID_PATTERN.test(lobbyId))
         {
             setIsScannerOpen(false);
-            setToast("That QR code isn't a Manhunt invite.");
+            setToast("That QR code isn't a Manhunt invite");
             return;
         }
 
@@ -89,21 +90,34 @@ function Home()
         <IonPage data-testid="home-page">
             <IonHeader>
                 <IonToolbar>
-                    <IonTitle>Manhunt</IonTitle>
+                    <IonTitle>
+                        <span className="brand">
+                            <BrandMark />
+                            Manhunt
+                        </span>
+                    </IonTitle>
                 </IonToolbar>
             </IonHeader>
             <IonContent className="ion-padding">
                 <div className="home-center page-column">
+                <header className="home-intro">
+                    <h1>Play manhunt outdoors</h1>
+                    <p>
+                        Seekers follow a live compass to each hider. Hiders see how
+                        close every seeker is.
+                    </p>
+                </header>
+
                 <IonCard>
                     <IonCardHeader>
-                        <IonCardTitle>Create New Lobby</IonCardTitle>
+                        <IonCardTitle>Start a game</IonCardTitle>
                     </IonCardHeader>
                     <IonCardContent>
                         <IonInput
                             data-testid="create-name-input"
-                            fill="solid"
-                            className="glass-input"
-                            placeholder="Enter lobby name"
+                            className="field-input"
+                            placeholder="Lobby name"
+                            aria-label="Lobby name"
                             value={newLobbyName}
                             onIonInput={(e) => setNewLobbyName(e.detail.value ?? '')}
                         />
@@ -114,22 +128,22 @@ function Home()
                             onClick={createLobbyClick}
                             disabled={isCreating}
                         >
-                            {isCreating ? 'Creating…' : 'Create Lobby'}
+                            {isCreating ? 'Creating…' : 'Create lobby'}
                         </IonButton>
                     </IonCardContent>
                 </IonCard>
 
                 <IonCard>
                     <IonCardHeader>
-                        <IonCardTitle>Join Existing Lobby</IonCardTitle>
+                        <IonCardTitle>Join a game</IonCardTitle>
                     </IonCardHeader>
                     <IonCardContent>
                         <div className="join-row">
                             <IonInput
                                 data-testid="join-id-input"
-                                fill="solid"
-                                className="glass-input"
-                                placeholder="Enter lobby ID"
+                                className="field-input"
+                                placeholder="Lobby ID or invite link"
+                                aria-label="Lobby ID or invite link"
                                 value={joinLobbyId}
                                 onIonInput={(e) => setJoinLobbyId(e.detail.value ?? '')}
                             />
@@ -145,11 +159,10 @@ function Home()
                         <IonButton
                             data-testid="join-btn"
                             expand="block"
-                            color="success"
-                            className="ion-margin-top"
+                            className="ion-margin-top button-secondary"
                             onClick={joinLobbyClick}
                         >
-                            Join Lobby
+                            Join lobby
                         </IonButton>
                     </IonCardContent>
                 </IonCard>

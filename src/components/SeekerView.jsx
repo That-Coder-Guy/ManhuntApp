@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import {
     IonCard, IonCardHeader, IonCardTitle, IonCardContent,
-    IonItem, IonLabel, IonBadge, IonButton, IonIcon, IonNote
+    IonItem, IonLabel, IonButton, IonIcon, IonNote
 } from '@ionic/react';
-import { arrowBackOutline } from 'ionicons/icons';
+import { chevronBackOutline } from 'ionicons/icons';
 import CompassArrow from './CompassArrow';
+import FixDot from './FixDot';
 import { calculateDistance, formatDistance } from '../utils/geo';
 import { getTimeAgo, isStale } from '../utils/time';
 
@@ -34,14 +35,6 @@ function SeekerView({ players, currentLocation })
         return () => clearInterval(intervalId);
     }, []);
 
-    if (hiders.length === 0) {
-        return (
-            <IonNote className="ion-text-center" style={{ display: 'block', padding: 24 }} data-testid="no-targets">
-                No hiders
-            </IonNote>
-        );
-    }
-
     // Compass screen for the selected hider
     if (selectedHider) {
         const distance = calculateDistance(
@@ -55,11 +48,12 @@ function SeekerView({ players, currentLocation })
             <div className="compass-screen" data-testid="compass-screen">
                 <IonButton
                     data-testid="compass-back"
-                    fill="outline"
+                    fill="clear"
                     size="small"
+                    className="compass-back-btn"
                     onClick={() => setSelectedId(null)}
                 >
-                    <IonIcon slot="start" icon={arrowBackOutline} />
+                    <IonIcon slot="start" icon={chevronBackOutline} />
                     All hiders
                 </IonButton>
                 <CompassArrow
@@ -79,48 +73,55 @@ function SeekerView({ players, currentLocation })
     // Hider list
     return (
         <IonCard className="targets-card" data-testid="targets-card">
-            <IonCardHeader>
-                <IonCardTitle data-testid="targets-title">
-                    Select Target
-                </IonCardTitle>
+            <IonCardHeader className="targets-card-header">
+                <IonCardTitle data-testid="targets-title">Hiders</IonCardTitle>
+                <span className="targets-count">{hiders.length}</span>
             </IonCardHeader>
             <IonCardContent className="targets-card-content">
-                <div className="targets-item-stack" data-testid="targets-list">
-                    {hiders.map((hider) => {
-                        const distance = calculateDistance(
-                            currentLocation.latitude,
-                            currentLocation.longitude,
-                            hider.latitude,
-                            hider.longitude
-                        );
-                        const stale = isStale(hider.location_last_updated) || hider.connected === false;
+                {hiders.length === 0 ? (
+                    <IonNote className="targets-empty" data-testid="no-targets">
+                        No hiders in this lobby yet
+                    </IonNote>
+                ) : (
+                    <div className="targets-item-stack" data-testid="targets-list">
+                        {hiders.map((hider) => {
+                            const distance = calculateDistance(
+                                currentLocation.latitude,
+                                currentLocation.longitude,
+                                hider.latitude,
+                                hider.longitude
+                            );
+                            const offline = hider.connected === false;
+                            const stale = offline || isStale(hider.location_last_updated);
 
-                        return (
-                            <IonItem
-                                key={hider.player_id}
-                                button
-                                detail
-                                lines="none"
-                                data-testid="target-card"
-                                className={`targets-item ${stale ? 'player-stale' : ''}`.trim()}
-                                onClick={() => setSelectedId(hider.player_id)}
-                            >
-                                <IonLabel>
-                                    <h2 data-testid="target-name">{hider.name || `Player ${hider.player_id}`}</h2>
-                                    <p className="player-freshness">
-                                        {hider.connected === false ? 'offline · ' : ''}
-                                        {hider.location_last_updated
-                                            ? `updated ${getTimeAgo(hider.location_last_updated)}`
-                                            : 'no location yet'}
-                                    </p>
-                                </IonLabel>
-                                <IonBadge slot="end" className="distance-badge-danger" data-testid="target-distance">
-                                    {formatDistance(distance)}
-                                </IonBadge>
-                            </IonItem>
-                        );
-                    })}
-                </div>
+                            return (
+                                <IonItem
+                                    key={hider.player_id}
+                                    button
+                                    detail
+                                    lines="none"
+                                    data-testid="target-card"
+                                    className={`targets-item ${stale ? 'player-stale' : ''}`.trim()}
+                                    onClick={() => setSelectedId(hider.player_id)}
+                                >
+                                    <FixDot fresh={!stale} offline={offline} />
+                                    <IonLabel>
+                                        <h2 data-testid="target-name">{hider.name || `Player ${hider.player_id}`}</h2>
+                                        <p className="player-freshness">
+                                            {offline ? 'Offline · ' : ''}
+                                            {hider.location_last_updated
+                                                ? `updated ${getTimeAgo(hider.location_last_updated)}`
+                                                : 'no location yet'}
+                                        </p>
+                                    </IonLabel>
+                                    <span slot="end" className="target-distance" data-testid="target-distance">
+                                        {formatDistance(distance)}
+                                    </span>
+                                </IonItem>
+                            );
+                        })}
+                    </div>
+                )}
             </IonCardContent>
         </IonCard>
     );

@@ -13,24 +13,24 @@ function PlayerError({ lobbyId }) {
                 <div className="page-column">
                     <IonCard className="ion-margin-top">
                         <IonCardHeader>
-                            <IonCardTitle>Player Timed Out</IonCardTitle>
+                            <IonCardTitle>Session expired</IonCardTitle>
                         </IonCardHeader>
                         <IonCardContent>
-                            <p>Your player session has expired. Rejoin the lobby to continue playing.</p>
+                            <p>You were away too long, so the lobby let your spot go. Rejoin to keep playing.</p>
                             <IonButton
                                 data-testid="rejoin-btn"
                                 expand="block"
                                 onClick={() => { window.location.href = `/lobby/${lobbyId}`; }}
                             >
-                                Rejoin Lobby
+                                Rejoin lobby
                             </IonButton>
                             <IonButton
                                 data-testid="home-btn"
                                 expand="block"
-                                fill="outline"
+                                className="button-secondary"
                                 onClick={() => navigate('/')}
                             >
-                                Go Home
+                                Go home
                             </IonButton>
                         </IonCardContent>
                     </IonCard>

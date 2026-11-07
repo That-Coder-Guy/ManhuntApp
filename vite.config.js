@@ -39,6 +39,9 @@ export default defineConfig({
         ]
       },
       workbox: {
+        // Precache the bundled typefaces with the shell so text renders in
+        // IBM Plex even when the app is opened with no connection
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
         // The SPA fallback must never swallow API or socket requests
         navigateFallbackDenylist: [/^\/manhunt-api/],
         runtimeCaching: [
