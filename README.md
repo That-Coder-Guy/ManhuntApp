@@ -165,6 +165,38 @@ Notes:
   falls back to HTTP long-polling.
 - Lobby state is in-memory only: restarting the server ends all live games.
 
+## Frontend on Vercel
+
+Vercel can host the frontend for free, but not the game server: the server
+keeps a WebSocket open to every phone and holds lobbies in memory, which
+Vercel's short-lived functions can't do. So the frontend goes on Vercel and
+the server runs somewhere always-on (a Raspberry Pi with a Cloudflare tunnel,
+below, works well).
+
+1. **Get the server a public HTTPS address first**, e.g.
+   `https://manhunt-api.yourdomain.com` from a named Cloudflare tunnel. It must
+   be HTTPS: a page on Vercel can't talk to a plain `http://` server.
+2. **Import the repo in Vercel** (Add New → Project → this repository).
+   `vercel.json` already sets the Vite build, the `dist` output, and a rewrite
+   so invite links like `/lobby/<id>` open the app instead of a 404.
+3. **Set the environment variable** in the Vercel project (Settings →
+   Environment Variables), for Production and Preview:
+   `VITE_API_ORIGIN` = `https://manhunt-api.yourdomain.com` (no trailing
+   slash). It's read at build time, so redeploy after changing it. If it's
+   missing, the app falls back to `https://api.hankinit.work`.
+4. **Allow the Vercel site on the server**: start it with
+   `ALLOWED_ORIGINS=https://your-project.vercel.app` (comma-separate several,
+   e.g. a custom domain too). On the Pi, add
+   `Environment=ALLOWED_ORIGINS=https://your-project.vercel.app` to
+   `deploy/manhunt.service` and restart it. Without this, browsers block the
+   requests: creating a lobby says "Couldn't create the lobby" and invite
+   links show "Can't join this lobby".
+5. **Deploy**, then open the Vercel URL on a phone and create a lobby. The
+   invite QR code points at the Vercel address.
+
+Preview deployments get their own `*.vercel.app` URLs; add any you want to
+play on to `ALLOWED_ORIGINS` (or set `TRUST_ALL_ORIGINS=1` while testing).
+
 ## Play over the internet (Cloudflare Tunnel)
 
 To play with friends who aren't on your Wi-Fi, expose the whole app (frontend,
