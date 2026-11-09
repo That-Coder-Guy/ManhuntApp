@@ -64,11 +64,13 @@
   /* ---- Type ---- */
   --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  --fs-meta: 0.8125rem;    /* 13 / 16 */
-  --fs-caption: 0.875rem;  /* 14 / 20 */
-  --fs-body: 1rem;         /* 16 / 20 */
-  --fs-title: 1.125rem;    /* 18 / 24 */
-  --fs-heading: 1.375rem;  /* 22 / 28 */
+  /* Sized to iOS's default text sizes (body 17, footnote 13, nothing under
+     11), so the app reads like the rest of the phone at arm's length */
+  --fs-meta: 0.8125rem;    /* 13 / 16  footnote */
+  --fs-caption: 0.9375rem; /* 15 / 20  subheadline */
+  --fs-body: 1.0625rem;    /* 17 / 22  body */
+  --fs-title: 1.25rem;     /* 20 / 24  title 3 */
+  --fs-heading: 1.5rem;    /* 24 / 32 */
   --fs-page: 1.875rem;     /* 30 / 32 */
   --fs-figure: 2.75rem;    /* 44 / 48 */
 
@@ -81,8 +83,9 @@
   --hairline-color: rgba(238, 240, 245, 0.08);
   --hairline: 1px solid var(--hairline-color);
   --text-1: #eef0f5;
+  /* Every text colour clears WCAG AA (4.5:1) on every surface, ink-4 included */
   --text-2: #a3a9b8;
-  --text-3: #7a8296;
+  --text-3: #8990a2;
 
   /* ---- Accent: blaze orange, with dark text on it (7:1) ---- */
   --accent: #ff7b2c;
@@ -92,7 +95,7 @@
 
   /* ---- Semantic, toned for the ramp ---- */
   --positive: #4cc38a;
-  --negative: #e5484d;
+  --negative: #eb656a;
 
   /* ---- Motion: one curve, two durations ---- */
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -166,7 +169,7 @@ body {
 ion-content {
   --background: var(--ink-1);
   font-size: var(--fs-body);
-  line-height: 1.25rem;
+  line-height: 1.375rem;
 }
 
 ion-content.ion-padding {
@@ -742,7 +745,7 @@ ion-card.targets-card ion-card-header.targets-card-header {
 
 ion-card.targets-card ion-card-title {
   font-size: var(--fs-body);
-  line-height: 1.25rem;
+  line-height: 1.375rem;
 }
 
 .targets-count {
@@ -803,7 +806,7 @@ ion-item.targets-item ion-label {
 ion-item.targets-item ion-label h2 {
   margin: 0;
   font-size: var(--fs-body);
-  line-height: 1.25rem;
+  line-height: 1.375rem;
   font-weight: 500;
   color: var(--text-1);
 }
@@ -840,7 +843,7 @@ ion-item p.player-freshness,
   margin-inline-start: var(--space-3);
   font-family: var(--font-mono);
   font-size: var(--fs-body);
-  line-height: 1.25rem;
+  line-height: 1.375rem;
   font-weight: 500;
   color: var(--text-1);
   white-space: nowrap;
@@ -1113,7 +1116,7 @@ ion-modal.permissions-dialog .permissions-dialog-body {
 ion-modal.permissions-dialog .permissions-dialog-body > h2 {
   margin: var(--space-5) 0 var(--space-4);
   font-size: var(--fs-heading);
-  line-height: 1.75rem;
+  line-height: 2rem;
   font-weight: 500;
 }
 
@@ -1136,7 +1139,7 @@ ion-modal.permissions-dialog ion-item {
 ion-modal.permissions-dialog ion-label h3 {
   margin: var(--space-3) 0 var(--space-1);
   font-size: var(--fs-body);
-  line-height: 1.25rem;
+  line-height: 1.375rem;
   font-weight: 500;
   color: var(--text-1);
 }
@@ -1398,7 +1401,7 @@ ion-item.share-id-row ion-note {
 
 .avatar--lg .avatar-initials {
   font-size: var(--fs-heading);
-  line-height: 1.75rem;
+  line-height: 2rem;
 }
 
 /* The fix dot sits on the picture's lower edge, ringed in the row colour */
@@ -1518,7 +1521,7 @@ ion-content .name-card.settings-row {
 .settings-row ion-label h2 {
   margin: 0;
   font-size: var(--fs-body);
-  line-height: 1.25rem;
+  line-height: 1.375rem;
   font-weight: 500;
   color: var(--text-1);
 }
@@ -1588,7 +1591,7 @@ ion-content .name-card.settings-row {
 
 .status-role {
   font-size: var(--fs-body);
-  line-height: 1.25rem;
+  line-height: 1.375rem;
   font-weight: 500;
   color: var(--text-1);
 }
@@ -1615,7 +1618,7 @@ ion-content .name-card.settings-row {
 /* ===== GAME OVER ===== */
 ion-card.game-over-card ion-card-title {
   font-size: var(--fs-heading);
-  line-height: 1.75rem;
+  line-height: 2rem;
 }
 
 .game-over-result {
@@ -1685,7 +1688,7 @@ ion-modal ion-list.settings-list ion-item {
 
 ion-list.settings-list ion-label h2 {
   font-size: var(--fs-body);
-  line-height: 1.25rem;
+  line-height: 1.375rem;
   font-weight: 500;
   color: var(--text-1);
 }
@@ -1776,7 +1779,7 @@ ion-toolbar ion-buttons ion-button.toolbar-primary {
 .play-area-map .leaflet-control-attribution {
   background: rgba(11, 13, 20, 0.75);
   color: var(--text-3);
-  font-size: 0.625rem;
+  font-size: 0.6875rem;
 }
 
 .play-area-map .leaflet-control-attribution a {
@@ -1804,7 +1807,7 @@ ion-toolbar ion-buttons ion-button.toolbar-primary {
   border: 2px solid var(--ink-1);
   color: var(--on-accent);
   font-family: var(--font-mono);
-  font-size: 0.625rem;
+  font-size: 0.75rem;
   font-weight: 500;
 }
 
