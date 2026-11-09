@@ -116,6 +116,8 @@ OpenStreetMap streets. To refresh the images after a UI change, run
 
 - Repo root — React + Vite frontend (this used to be the whole repo)
 - `server/` — Express + Socket.IO backend (merged in from the old ManhuntApi repo)
+- `shared/` — code both sides use (play-area geometry, server-address checks)
+- `api/` — the one Vercel function: where the game server is right now
 
 ## Development
 
@@ -157,7 +159,10 @@ Two options:
    (empty) so the client talks to its own origin.
 2. **Split hosting:** host `dist/` anywhere, build with
    `VITE_API_ORIGIN=https://your-api-host`, and set the `ALLOWED_ORIGINS`
-   env var (comma-separated) to your frontend origin.
+   env var (comma-separated) to your frontend origin. With
+   `VITE_API_ORIGIN=auto` the app asks `/api/server-origin` for the address
+   instead; that's how the [Vercel setup](#frontend-on-vercel-server-through-cloudflare)
+   follows a changing tunnel address.
 
 Notes:
 - Any reverse proxy in front of the server must forward WebSocket upgrade
@@ -165,37 +170,89 @@ Notes:
   falls back to HTTP long-polling.
 - Lobby state is in-memory only: restarting the server ends all live games.
 
-## Frontend on Vercel
+## Frontend on Vercel, server through Cloudflare
 
 Vercel can host the frontend for free, but not the game server: the server
 keeps a WebSocket open to every phone and holds lobbies in memory, which
-Vercel's short-lived functions can't do. So the frontend goes on Vercel and
-the server runs somewhere always-on (a Raspberry Pi with a Cloudflare tunnel,
-below, works well).
+Vercel's short-lived functions can't do. So the site goes on Vercel and the
+server runs on an always-on machine, such as a Raspberry Pi, reached through
+a free Cloudflare quick tunnel. Players only ever use the Vercel address.
 
-1. **Get the server a public HTTPS address first**, e.g.
-   `https://manhunt-api.yourdomain.com`; `scripts/setup-server.sh` does this
-   with a Cloudflare tunnel ([below](#set-up-the-server-with-cloudflare-raspberry-pi-or-any-linux-box)).
-   It must be HTTPS: a page on Vercel can't talk to a plain `http://` server.
-2. **Import the repo in Vercel** (Add New → Project → this repository).
-   `vercel.json` already sets the Vite build, the `dist` output, and a rewrite
-   so invite links like `/lobby/<id>` open the app instead of a 404.
-3. **Set the environment variable** in the Vercel project (Settings →
-   Environment Variables), for Production and Preview:
-   `VITE_API_ORIGIN` = `https://manhunt-api.yourdomain.com` (no trailing
-   slash). It's read at build time, so redeploy after changing it. If it's
-   missing, the app falls back to `https://api.hankinit.work`.
-4. **Allow the Vercel site on the server**: run
-   `scripts/setup-server.sh --allow-origin https://your-project.vercel.app`
-   on it (repeat `--allow-origin` for a custom domain too), or set
-   `ALLOWED_ORIGINS` yourself if you run the server another way. Without this, browsers block the
-   requests: creating a lobby says "Couldn't create the lobby" and invite
-   links show "Can't join this lobby".
-5. **Deploy**, then open the Vercel URL on a phone and create a lobby. The
-   invite QR code points at the Vercel address.
+The quick tunnel's `https://….trycloudflare.com` address changes whenever the
+tunnel restarts, so the site can't have it built in. Instead:
 
-Preview deployments get their own `*.vercel.app` URLs; add any you want to
-play on to `ALLOWED_ORIGINS` (or set `TRUST_ALL_ORIGINS=1` while testing).
+- The Pi runs a small service (`manhunt-publish`) that watches the tunnel.
+  When the address changes, and the new one answers, it saves the address in
+  the Vercel project's [Edge Config](https://vercel.com/docs/edge-config), a
+  small key-value store that is free on every plan. It only writes on a change.
+- When the app opens, it asks `/api/server-origin` (a Vercel function,
+  `api/server-origin.js`) where the server is now, then connects there. It
+  remembers the last answer, so a weak signal that drops the lookup still
+  connects.
+
+If the Pi is off, creating a lobby says "The game server is offline".
+
+### Set it up
+
+1. **Import the repo in Vercel** (Add New → Project → this repository) and
+   deploy. `vercel.json` sets everything: the build (`npm run build:vercel`),
+   the `dist` output, and a rewrite so invite links like `/lobby/<id>` open
+   the app. Note the site's address, e.g. `https://your-project.vercel.app`.
+2. **Create the Edge Config.** In the project, open **Storage → Create
+   Database → Edge Config**, name it (`manhunt`), and connect it to the
+   project for all environments. Connecting adds an `EDGE_CONFIG` environment
+   variable that the function reads. Copy the store's ID, which starts with
+   `ecfg_`.
+3. **Redeploy** (Deployments → the latest one → ⋯ → Redeploy) so the function
+   picks up `EDGE_CONFIG`.
+4. **Create an access token** for the Pi under **Account Settings → Tokens**.
+   Pick the scope that owns the project. Choosing *No expiration* saves
+   renewing it. If the project belongs to a team rather than your personal
+   account, also copy the team ID (Team Settings → General, `team_…`).
+5. **Set up the Pi** (see [the full guide](#set-up-the-server-with-cloudflare-raspberry-pi-or-any-linux-box)
+   for a fresh machine):
+
+   ```bash
+   scripts/setup-server.sh --quick \
+     --vercel-site https://your-project.vercel.app \
+     --vercel-token <TOKEN> \
+     --edge-config ecfg_xxxxxxxx
+   ```
+
+   Add `--vercel-team team_xxxxxxxx` for a team project. The script also
+   allows the Vercel site to use the server. At the end it checks that the
+   site reports the tunnel's address:
+
+   ```
+   ✓ https://your-project.vercel.app/api/server-origin → https://calm-river-otter.trycloudflare.com
+
+     Play at:  https://your-project.vercel.app
+   ```
+
+6. **Play**: open the Vercel address on a phone and create a lobby. The
+   invite QR code points at the Vercel address too, so it keeps working
+   whatever the tunnel's address is.
+
+After a reboot the tunnel comes back with a new address. The publisher sees
+it within about ten seconds of it answering, and from then on newly opened
+apps connect there. Lobbies live in the server's memory, so a reboot ends
+games either way.
+
+The token can manage your Vercel account, so the script keeps it in
+`/etc/cloudflared/manhunt-publish.env`, readable by root only. If it expires
+or you revoke it, `journalctl -u manhunt-publish` shows `Vercel answered 403`.
+Re-run the script with `--vercel-token <NEW TOKEN>` to replace it.
+
+Preview deployments get their own `*.vercel.app` addresses. Allow any you
+want to play on with `--allow-origin https://….vercel.app`.
+
+### With your own domain instead
+
+A tunnel on your own domain (`--hostname`, below) has a fixed address, so no
+Edge Config is needed. In the Vercel project, set the environment variable
+`VITE_API_ORIGIN` to `https://manhunt.yourdomain.com` (no trailing slash) and
+redeploy. Then allow the site on the server with
+`scripts/setup-server.sh --allow-origin https://your-project.vercel.app`.
 
 ## Play over the internet (Cloudflare Tunnel)
 
@@ -238,7 +295,7 @@ There are two kinds of address:
 | Looks like | `https://calm-river-otter.trycloudflare.com` | `https://manhunt.yourdomain.com` |
 | Needs | Nothing: no account, no domain | A free Cloudflare account with a domain on it |
 | Address | Changes whenever the tunnel restarts (a reboot, say) | Fixed |
-| Frontend on Vercel | No; open the Pi's address directly | Yes |
+| Frontend on Vercel | Yes; the site follows the address ([setup](#frontend-on-vercel-server-through-cloudflare)) | Yes |
 
 ### What you need
 
@@ -302,11 +359,7 @@ scripts/setup-server.sh --token <TOKEN> --hostname manhunt.yourdomain.com
 (`--hostname` is only used here to check the address works.) The token is
 stored in `/etc/cloudflared/manhunt-tunnel.env`, readable by root only.
 
-Frontend on Vercel? Add the Vercel address so browsers may use the server:
-
-```bash
-scripts/setup-server.sh --allow-origin https://your-project.vercel.app
-```
+Frontend on Vercel? See [Frontend on Vercel](#frontend-on-vercel-server-through-cloudflare).
 
 Add `--dry-run` to any command to see what it would do without changing
 anything; `--help` lists every option (`--port`, `--tunnel-name`,
@@ -350,9 +403,9 @@ stops everything.
 ### Remove it
 
 ```bash
-sudo systemctl disable --now manhunt manhunt-tunnel
-sudo rm /etc/systemd/system/manhunt.service /etc/systemd/system/manhunt-tunnel.service
-sudo rm -f /etc/cloudflared/manhunt-tunnel.*   # tunnel config/token
+sudo systemctl disable --now manhunt manhunt-tunnel manhunt-publish
+sudo rm -f /etc/systemd/system/manhunt{,-tunnel,-publish}.service
+sudo rm -f /etc/cloudflared/manhunt-tunnel.* /etc/cloudflared/manhunt-publish.env   # config and tokens
 sudo systemctl daemon-reload
 cloudflared tunnel delete manhunt              # if the script created it
 ```

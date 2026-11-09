@@ -26,6 +26,10 @@
 #   --no-tunnel
 #       Only the app service (for example behind your own reverse proxy).
 #
+# Frontend on Vercel with a --quick tunnel: add --vercel-site, --vercel-token
+# and --edge-config, and a small service keeps the Vercel site pointed at the
+# tunnel's current address, even after it changes (see the README).
+#
 # Run it as your normal user from inside the repository; it uses sudo where
 # it needs to.
 
@@ -36,6 +40,7 @@ QUICK_METRICS="127.0.0.1:20241"   # cloudflared reports the quick tunnel's addre
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVICE_NAME="manhunt"
 TUNNEL_SERVICE_NAME="manhunt-tunnel"
+PUBLISH_SERVICE_NAME="manhunt-publish"
 # Overridable so the script can be exercised without touching the real system
 SYSTEMD_DIR="${SYSTEMD_DIR:-/etc/systemd/system}"
 CF_DIR="${CF_DIR:-/etc/cloudflared}"
@@ -49,6 +54,10 @@ ORIGINS=()
 NO_TUNNEL=0
 QUICK=0
 SHOW_URL=0
+VERCEL_SITE=""
+VERCEL_TOKEN=""
+EDGE_CONFIG_ID=""
+VERCEL_TEAM_ID=""
 NO_BUILD=0
 DRY_RUN=0
 
@@ -64,7 +73,7 @@ die()  { printf '\n%s✖ %s%s\n' "$RED" "$*" "$RESET" >&2; exit 1; }
 did()  { if (( DRY_RUN )); then ok "Would: $*"; else ok "$*"; fi; }
 
 usage() {
-    sed -n '3,31p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '3,35p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
     cat <<'EOF'
 
 Options:
@@ -77,6 +86,12 @@ Options:
   --allow-origin URL     Extra site allowed to use the server, e.g. a Vercel
                          frontend (https://your-app.vercel.app). Repeatable.
   --no-tunnel            Set up the app service only
+  --vercel-site URL      Your Vercel frontend, e.g. https://your-app.vercel.app;
+                         with the next two, publishes the quick tunnel's
+                         address to it whenever it changes
+  --vercel-token TOKEN   Vercel access token (Account Settings → Tokens)
+  --edge-config ID       The Vercel project's Edge Config ID (ecfg_…)
+  --vercel-team ID       Only if the project is in a Vercel team (team_…)
   --no-build             Skip npm install and the build (restart only)
   --dry-run              Show what would be done without doing it
   -h, --help             Show this help
@@ -94,6 +109,10 @@ while [[ $# -gt 0 ]]; do
         --no-tunnel)    NO_TUNNEL=1; shift ;;
         --quick)        QUICK=1; shift ;;
         --url)          SHOW_URL=1; shift ;;
+        --vercel-site)  VERCEL_SITE="${2:-}"; shift 2 ;;
+        --vercel-token) VERCEL_TOKEN="${2:-}"; shift 2 ;;
+        --edge-config)  EDGE_CONFIG_ID="${2:-}"; shift 2 ;;
+        --vercel-team)  VERCEL_TEAM_ID="${2:-}"; shift 2 ;;
         --no-build)     NO_BUILD=1; shift ;;
         --dry-run)      DRY_RUN=1; shift ;;
         -h|--help)      usage; exit 0 ;;
@@ -112,6 +131,10 @@ done
 (( NO_TUNNEL == 0 )) || [[ -z "$TOKEN" ]] || die "--token and --no-tunnel can't be used together"
 (( QUICK == 0 )) || [[ -z "$TOKEN$PUBLIC_HOST" ]] || die "--quick gives you a Cloudflare address; it can't be combined with --token or --hostname"
 (( QUICK == 0 || NO_TUNNEL == 0 )) || die "--quick and --no-tunnel can't be used together"
+[[ -z "$VERCEL_SITE" || "$VERCEL_SITE" =~ ^https://[^/]+$ ]] || die "--vercel-site must look like https://your-app.vercel.app (no path, no trailing slash)"
+[[ -z "$VERCEL_TOKEN" || "$VERCEL_TOKEN" =~ ^[A-Za-z0-9_-]{16,}$ ]] || die "--vercel-token doesn't look like a Vercel access token"
+[[ -z "$EDGE_CONFIG_ID" || "$EDGE_CONFIG_ID" =~ ^ecfg_[A-Za-z0-9]+$ ]] || die "--edge-config must be the store's ID, like ecfg_abc123 (Vercel → Storage → your Edge Config)"
+[[ -z "$VERCEL_TEAM_ID" || "$VERCEL_TEAM_ID" =~ ^team_[A-Za-z0-9]+$ ]] || die "--vercel-team must look like team_abc123"
 
 # ---------- helpers ----------
 if [[ $EUID -eq 0 ]]; then
@@ -148,6 +171,13 @@ existing_env() {
     local file="$1" key="$2"
     [[ -r "$file" ]] || return 0
     sed -n "s/^Environment=${key}=//p; s/^${key}=//p" "$file" | head -n 1
+}
+
+# Like existing_env, for root-only files (they hold tokens)
+existing_secret() {
+    local file="$1" key="$2"
+    [[ -e "$file" ]] || return 0
+    "${SUDO[@]+"${SUDO[@]}"}" sed -n "s/^${key}=//p" "$file" 2>/dev/null | head -n 1 || true
 }
 
 wait_for_url() {
@@ -208,6 +238,42 @@ PORT="${PORT:-3001}"
 if (( ${#ORIGINS[@]} == 0 )); then
     PREVIOUS_ORIGINS="$(existing_env "$APP_UNIT" ALLOWED_ORIGINS)"
     [[ -z "$PREVIOUS_ORIGINS" ]] || IFS=',' read -r -a ORIGINS <<< "$PREVIOUS_ORIGINS"
+fi
+
+# Which tunnel to run
+MODE="none"
+if (( NO_TUNNEL )); then
+    MODE="none"
+elif (( QUICK )); then
+    MODE="quick"
+elif [[ -n "$TOKEN" ]]; then
+    MODE="token"
+elif [[ -n "$PUBLIC_HOST" ]]; then
+    MODE="hostname"
+elif [[ "$(saved_mode "$TUNNEL_UNIT")" == quick ]]; then
+    MODE="quick"    # keep it; rewritten only if the port changed
+elif [[ -f "$TUNNEL_UNIT" ]]; then
+    MODE="existing"
+fi
+
+# Publishing the tunnel's address to a Vercel frontend
+PUBLISH_ENV="$CF_DIR/$PUBLISH_SERVICE_NAME.env"
+PUBLISH_UNIT="$SYSTEMD_DIR/$PUBLISH_SERVICE_NAME.service"
+[[ -n "$VERCEL_SITE" ]] || VERCEL_SITE="$(existing_secret "$PUBLISH_ENV" VERCEL_SITE)"
+[[ -n "$VERCEL_TOKEN" ]] || VERCEL_TOKEN="$(existing_secret "$PUBLISH_ENV" VERCEL_TOKEN)"
+[[ -n "$EDGE_CONFIG_ID" ]] || EDGE_CONFIG_ID="$(existing_secret "$PUBLISH_ENV" EDGE_CONFIG_ID)"
+[[ -n "$VERCEL_TEAM_ID" ]] || VERCEL_TEAM_ID="$(existing_secret "$PUBLISH_ENV" VERCEL_TEAM_ID)"
+PUBLISH=0
+if [[ -n "$VERCEL_SITE$VERCEL_TOKEN$EDGE_CONFIG_ID" ]]; then
+    missing=()
+    [[ -n "$VERCEL_SITE" ]] || missing+=(--vercel-site)
+    [[ -n "$VERCEL_TOKEN" ]] || missing+=(--vercel-token)
+    [[ -n "$EDGE_CONFIG_ID" ]] || missing+=(--edge-config)
+    (( ${#missing[@]} == 0 )) || die "Publishing to Vercel also needs: ${missing[*]}"
+    [[ "$MODE" == quick ]] || die "Publishing to Vercel is for --quick tunnels. With a fixed address, set VITE_API_ORIGIN in Vercel instead (see the README)."
+    PUBLISH=1
+    # The Vercel site must be allowed to use the server
+    [[ " ${ORIGINS[*]+"${ORIGINS[*]}"} " == *" $VERCEL_SITE "* ]] || ORIGINS+=("$VERCEL_SITE")
 fi
 
 printf '%sManhunt server setup%s\n' "$BOLD" "$RESET"
@@ -296,20 +362,6 @@ fi
 (( ${#ORIGINS[@]} == 0 )) || note "Also allows: ${ORIGINS[*]}"
 
 # ---------- 4. Cloudflare Tunnel ----------
-MODE="none"
-if (( NO_TUNNEL )); then
-    MODE="none"
-elif (( QUICK )); then
-    MODE="quick"
-elif [[ -n "$TOKEN" ]]; then
-    MODE="token"
-elif [[ -n "$PUBLIC_HOST" ]]; then
-    MODE="hostname"
-elif [[ "$(saved_mode "$TUNNEL_UNIT")" == quick ]]; then
-    MODE="quick"    # keep it; rewritten only if the port changed
-elif [[ -f "$TUNNEL_UNIT" ]]; then
-    MODE="existing"
-fi
 TUNNEL_CHANGED=0
 
 install_cloudflared() {
@@ -479,12 +531,81 @@ if [[ -n "$PUBLIC_HOST" && "$MODE" != none ]]; then
     fi
 fi
 
+# ---------- 6. Vercel ----------
+if (( PUBLISH )); then
+    step "Pointing $VERCEL_SITE at this server"
+    PUBLISH_ENV_CONTENT="VERCEL_SITE=$VERCEL_SITE
+VERCEL_TOKEN=$VERCEL_TOKEN
+EDGE_CONFIG_ID=$EDGE_CONFIG_ID${VERCEL_TEAM_ID:+
+VERCEL_TEAM_ID=$VERCEL_TEAM_ID}"
+    PUBLISH_CHANGED=0
+    # The token is a secret: root-only, like the tunnel token
+    [[ "$(write_root_file "$PUBLISH_ENV" 600 "$PUBLISH_ENV_CONTENT")" == same ]] || PUBLISH_CHANGED=1
+    PUBLISH_UNIT_CONTENT="# Written by scripts/setup-server.sh; re-run it rather than editing this file.
+[Unit]
+Description=Publish Manhunt's tunnel address to its Vercel frontend
+After=network-online.target $TUNNEL_SERVICE_NAME.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=$APP_USER
+WorkingDirectory=$REPO_DIR
+ExecStart=$NODE_BIN scripts/publish-address.mjs
+EnvironmentFile=$PUBLISH_ENV
+Environment=QUICK_METRICS=$QUICK_METRICS
+StateDirectory=$PUBLISH_SERVICE_NAME
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target"
+    [[ "$(write_root_file "$PUBLISH_UNIT" 644 "$PUBLISH_UNIT_CONTENT")" == same ]] || PUBLISH_CHANGED=1
+    as_root systemctl daemon-reload
+    if (( PUBLISH_CHANGED || NO_BUILD == 0 )); then
+        # Also after a rebuild, which may have updated the publisher itself
+        as_root systemctl enable "$PUBLISH_SERVICE_NAME" --quiet
+        as_root systemctl restart "$PUBLISH_SERVICE_NAME"
+    else
+        as_root systemctl enable --now "$PUBLISH_SERVICE_NAME" --quiet
+    fi
+    did "Service $PUBLISH_SERVICE_NAME keeps the site pointed at the tunnel"
+
+    if (( DRY_RUN )); then
+        note "Check skipped in a dry run"
+    else
+        published=0
+        for (( i = 0; i < 30; i++ )); do
+            if curl -fsS --max-time 5 "$VERCEL_SITE/api/server-origin" 2>/dev/null | grep -qF "\"origin\":\"$PUBLIC_URL\""; then
+                published=1; break
+            fi
+            sleep 3
+        done
+        if (( published )); then
+            ok "$VERCEL_SITE/api/server-origin → $PUBLIC_URL"
+        else
+            warn "The Vercel site doesn't report this server's address yet."
+            warn "  1. journalctl -u $PUBLISH_SERVICE_NAME -n 20 shows a wrong token or Edge Config ID."
+            warn "     Fix it by re-running with --vercel-token / --edge-config."
+            warn "  2. If it says \"Published\", connect the Edge Config store to the Vercel"
+            warn "     project and redeploy, then: curl $VERCEL_SITE/api/server-origin"
+        fi
+    fi
+fi
+
 # ---------- Summary ----------
 step "Done"
-if [[ -n "$PUBLIC_HOST" && "$MODE" != none ]]; then
+if (( PUBLISH )); then
+    printf '\n  %sPlay at:  %s%s\n\n' "$BOLD" "$VERCEL_SITE" "$RESET"
+    note "Server:   $PUBLIC_URL"
+    note "The site finds the server by itself, even when the tunnel's address changes."
+elif [[ -n "$PUBLIC_HOST" && "$MODE" != none ]]; then
     printf '\n  %sPlay at:  https://%s%s\n\n' "$BOLD" "$PUBLIC_HOST" "$RESET"
 fi
-if [[ "$MODE" == quick ]]; then
+if [[ "$MODE" == quick ]] && (( ! PUBLISH )); then
     note "This address changes whenever the tunnel restarts (a reboot, for example)."
     note "See the current one any time with: scripts/setup-server.sh --url"
     note "Open it on your phone and use the in-app Invite button: the QR code follows the address."
@@ -492,11 +613,14 @@ fi
 note "Local:    http://127.0.0.1:$PORT"
 TUNNEL_LOGS=""
 [[ -f "$TUNNEL_UNIT" || "$MODE" != none ]] && TUNNEL_LOGS="   ·   journalctl -u $TUNNEL_SERVICE_NAME -f"
+(( ! PUBLISH )) || TUNNEL_LOGS="$TUNNEL_LOGS   ·   journalctl -u $PUBLISH_SERVICE_NAME -f"
 note "Logs:     journalctl -u $SERVICE_NAME -f$TUNNEL_LOGS"
 note "Update:   git pull && scripts/setup-server.sh"
-if [[ "$MODE" == quick ]]; then
-    note "Hosting the frontend on Vercel needs a fixed server address, so with a quick"
-    note "tunnel open the address above directly instead."
+if (( PUBLISH )); then
+    :
+elif [[ "$MODE" == quick ]]; then
+    note "Frontend on Vercel? Re-run with --vercel-site, --vercel-token and --edge-config"
+    note "          so it follows this changing address (see the README)."
 else
     SHOWN_HOST="${PUBLIC_HOST:-YOUR-SERVER-HOSTNAME}"
     note "Frontend on Vercel? Set VITE_API_ORIGIN=https://$SHOWN_HOST there and"

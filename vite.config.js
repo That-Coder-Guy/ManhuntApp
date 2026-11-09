@@ -43,7 +43,7 @@ export default defineConfig({
         // IBM Plex even when the app is opened with no connection
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
         // The SPA fallback must never swallow API or socket requests
-        navigateFallbackDenylist: [/^\/manhunt-api/],
+        navigateFallbackDenylist: [/^\/manhunt-api/, /^\/api\//],
         runtimeCaching: [
           {
             // Map tiles: keep what's been seen so the play-area map still

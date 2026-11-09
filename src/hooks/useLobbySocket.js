@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
-import { API_ORIGIN, SOCKET_PATH } from '../utils/api.js';
+import { getApiOrigin, SOCKET_PATH } from '../utils/api.js';
 
 // High-level join state of the lobby connection
 export const JOIN_STATE = {
@@ -141,73 +141,85 @@ function useLobbySocket(lobbyId, credentials, onJoined)
             setLastSyncTime(Date.now());
         };
 
-        // Empty API_ORIGIN means this server also serves the frontend
-        const socket = io(API_ORIGIN || window.location.origin, {
-            path: SOCKET_PATH,
-            auth: { lobby_id: lobbyId, player_token: initialToken || undefined, host_key: hostKey || undefined },
-            reconnectionDelayMax: 10000,
-            timeout: 10000
-        });
-        socketRef.current = socket;
-        window.__manhuntSocket = socket; // debug handle for field testing and e2e
+        let socket = null;
+        let cancelled = false;
 
-        socket.on('connect', () => setConnectionState(CONNECTION_STATE.CONNECTED));
-        socket.on('disconnect', () => setConnectionState(CONNECTION_STATE.RECONNECTING));
-
-        socket.on('connect_error', () =>
+        const connect = (origin) =>
         {
-            setConnectionState(CONNECTION_STATE.RECONNECTING);
-            // Before the first join there is nothing to resume, so stop
-            // retrying and say so rather than spin forever
-            if (!hasJoined && ++failedAttempts >= MAX_INITIAL_CONNECT_ATTEMPTS)
+            socket = io(origin, {
+                path: SOCKET_PATH,
+                auth: { lobby_id: lobbyId, player_token: initialToken || undefined, host_key: hostKey || undefined },
+                reconnectionDelayMax: 10000,
+                timeout: 10000
+            });
+            socketRef.current = socket;
+            window.__manhuntSocket = socket; // debug handle for field testing and e2e
+
+            socket.on('connect', () => setConnectionState(CONNECTION_STATE.CONNECTED));
+            socket.on('disconnect', () => setConnectionState(CONNECTION_STATE.RECONNECTING));
+
+            socket.on('connect_error', () =>
+            {
+                setConnectionState(CONNECTION_STATE.RECONNECTING);
+                // Before the first join there is nothing to resume, so stop
+                // retrying and say so rather than spin forever
+                if (!hasJoined && ++failedAttempts >= MAX_INITIAL_CONNECT_ATTEMPTS)
+                {
+                    stopped = true;
+                    setJoinState(JOIN_STATE.ERROR);
+                    socket.disconnect();
+                }
+            });
+
+            // Sent on every (re)connection
+            socket.on('joined', (data) =>
+            {
+                // Reconnections must resume this identity, not create a new player
+                socket.auth.player_token = data.player_token;
+                hasJoined = true;
+
+                setLobbyName(data.lobby_name);
+                setSelfId(data.player_id);
+                applyState(data.state);
+                setJoinState(JOIN_STATE.JOINED);
+                onJoinedRef.current?.(data);
+
+                // A stationary phone may not report a new GPS fix for a long time;
+                // re-send the last one so the server isn't left with a stale position
+                sendLatestLocation();
+            });
+
+            socket.on('lobby-state', applyState);
+
+            // Pictures arrive apart from the per-second state: all on join, then each change
+            socket.on('avatars', (data) => setAvatars(data?.avatars && typeof data.avatars === 'object' ? data.avatars : {}));
+            socket.on('avatar', ({ player_id: playerId, avatar } = {}) =>
+                setAvatars((current) => ({ ...current, [playerId]: avatar || undefined })));
+
+            socket.on('fatal-error', (data) =>
             {
                 stopped = true;
-                setJoinState(JOIN_STATE.ERROR);
+                setJoinState(FATAL_STATES[data?.status] ?? JOIN_STATE.ERROR);
                 socket.disconnect();
-            }
-        });
+            });
+        };
 
-        // Sent on every (re)connection
-        socket.on('joined', (data) =>
-        {
-            // Reconnections must resume this identity, not create a new player
-            socket.auth.player_token = data.player_token;
-            hasJoined = true;
-
-            setLobbyName(data.lobby_name);
-            setSelfId(data.player_id);
-            applyState(data.state);
-            setJoinState(JOIN_STATE.JOINED);
-            onJoinedRef.current?.(data);
-
-            // A stationary phone may not report a new GPS fix for a long time;
-            // re-send the last one so the server isn't left with a stale position
-            sendLatestLocation();
-        });
-
-        socket.on('lobby-state', applyState);
-
-        // Pictures arrive apart from the per-second state: all on join, then each change
-        socket.on('avatars', (data) => setAvatars(data?.avatars && typeof data.avatars === 'object' ? data.avatars : {}));
-        socket.on('avatar', ({ player_id: playerId, avatar } = {}) =>
-            setAvatars((current) => ({ ...current, [playerId]: avatar || undefined })));
-
-        socket.on('fatal-error', (data) =>
-        {
-            stopped = true;
-            setJoinState(FATAL_STATES[data?.status] ?? JOIN_STATE.ERROR);
-            socket.disconnect();
-        });
+        // Where the server is may need looking up first (a frontend on Vercel)
+        getApiOrigin().then(
+            (origin) => { if (!cancelled) connect(origin); },
+            () => { if (!cancelled) setJoinState(JOIN_STATE.ERROR); });
 
         // Reconnect as soon as the browser is back online, not after the backoff
-        const handleOnline = () => { if (!socket.connected && !stopped) socket.connect(); };
+        const handleOnline = () => { if (socket && !socket.connected && !stopped) socket.connect(); };
         window.addEventListener('online', handleOnline);
 
         return () =>
         {
+            cancelled = true;
             window.removeEventListener('online', handleOnline);
             clearTimeout(sendTimerRef.current);
             sendTimerRef.current = null;
+            if (!socket) return;
             socket.disconnect();
             socketRef.current = null;
             if (window.__manhuntSocket === socket) delete window.__manhuntSocket;

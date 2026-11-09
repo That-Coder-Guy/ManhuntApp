@@ -32,7 +32,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['tests/**/*.js'],
+    files: ['tests/**/*.js', 'api/**/*.js'],
     extends: [js.configs.recommended],
     languageOptions: {
       ecmaVersion: 2022,
@@ -45,7 +45,7 @@ export default defineConfig([
   },
   {
     files: ['**/*.{js,jsx}'],
-    ignores: ['server/**', 'scripts/**', 'tests/**'],
+    ignores: ['server/**', 'scripts/**', 'tests/**', 'api/**'],
     extends: [
       js.configs.recommended,
       reactHooks.configs['recommended-latest'],

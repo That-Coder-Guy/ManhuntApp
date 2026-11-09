@@ -34,7 +34,9 @@ function Home()
             navigate(lobbyPath(lobbyId));
         } catch (error) {
             console.error('Error creating lobby:', error);
-            setToast("Couldn't create the lobby. Check your connection and try again.");
+            setToast(error.status === 'server_offline'
+                ? "The game server is offline. Ask whoever runs it to start it."
+                : "Couldn't create the lobby. Check your connection and try again.");
         } finally {
             setIsCreating(false);
         }
