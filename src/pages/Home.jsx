@@ -71,7 +71,7 @@ function Home()
                     </IonTitle>
                 </IonToolbar>
             </IonHeader>
-            <IonContent className="ion-padding">
+            <IonContent className="ion-padding home-content">
                 <div className="home-center">
                 <header className="home-intro">
                     <h1>Play manhunt outdoors</h1>
