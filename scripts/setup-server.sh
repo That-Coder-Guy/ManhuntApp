@@ -26,9 +26,11 @@
 #   --no-tunnel
 #       Only the app service (for example behind your own reverse proxy).
 #
-# Frontend on Vercel with a --quick tunnel: add --vercel-site, --vercel-token
-# and --global-config, and a small service keeps the Vercel site pointed at the
-# tunnel's current address, even after it changes (see the README).
+# A permanent address for a --quick tunnel: add --cf-api-token (a free
+# Cloudflare account's API token). It deploys a small Cloudflare Worker at
+# https://manhunt.<you>.workers.dev that forwards players to the tunnel, and a
+# service that tells it the tunnel's address whenever that changes. The token
+# is only used to deploy; it isn't stored.
 #
 # Run it as your normal user from inside the repository; it uses sudo where
 # it needs to.
@@ -54,10 +56,10 @@ ORIGINS=()
 NO_TUNNEL=0
 QUICK=0
 SHOW_URL=0
-VERCEL_SITE=""
-VERCEL_TOKEN=""
-GLOBAL_CONFIG_ID=""
-VERCEL_TEAM_ID=""
+CF_API_TOKEN="${CF_API_TOKEN:-}"   # may also come from the environment
+WORKER_NAME="manhunt"
+WORKERS_SUBDOMAIN=""
+CF_ACCOUNT_ID=""
 NO_BUILD=0
 DRY_RUN=0
 
@@ -73,7 +75,7 @@ die()  { printf '\n%s✖ %s%s\n' "$RED" "$*" "$RESET" >&2; exit 1; }
 did()  { if (( DRY_RUN )); then ok "Would: $*"; else ok "$*"; fi; }
 
 usage() {
-    sed -n '3,35p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '3,36p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
     cat <<'EOF'
 
 Options:
@@ -83,15 +85,17 @@ Options:
   --token TOKEN          Token of a dashboard-managed tunnel
   --tunnel-name NAME     Tunnel name for --hostname mode (default: manhunt)
   --port PORT            Local port for the app (default: 3001)
-  --allow-origin URL     Extra site allowed to use the server, e.g. a Vercel
-                         frontend (https://your-app.vercel.app). Repeatable.
+  --allow-origin URL     Extra site allowed to use the server, e.g. a frontend
+                         hosted elsewhere. Repeatable.
   --no-tunnel            Set up the app service only
-  --vercel-site URL      Your Vercel frontend, e.g. https://your-app.vercel.app;
-                         with the next two, publishes the quick tunnel's
-                         address to it whenever it changes
-  --vercel-token TOKEN   Vercel access token (Account Settings → Tokens)
-  --global-config ID     The Vercel project's Global Config ID (ecfg_…)
-  --vercel-team ID       Only if the project is in a Vercel team (team_…)
+  --cf-api-token TOKEN   With --quick: deploy a permanent workers.dev address
+                         (a Cloudflare API token, "Edit Cloudflare Workers"
+                         template). Also read from $CF_API_TOKEN.
+  --worker-name NAME     The Worker's name, the first part of the address
+                         (default: manhunt)
+  --workers-subdomain S  Only if your Cloudflare account has no workers.dev
+                         subdomain yet: the one to register
+  --cf-account ID        Only if the token can reach several accounts
   --no-build             Skip npm install and the build (restart only)
   --dry-run              Show what would be done without doing it
   -h, --help             Show this help
@@ -109,10 +113,10 @@ while [[ $# -gt 0 ]]; do
         --no-tunnel)    NO_TUNNEL=1; shift ;;
         --quick)        QUICK=1; shift ;;
         --url)          SHOW_URL=1; shift ;;
-        --vercel-site)  VERCEL_SITE="${2:-}"; shift 2 ;;
-        --vercel-token) VERCEL_TOKEN="${2:-}"; shift 2 ;;
-        --global-config) GLOBAL_CONFIG_ID="${2:-}"; shift 2 ;;
-        --vercel-team)  VERCEL_TEAM_ID="${2:-}"; shift 2 ;;
+        --cf-api-token) CF_API_TOKEN="${2:-}"; shift 2 ;;
+        --worker-name)  WORKER_NAME="${2:-}"; shift 2 ;;
+        --workers-subdomain) WORKERS_SUBDOMAIN="${2:-}"; shift 2 ;;
+        --cf-account)   CF_ACCOUNT_ID="${2:-}"; shift 2 ;;
         --no-build)     NO_BUILD=1; shift ;;
         --dry-run)      DRY_RUN=1; shift ;;
         -h|--help)      usage; exit 0 ;;
@@ -125,16 +129,16 @@ done
 [[ -z "$PORT" || "$PORT" =~ ^[0-9]+$ && "$PORT" -ge 1 && "$PORT" -le 65535 ]] || die "--port must be a number from 1 to 65535"
 [[ "$TUNNEL_NAME" =~ ^[a-zA-Z0-9_-]+$ ]] || die "--tunnel-name may only use letters, digits, - and _"
 for origin in "${ORIGINS[@]+"${ORIGINS[@]}"}"; do
-    [[ "$origin" =~ ^https?://[^/]+$ ]] || die "--allow-origin must look like https://your-app.vercel.app (no path, no trailing slash)"
+    [[ "$origin" =~ ^https?://[^/]+$ ]] || die "--allow-origin must look like https://games.example.com (no path, no trailing slash)"
 done
 [[ -z "$TOKEN" || "$TOKEN" =~ ^[A-Za-z0-9+/=_-]{20,}$ ]] || die "--token doesn't look like a Cloudflare tunnel token"
 (( NO_TUNNEL == 0 )) || [[ -z "$TOKEN" ]] || die "--token and --no-tunnel can't be used together"
 (( QUICK == 0 )) || [[ -z "$TOKEN$PUBLIC_HOST" ]] || die "--quick gives you a Cloudflare address; it can't be combined with --token or --hostname"
 (( QUICK == 0 || NO_TUNNEL == 0 )) || die "--quick and --no-tunnel can't be used together"
-[[ -z "$VERCEL_SITE" || "$VERCEL_SITE" =~ ^https://[^/]+$ ]] || die "--vercel-site must look like https://your-app.vercel.app (no path, no trailing slash)"
-[[ -z "$VERCEL_TOKEN" || "$VERCEL_TOKEN" =~ ^[A-Za-z0-9_-]{16,}$ ]] || die "--vercel-token doesn't look like a Vercel access token"
-[[ -z "$GLOBAL_CONFIG_ID" || "$GLOBAL_CONFIG_ID" =~ ^ecfg_[A-Za-z0-9]+$ ]] || die "--global-config must be the store's ID, like ecfg_abc123 (Vercel → Storage → your Global Config store)"
-[[ -z "$VERCEL_TEAM_ID" || "$VERCEL_TEAM_ID" =~ ^team_[A-Za-z0-9]+$ ]] || die "--vercel-team must look like team_abc123"
+[[ -z "$CF_API_TOKEN" || "$CF_API_TOKEN" =~ ^[A-Za-z0-9_-]{20,}$ ]] || die "--cf-api-token doesn't look like a Cloudflare API token"
+[[ "$WORKER_NAME" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || die "--worker-name may only use a-z, 0-9 and - (it becomes part of the address)"
+[[ -z "$WORKERS_SUBDOMAIN" || "$WORKERS_SUBDOMAIN" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || die "--workers-subdomain may only use a-z, 0-9 and -"
+[[ -z "$CF_ACCOUNT_ID" || "$CF_ACCOUNT_ID" =~ ^[a-f0-9]{32}$ ]] || die "--cf-account must be a 32-character account ID"
 
 # ---------- helpers ----------
 if [[ $EUID -eq 0 ]]; then
@@ -205,76 +209,6 @@ saved_mode() {
     [[ -r "$1" ]] && sed -n 's/^# tunnel-mode: //p' "$1" | head -n 1
 }
 
-# The publisher's latest report, e.g. "Published https://…" or "Vercel answered 403 …"
-publisher_status() {
-    "${SUDO[@]+"${SUDO[@]}"}" journalctl -u "$PUBLISH_SERVICE_NAME" --no-pager -o cat -n 50 2>/dev/null \
-        | grep -E '^(Watching|Published|Vercel answered|Couldn.t reach|Missing|Waiting)' | tail -n 1 || true
-}
-
-# Ask the Vercel site where the server is until it says PUBLIC_URL, or explain
-# exactly why it doesn't
-check_vercel_site() {
-    local endpoint="$VERCEL_SITE/api/server-origin" body_file reply code redirect origin="" since_published=0
-    body_file="$(mktemp)"
-    for (( i = 0; i < 30; i++ )); do
-        reply="$(curl -sS --max-time 8 -o "$body_file" -w '%{http_code} %{redirect_url}' "$endpoint" 2>/dev/null || true)"
-        code="${reply%% *}"; redirect="${reply#* }"
-        origin="$(grep -o '"origin":[^,}]*' "$body_file" 2>/dev/null | head -n 1 | sed 's/^"origin"://; s/"//g' || true)"
-        if [[ "$code" == 200 && "$origin" == "$PUBLIC_URL" ]]; then
-            rm -f "$body_file"
-            ok "$endpoint → $PUBLIC_URL"
-            return 0
-        fi
-        # Only "not published yet" is worth waiting for, and only while the
-        # publisher hasn't already been refused
-        if [[ "$code" != 200 ]] || ! grep -q '"origin"' "$body_file"; then break; fi
-        case "$(publisher_status)" in
-            "Vercel answered"*) break ;;
-            # Published, but the site still can't see it: a store problem
-            "Published $PUBLIC_URL") (( ++since_published < 10 )) || break ;;
-        esac
-        sleep 3
-    done
-
-    local publisher
-    publisher="$(publisher_status)"
-    warn "$VERCEL_SITE doesn't point at this server yet."
-    if [[ "$code" == 401 || "$code" == 403 || "$redirect" == *vercel.com* ]] || grep -qi 'vercel authentication\|sso-api' "$body_file" 2>/dev/null; then
-        warn "It asks visitors to log in to Vercel (Deployment Protection), so the app can't"
-        warn "read the address, and friends would get a Vercel login page too."
-        [[ "$VERCEL_SITE" != *-git-* ]] || warn "Addresses with -git-<branch>- in them are branch links, which Vercel protects by default."
-        warn "Fix: use the project's production address (Vercel → project → Overview → Domains,"
-        warn "e.g. https://<project>.vercel.app) and re-run with --vercel-site <that address>,"
-        warn "or turn off Vercel Authentication in Settings → Deployment Protection."
-    elif [[ "$code" == 000 || -z "$code" ]]; then
-        warn "Couldn't reach $VERCEL_SITE at all. Check the address (open it in a browser)."
-    elif [[ "$code" == 404 ]]; then
-        warn "This deployment has no /api/server-origin. In Vercel, redeploy the latest main"
-        warn "(Deployments → ⋯ → Redeploy), and check Settings → General → Root Directory is empty."
-    elif [[ "$code" =~ ^5 ]]; then
-        warn "The site's /api/server-origin function failed (HTTP $code). See Vercel → project → Logs."
-    elif [[ "$code" == 200 ]] && ! grep -q '"origin"' "$body_file"; then
-        warn "It answers with the app's page instead of the function, so Vercel didn't deploy"
-        warn "the api/ folder. Check Settings → General → Root Directory is empty, then redeploy."
-    elif [[ "$publisher" == Published* ]]; then
-        warn "The Pi published its address, but the site reads ${origin:-nothing}."
-        warn "Connect the Global Config store to this project (Storage tab → the store → Projects),"
-        warn "make sure it's the store with ID $GLOBAL_CONFIG_ID, then redeploy."
-    elif [[ "$publisher" == "Vercel answered 40"[13]* ]]; then
-        warn "Vercel won't let the Pi's token write to the store. Tokens limited to one project"
-        warn "can't: in Account Settings → Tokens, make a new token with Scope set to Full Account"
-        warn "or to the team that owns the project, then re-run with --vercel-token <the new token>."
-    elif [[ "$publisher" == "Vercel answered 404"* ]]; then
-        warn "Vercel wouldn't store the address in $GLOBAL_CONFIG_ID. Check the ID on the store's"
-        warn "page (Storage → the store), and add --vercel-team team_… if the project is in a team."
-    else
-        warn "The site answered: $(head -c 200 "$body_file" 2>/dev/null)"
-    fi
-    [[ -z "$publisher" ]] || warn "Publisher's latest report: $publisher"
-    warn "Check again any time: curl $endpoint"
-    rm -f "$body_file"
-}
-
 node_is_new_enough() {
     command -v node >/dev/null || return 1
     # The server shares an ES module with the app, which needs Node 20.19+ or 22.12+
@@ -289,6 +223,8 @@ TUNNEL_UNIT="$SYSTEMD_DIR/$TUNNEL_SERVICE_NAME.service"
 if (( SHOW_URL )); then
     case "$(saved_mode "$TUNNEL_UNIT")" in
         quick)
+            worker="$(existing_secret "$CF_DIR/$PUBLISH_SERVICE_NAME.env" WORKER_URL)"
+            if [[ -n "$worker" ]]; then echo "$worker"; exit 0; fi
             url="$(quick_url)"
             [[ -n "$url" ]] || die "The quick tunnel has no address yet. Is it running? systemctl status $TUNNEL_SERVICE_NAME"
             echo "$url" ;;
@@ -326,24 +262,20 @@ elif [[ -f "$TUNNEL_UNIT" ]]; then
     MODE="existing"
 fi
 
-# Publishing the tunnel's address to a Vercel frontend
+# A permanent workers.dev address in front of a quick tunnel
 PUBLISH_ENV="$CF_DIR/$PUBLISH_SERVICE_NAME.env"
 PUBLISH_UNIT="$SYSTEMD_DIR/$PUBLISH_SERVICE_NAME.service"
-[[ -n "$VERCEL_SITE" ]] || VERCEL_SITE="$(existing_secret "$PUBLISH_ENV" VERCEL_SITE)"
-[[ -n "$VERCEL_TOKEN" ]] || VERCEL_TOKEN="$(existing_secret "$PUBLISH_ENV" VERCEL_TOKEN)"
-[[ -n "$GLOBAL_CONFIG_ID" ]] || GLOBAL_CONFIG_ID="$(existing_secret "$PUBLISH_ENV" GLOBAL_CONFIG_ID)"
-[[ -n "$VERCEL_TEAM_ID" ]] || VERCEL_TEAM_ID="$(existing_secret "$PUBLISH_ENV" VERCEL_TEAM_ID)"
-PUBLISH=0
-if [[ -n "$VERCEL_SITE$VERCEL_TOKEN$GLOBAL_CONFIG_ID" ]]; then
-    missing=()
-    [[ -n "$VERCEL_SITE" ]] || missing+=(--vercel-site)
-    [[ -n "$VERCEL_TOKEN" ]] || missing+=(--vercel-token)
-    [[ -n "$GLOBAL_CONFIG_ID" ]] || missing+=(--global-config)
-    (( ${#missing[@]} == 0 )) || die "Publishing to Vercel also needs: ${missing[*]}"
-    [[ "$MODE" == quick ]] || die "Publishing to Vercel is for --quick tunnels. With a fixed address, set VITE_API_ORIGIN in Vercel instead (see the README)."
-    PUBLISH=1
-    # The Vercel site must be allowed to use the server
-    [[ " ${ORIGINS[*]+"${ORIGINS[*]}"} " == *" $VERCEL_SITE "* ]] || ORIGINS+=("$VERCEL_SITE")
+WORKER_SOURCE="$REPO_DIR/cloudflare/worker.js"
+WORKER_URL="$(existing_secret "$PUBLISH_ENV" WORKER_URL)"
+PUBLISH_SECRET="$(existing_secret "$PUBLISH_ENV" PUBLISH_SECRET)"
+DEPLOYED_HASH="$(existing_secret "$PUBLISH_ENV" WORKER_HASH)"
+WORKER_HASH="$(sha256sum "$WORKER_SOURCE" | cut -d' ' -f1)"
+STATIC=0
+if [[ -n "$CF_API_TOKEN" ]]; then
+    [[ "$MODE" == quick ]] || die "--cf-api-token gives a quick tunnel a permanent address; use it with --quick"
+    STATIC=1
+elif [[ -n "$WORKER_URL" && "$MODE" == quick ]]; then
+    STATIC=1    # set up on an earlier run
 fi
 
 printf '%sManhunt server setup%s\n' "$BOLD" "$RESET"
@@ -601,19 +533,38 @@ if [[ -n "$PUBLIC_HOST" && "$MODE" != none ]]; then
     fi
 fi
 
-# ---------- 6. Vercel ----------
-if (( PUBLISH )); then
-    step "Pointing $VERCEL_SITE at this server"
-    PUBLISH_ENV_CONTENT="VERCEL_SITE=$VERCEL_SITE
-VERCEL_TOKEN=$VERCEL_TOKEN
-GLOBAL_CONFIG_ID=$GLOBAL_CONFIG_ID${VERCEL_TEAM_ID:+
-VERCEL_TEAM_ID=$VERCEL_TEAM_ID}"
+# ---------- 6. Permanent address ----------
+if (( STATIC )); then
+    step "Permanent address (Cloudflare Worker)"
+    if [[ -n "$CF_API_TOKEN" ]]; then
+        # Shared by the Worker and the Pi; kept across deploys
+        [[ -n "$PUBLISH_SECRET" ]] || PUBLISH_SECRET="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64url"))')"
+        if (( DRY_RUN )); then
+            WORKER_URL="${WORKER_URL:-https://$WORKER_NAME.<your-subdomain>.workers.dev}"
+            note "Would deploy cloudflare/worker.js as the Worker $WORKER_NAME"
+        else
+            WORKER_URL="$(CLOUDFLARE_API_TOKEN="$CF_API_TOKEN" PUBLISH_SECRET="$PUBLISH_SECRET" \
+                WORKER_NAME="$WORKER_NAME" WORKERS_SUBDOMAIN="$WORKERS_SUBDOMAIN" CF_ACCOUNT_ID="$CF_ACCOUNT_ID" \
+                node "$REPO_DIR/scripts/deploy-worker.mjs" 2> >(sed 's/^/  /' >&2))" \
+                || die "Deploying the Worker failed (see above)"
+            ok "Worker deployed at $WORKER_URL"
+        fi
+        DEPLOYED_HASH="$WORKER_HASH"
+    else
+        ok "Worker at $WORKER_URL"
+        [[ "$DEPLOYED_HASH" == "$WORKER_HASH" ]] \
+            || warn "cloudflare/worker.js changed since it was deployed; re-run with --cf-api-token <TOKEN> to update it"
+    fi
+
+    # The secret lets anyone repoint the address: root-only, like the tunnel token
+    PUBLISH_ENV_CONTENT="WORKER_URL=$WORKER_URL
+PUBLISH_SECRET=$PUBLISH_SECRET
+WORKER_HASH=$DEPLOYED_HASH"
     PUBLISH_CHANGED=0
-    # The token is a secret: root-only, like the tunnel token
     [[ "$(write_root_file "$PUBLISH_ENV" 600 "$PUBLISH_ENV_CONTENT")" == same ]] || PUBLISH_CHANGED=1
     PUBLISH_UNIT_CONTENT="# Written by scripts/setup-server.sh; re-run it rather than editing this file.
 [Unit]
-Description=Publish Manhunt's tunnel address to its Vercel frontend
+Description=Point Manhunt's workers.dev address at the tunnel
 After=network-online.target $TUNNEL_SERVICE_NAME.service
 Wants=network-online.target
 
@@ -624,7 +575,6 @@ WorkingDirectory=$REPO_DIR
 ExecStart=$NODE_BIN scripts/publish-address.mjs
 EnvironmentFile=$PUBLISH_ENV
 Environment=QUICK_METRICS=$QUICK_METRICS
-StateDirectory=$PUBLISH_SERVICE_NAME
 Restart=always
 RestartSec=10
 NoNewPrivileges=true
@@ -635,49 +585,50 @@ ProtectSystem=full
 WantedBy=multi-user.target"
     [[ "$(write_root_file "$PUBLISH_UNIT" 644 "$PUBLISH_UNIT_CONTENT")" == same ]] || PUBLISH_CHANGED=1
     as_root systemctl daemon-reload
-    if (( PUBLISH_CHANGED || NO_BUILD == 0 )); then
-        # Also after a rebuild, which may have updated the publisher itself
+    if (( PUBLISH_CHANGED || NO_BUILD == 0 )) || [[ -n "$CF_API_TOKEN" ]]; then
+        # Also after a rebuild or deploy: tell the (possibly new) Worker right away
         as_root systemctl enable "$PUBLISH_SERVICE_NAME" --quiet
         as_root systemctl restart "$PUBLISH_SERVICE_NAME"
     else
         as_root systemctl enable --now "$PUBLISH_SERVICE_NAME" --quiet
     fi
-    did "Service $PUBLISH_SERVICE_NAME keeps the site pointed at the tunnel"
+    did "Service $PUBLISH_SERVICE_NAME points it at the tunnel"
 
     if (( DRY_RUN )); then
         note "Check skipped in a dry run"
+    elif wait_for_url "$WORKER_URL/manhunt-api/health" 36 5; then
+        ok "Live: $WORKER_URL"
     else
-        check_vercel_site
+        warn "$WORKER_URL doesn't reach the server yet. A new workers.dev address can take a"
+        warn "few minutes to start working. Then check:"
+        warn "  curl $WORKER_URL/manhunt-api/health"
+        warn "  journalctl -u $PUBLISH_SERVICE_NAME -n 20     (the publisher's reports)"
     fi
+elif [[ -f "$PUBLISH_UNIT" ]]; then
+    # Left over from an earlier setup (a Worker with another tunnel mode, or the old Vercel publisher)
+    as_root systemctl disable --now "$PUBLISH_SERVICE_NAME" --quiet || true
+    # The old Vercel publisher's file holds a Vercel token that is no longer used
+    [[ -n "$WORKER_URL" ]] || as_root rm -f "$PUBLISH_ENV"
+    note "Stopped $PUBLISH_SERVICE_NAME: nothing to publish to with this setup"
 fi
 
 # ---------- Summary ----------
 step "Done"
-if (( PUBLISH )); then
-    printf '\n  %sPlay at:  %s%s\n\n' "$BOLD" "$VERCEL_SITE" "$RESET"
-    note "Server:   $PUBLIC_URL"
-    note "The site finds the server by itself, even when the tunnel's address changes."
+if (( STATIC )); then
+    printf '\n  %sPlay at:  %s%s\n\n' "$BOLD" "$WORKER_URL" "$RESET"
+    note "This address stays the same, even when the tunnel's changes."
+    note "Tunnel:   $PUBLIC_URL"
 elif [[ -n "$PUBLIC_HOST" && "$MODE" != none ]]; then
     printf '\n  %sPlay at:  https://%s%s\n\n' "$BOLD" "$PUBLIC_HOST" "$RESET"
 fi
-if [[ "$MODE" == quick ]] && (( ! PUBLISH )); then
+if [[ "$MODE" == quick ]] && (( ! STATIC )); then
     note "This address changes whenever the tunnel restarts (a reboot, for example)."
     note "See the current one any time with: scripts/setup-server.sh --url"
-    note "Open it on your phone and use the in-app Invite button: the QR code follows the address."
+    note "For one that never changes, re-run with --cf-api-token (see the README)."
 fi
 note "Local:    http://127.0.0.1:$PORT"
 TUNNEL_LOGS=""
 [[ -f "$TUNNEL_UNIT" || "$MODE" != none ]] && TUNNEL_LOGS="   ·   journalctl -u $TUNNEL_SERVICE_NAME -f"
-(( ! PUBLISH )) || TUNNEL_LOGS="$TUNNEL_LOGS   ·   journalctl -u $PUBLISH_SERVICE_NAME -f"
+(( ! STATIC )) || TUNNEL_LOGS="$TUNNEL_LOGS   ·   journalctl -u $PUBLISH_SERVICE_NAME -f"
 note "Logs:     journalctl -u $SERVICE_NAME -f$TUNNEL_LOGS"
 note "Update:   git pull && scripts/setup-server.sh"
-if (( PUBLISH )); then
-    :
-elif [[ "$MODE" == quick ]]; then
-    note "Frontend on Vercel? Re-run with --vercel-site, --vercel-token and --global-config"
-    note "          so it follows this changing address (see the README)."
-else
-    SHOWN_HOST="${PUBLIC_HOST:-YOUR-SERVER-HOSTNAME}"
-    note "Frontend on Vercel? Set VITE_API_ORIGIN=https://$SHOWN_HOST there and"
-    note "          re-run with --allow-origin https://<your-app>.vercel.app"
-fi

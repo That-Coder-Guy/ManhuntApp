@@ -32,7 +32,17 @@ export default defineConfig([
     },
   },
   {
-    files: ['tests/**/*.js', 'api/**/*.js'],
+    // Cloudflare Worker (module syntax, Workers runtime)
+    files: ['cloudflare/**/*.js'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 2022,
+      globals: globals.serviceworker,
+      sourceType: 'module',
+    },
+  },
+  {
+    files: ['tests/**/*.js'],
     extends: [js.configs.recommended],
     languageOptions: {
       ecmaVersion: 2022,
@@ -45,7 +55,7 @@ export default defineConfig([
   },
   {
     files: ['**/*.{js,jsx}'],
-    ignores: ['server/**', 'scripts/**', 'tests/**', 'api/**'],
+    ignores: ['server/**', 'scripts/**', 'tests/**', 'cloudflare/**'],
     extends: [
       js.configs.recommended,
       reactHooks.configs['recommended-latest'],

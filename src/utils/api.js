@@ -1,18 +1,10 @@
-import { normalizeServerOrigin } from '../../shared/serverOrigin.js';
-
-// Where the game server is. VITE_API_ORIGIN is read at build time:
-//   https://… — a fixed server address
-//   (empty)   — the server also serves this frontend (single origin)
-//   auto      — ask /api/server-origin when the app starts. For a frontend on
-//               Vercel with the server behind a Cloudflare quick tunnel, whose
-//               address changes; the server publishes it (see README).
-const CONFIGURED_ORIGIN = import.meta.env.VITE_API_ORIGIN ?? "https://api.hankinit.work";
-const DISCOVER = CONFIGURED_ORIGIN === "auto";
-
-function fixedApiOrigin()
+// Server origin. Override with VITE_API_ORIGIN (see .env.development for local
+// dev); set it to an empty string for single-origin deployments where the
+// server also serves this frontend.
+function resolveApiOrigin()
 {
-    const configured = CONFIGURED_ORIGIN;
-    if (!configured) return window.location.origin;
+    const configured = import.meta.env.VITE_API_ORIGIN ?? "https://api.hankinit.work";
+    if (!configured) return configured;
 
     // In dev the configured origin is localhost, which other devices on the
     // LAN can't reach. When the page was loaded from a LAN address (phone on
@@ -35,55 +27,12 @@ function fixedApiOrigin()
     return configured;
 }
 
-const DISCOVERY_URL = "/api/server-origin";
-const DISCOVERY_TIMEOUT_MS = 5000;
-// The last address discovery returned, for when the lookup itself fails on a
-// weak connection
-const SAVED_ORIGIN_KEY = "manhunt.serverOrigin";
-
-let discovered = null; // promise of the address found this page load
-
-async function discoverApiOrigin()
-{
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), DISCOVERY_TIMEOUT_MS);
-    try {
-        const response = await fetch(DISCOVERY_URL, { cache: "no-store", signal: controller.signal });
-        const data = response.ok ? await response.json() : null;
-        const origin = normalizeServerOrigin(data?.origin);
-        if (origin) {
-            try { localStorage.setItem(SAVED_ORIGIN_KEY, origin); } catch { /* storage unavailable */ }
-            return origin;
-        }
-        if (response.ok) throw requestError("The game server isn't online right now", "server_offline");
-    } catch (error) {
-        if (error.status === "server_offline") throw error;
-        // Couldn't ask: fall back to the last known address
-    } finally {
-        clearTimeout(timeoutId);
-    }
-    let saved = null;
-    try { saved = normalizeServerOrigin(localStorage.getItem(SAVED_ORIGIN_KEY)); } catch { /* storage unavailable */ }
-    if (saved) return saved;
-    throw requestError("Network error: check your connection", "network_error");
-}
-
-/**
- * Resolves with the game server's origin. With discovery, a successful lookup
- * is kept for the rest of the page load; a failed one is retried next call.
- */
-export function getApiOrigin()
-{
-    if (!DISCOVER) return Promise.resolve(fixedApiOrigin());
-    if (!discovered) {
-        discovered = discoverApiOrigin();
-        discovered.catch(() => { discovered = null; });
-    }
-    return discovered;
-}
+export const API_ORIGIN = resolveApiOrigin();
 
 // Socket.IO endpoint path on the server
 export const SOCKET_PATH = "/manhunt-api/socket.io";
+
+const API_BASE = `${API_ORIGIN}/manhunt-api`;
 
 // How long to wait before giving up on a REST request
 const REQUEST_TIMEOUT_MS = 8000;
@@ -103,13 +52,12 @@ function requestError(message, status)
  */
 export async function createLobby(lobbyName)
 {
-    const apiBase = `${await getApiOrigin()}/manhunt-api`;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     let response;
     try {
-        response = await fetch(`${apiBase}/create-lobby`, {
+        response = await fetch(`${API_BASE}/create-lobby`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ lobby_name: lobbyName }),

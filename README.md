@@ -116,8 +116,8 @@ OpenStreetMap streets. To refresh the images after a UI change, run
 
 - Repo root — React + Vite frontend (this used to be the whole repo)
 - `server/` — Express + Socket.IO backend (merged in from the old ManhuntApi repo)
-- `shared/` — code both sides use (play-area geometry, server-address checks)
-- `api/` — the one Vercel function: where the game server is right now
+- `shared/` — code both sides use (play-area geometry)
+- `cloudflare/` — the Worker behind the permanent `workers.dev` address
 
 ## Development
 
@@ -159,114 +159,13 @@ Two options:
    (empty) so the client talks to its own origin.
 2. **Split hosting:** host `dist/` anywhere, build with
    `VITE_API_ORIGIN=https://your-api-host`, and set the `ALLOWED_ORIGINS`
-   env var (comma-separated) to your frontend origin. With
-   `VITE_API_ORIGIN=auto` the app asks `/api/server-origin` for the address
-   instead; that's how the [Vercel setup](#frontend-on-vercel-server-through-cloudflare)
-   follows a changing tunnel address.
+   env var (comma-separated) to your frontend origin.
 
 Notes:
 - Any reverse proxy in front of the server must forward WebSocket upgrade
   headers for `/manhunt-api/socket.io`. If it can't, Socket.IO automatically
   falls back to HTTP long-polling.
 - Lobby state is in-memory only: restarting the server ends all live games.
-
-## Frontend on Vercel, server through Cloudflare
-
-Vercel can host the frontend for free, but not the game server: the server
-keeps a WebSocket open to every phone and holds lobbies in memory, which
-Vercel's short-lived functions can't do. So the site goes on Vercel and the
-server runs on an always-on machine, such as a Raspberry Pi, reached through
-a free Cloudflare quick tunnel. Players only ever use the Vercel address.
-
-The quick tunnel's `https://….trycloudflare.com` address changes whenever the
-tunnel restarts, so the site can't have it built in. Instead:
-
-- The Pi runs a small service (`manhunt-publish`) that watches the tunnel.
-  When the address changes, and the new one answers, it saves the address in
-  the Vercel project's [Global Config](https://vercel.com/docs/global-config), a
-  small key-value store that is free on every plan. It only writes on a change.
-- When the app opens, it asks `/api/server-origin` (a Vercel function,
-  `api/server-origin.js`) where the server is now, then connects there. It
-  remembers the last answer, so a weak signal that drops the lookup still
-  connects.
-
-If the Pi is off, creating a lobby says "The game server is offline".
-
-### Set it up
-
-1. **Import the repo in Vercel** (Add New → Project → this repository) and
-   deploy. `vercel.json` sets everything: the build (`npm run build:vercel`),
-   the `dist` output, and a rewrite so invite links like `/lobby/<id>` open
-   the app. Note the site's **production** address, listed under **Domains**
-   on the project's Overview, e.g. `https://your-project.vercel.app`. Don't use
-   a link with `-git-main-` or a random hash in it: those are deployment
-   links, and Vercel puts its own login page in front of them by default.
-2. **Create the Global Config store.** In the project, open the
-   **Storage** tab and pick **Global Config** (formerly Edge Config), name it
-   (`manhunt`), and connect it to the project for all environments.
-   Connecting adds a `GLOBAL_CONFIG` environment variable that the function
-   reads. Copy the store's ID, which starts with `ecfg_`.
-3. **Redeploy** (Deployments → the latest one → ⋯ → Redeploy) so the function
-   picks up `GLOBAL_CONFIG`.
-4. **Create an access token** for the Pi under **Account Settings → Tokens**.
-   Set **Scope** to *Full Account* or to the team that owns the project.
-   A token limited to a single project can't write to the store, which
-   belongs to the team. Choosing *No expiration* saves renewing it.
-5. **Set up the Pi** (see [the full guide](#set-up-the-server-with-cloudflare-raspberry-pi-or-any-linux-box)
-   for a fresh machine):
-
-   ```bash
-   scripts/setup-server.sh --quick \
-     --vercel-site https://your-project.vercel.app \
-     --vercel-token <TOKEN> \
-     --global-config ecfg_xxxxxxxx
-   ```
-
-   The publisher finds which of your Vercel teams owns the store by itself
-   (Vercel keeps even personal projects in a team), or you can name it with
-   `--vercel-team team_xxxxxxxx`. The script also
-   allows the Vercel site to use the server. At the end it checks that the
-   site reports the tunnel's address:
-
-   ```
-   ✓ https://your-project.vercel.app/api/server-origin → https://calm-river-otter.trycloudflare.com
-
-     Play at:  https://your-project.vercel.app
-   ```
-
-6. **Play**: open the Vercel address on a phone and create a lobby. The
-   invite QR code points at the Vercel address too, so it keeps working
-   whatever the tunnel's address is.
-
-After a reboot the tunnel comes back with a new address. The publisher sees
-it within about ten seconds of it answering, and from then on newly opened
-apps connect there. Lobbies live in the server's memory, so a reboot ends
-games either way.
-
-The token can manage your Vercel account, so the script keeps it in
-`/etc/cloudflared/manhunt-publish.env`, readable by root only. If it expires
-or you revoke it, `journalctl -u manhunt-publish` shows `Vercel answered 403`.
-Re-run the script with `--vercel-token <NEW TOKEN>` to replace it.
-
-Preview deployments get their own `*.vercel.app` addresses. Allow any you
-want to play on with `--allow-origin https://….vercel.app`.
-
-If the script says the site doesn't point at the server yet, it explains why:
-
-| It says | Fix |
-| --- | --- |
-| Asks visitors to log in to Vercel | Use the production address with `--vercel-site`, or turn off **Vercel Authentication** in Settings → Deployment Protection |
-| No `/api/server-origin` / answers with the app's page | Redeploy the latest `main`; Settings → General → Root Directory must be empty |
-| The Pi published its address, but the site reads null | Connect the Global Config store to the project (Storage tab), then redeploy |
-| Vercel won't let the Pi's token write to the store | Make a new token with **Scope** set to *Full Account* or the team that owns the project (not a single project), and re-run with `--vercel-token` |
-
-### With your own domain instead
-
-A tunnel on your own domain (`--hostname`, below) has a fixed address, so no
-Global Config store is needed. In the Vercel project, set the environment variable
-`VITE_API_ORIGIN` to `https://manhunt.yourdomain.com` (no trailing slash) and
-redeploy. Then allow the site on the server with
-`scripts/setup-server.sh --allow-origin https://your-project.vercel.app`.
 
 ## Play over the internet (Cloudflare Tunnel)
 
@@ -302,14 +201,16 @@ installs `cloudflared` and connects a Cloudflare Tunnel. A Pi 4 or 5 runs
 the whole app comfortably. Nothing on your router needs changing, and the
 tunnel is free with no bandwidth cap for an app like this.
 
-There are two kinds of address:
+There are three kinds of address, all free:
 
-| | Cloudflare's address (`--quick`) | Your own domain (`--hostname`) |
-| --- | --- | --- |
-| Looks like | `https://calm-river-otter.trycloudflare.com` | `https://manhunt.yourdomain.com` |
-| Needs | Nothing: no account, no domain | A free Cloudflare account with a domain on it |
-| Address | Changes whenever the tunnel restarts (a reboot, say) | Fixed |
-| Frontend on Vercel | Yes; the site follows the address ([setup](#frontend-on-vercel-server-through-cloudflare)) | Yes |
+| | Quick tunnel (`--quick`) | Permanent `workers.dev` (`--quick --cf-api-token`) | Your own domain (`--hostname`) |
+| --- | --- | --- | --- |
+| Looks like | `https://calm-river-otter.trycloudflare.com` | `https://manhunt.yourname.workers.dev` | `https://manhunt.yourdomain.com` |
+| Needs | Nothing | A free Cloudflare account | A Cloudflare account with a domain you own |
+| Address | Changes whenever the tunnel restarts (a reboot, say) | **Never changes** | Never changes |
+
+Without a domain, the `workers.dev` address is the most permanent one
+Cloudflare offers for free.
 
 ### What you need
 
@@ -348,7 +249,53 @@ scripts/setup-server.sh --url
 ```
 
 Cloudflare offers quick tunnels without any uptime guarantee. They are
-reliable enough for games with friends; for something permanent, use a domain.
+reliable enough for games with friends. For an address that never changes,
+add the permanent `workers.dev` address below.
+
+### Run it: a permanent address on workers.dev
+
+A small [Cloudflare Worker](https://developers.cloudflare.com/workers/)
+(`cloudflare/worker.js`) sits at `https://manhunt.<yourname>.workers.dev` and
+forwards everything (pages, API calls and the game's WebSocket) to the quick
+tunnel. A service on the Pi (`manhunt-publish`) tells the Worker the
+tunnel's address whenever it changes, using a secret only the two of them
+share. Players only ever use the `workers.dev` address, so links and invite QR
+codes keep working after a reboot.
+
+1. **Make a free Cloudflare account** at [dash.cloudflare.com](https://dash.cloudflare.com/sign-up).
+2. **Create an API token**: My Profile → **API Tokens** → **Create Token** →
+   use the **Edit Cloudflare Workers** template. Under *Account Resources*
+   pick your account, under *Zone Resources* pick *All zones*, then
+   **Continue to summary → Create Token**, and copy it.
+3. **Run the script** with it:
+
+   ```bash
+   scripts/setup-server.sh --quick --cf-api-token <TOKEN>
+   ```
+
+   If your account has never used Workers, it has no `workers.dev` name yet:
+   add `--workers-subdomain <yourname>` to pick one. The address becomes
+   `https://manhunt.<yourname>.workers.dev`, and `--worker-name` changes the
+   `manhunt` part.
+
+It ends with:
+
+```
+  ✓ Live: https://manhunt.yourname.workers.dev
+
+  Play at:  https://manhunt.yourname.workers.dev
+```
+
+The token is only used to deploy the Worker; the script doesn't store it, so
+you can delete it in the dashboard afterwards. You need a token again only
+to update the Worker; the script says when `cloudflare/worker.js` changed.
+A new `workers.dev` address can take a few minutes to start working.
+
+After a reboot, the tunnel gets a new address. The publisher tells the
+Worker within seconds of the address answering, and the Worker picks it up
+within about a minute. If the Pi is off, the address shows "The game server
+is offline". Workers' free plan covers 100,000 requests a day; a game uses a
+few requests per player, since locations travel over the WebSocket.
 
 ### Run it: your own domain
 
@@ -373,8 +320,6 @@ scripts/setup-server.sh --token <TOKEN> --hostname manhunt.yourdomain.com
 (`--hostname` is only used here to check the address works.) The token is
 stored in `/etc/cloudflared/manhunt-tunnel.env`, readable by root only.
 
-Frontend on Vercel? See [Frontend on Vercel](#frontend-on-vercel-server-through-cloudflare).
-
 Add `--dry-run` to any command to see what it would do without changing
 anything; `--help` lists every option (`--port`, `--tunnel-name`,
 `--no-tunnel`, `--no-build`). You can switch between kinds of address later
@@ -397,6 +342,7 @@ games (lobbies are in memory), so update between rounds.
 systemctl status manhunt manhunt-tunnel        # both should be "active (running)"
 journalctl -u manhunt -f                       # app logs
 journalctl -u manhunt-tunnel -f                # tunnel logs
+journalctl -u manhunt-publish -f               # workers.dev publisher: "Published https://…"
 scripts/setup-server.sh --url                  # the public address
 curl https://<your-address>/manhunt-api/health   # {"status":"success"}
 ```
@@ -404,8 +350,10 @@ curl https://<your-address>/manhunt-api/health   # {"status":"success"}
 - **Error 1033 or 530** from Cloudflare: the tunnel isn't connected; check
   `journalctl -u manhunt-tunnel`.
 - **Error 502**: the tunnel is up but the app isn't; check `journalctl -u manhunt`.
-- **Not resolving yet**: a brand-new DNS record or quick-tunnel address can
-  take a minute or two.
+- **Not resolving yet**: a brand-new DNS record, quick-tunnel or `workers.dev`
+  address can take a few minutes.
+- **"The game server is offline"** on `workers.dev`: the Pi or its tunnel is
+  down, or the publisher hasn't caught up; check `journalctl -u manhunt-publish`.
 
 ### Just one game, no server
 
@@ -423,6 +371,10 @@ sudo rm -f /etc/cloudflared/manhunt-tunnel.* /etc/cloudflared/manhunt-publish.en
 sudo systemctl daemon-reload
 cloudflared tunnel delete manhunt              # if the script created it
 ```
+
+For the `workers.dev` address, also delete the `manhunt` Worker and the
+`manhunt-tunnel` KV namespace in the Cloudflare dashboard (Workers & Pages,
+and Storage & Databases → KV).
 
 Doing it by hand instead: `deploy/manhunt.service` is a plain systemd unit for
 the app. Server settings, as environment variables:
