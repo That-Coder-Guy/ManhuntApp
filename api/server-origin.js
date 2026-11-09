@@ -4,18 +4,18 @@
 // Raspberry Pi behind a Cloudflare quick tunnel whose address changes when the
 // tunnel restarts. The Pi writes its current address into this project's Edge
 // Config (scripts/publish-address.mjs); the app asks here when it starts.
-import { get } from '@vercel/edge-config';
+import { get } from '@vercel/global-config';
 import { SERVER_ORIGIN_KEY, normalizeServerOrigin } from '../shared/serverOrigin.js';
 
 export default async function handler(_req, res)
 {
     let origin = null;
     try {
-        // Reads the store named by EDGE_CONFIG, which Vercel sets when the
-        // store is connected to the project
+        // Reads the store named by GLOBAL_CONFIG (EDGE_CONFIG on older
+        // projects), which Vercel sets when the store is connected to the project
         origin = normalizeServerOrigin(await get(SERVER_ORIGIN_KEY));
     } catch (error) {
-        console.error('Edge Config read failed:', error.message);
+        console.error('Global Config read failed:', error.message);
     }
     res.setHeader('Cache-Control', 'no-store');
     res.status(200).json({ origin });

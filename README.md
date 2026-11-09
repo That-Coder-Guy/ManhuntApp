@@ -183,7 +183,7 @@ tunnel restarts, so the site can't have it built in. Instead:
 
 - The Pi runs a small service (`manhunt-publish`) that watches the tunnel.
   When the address changes, and the new one answers, it saves the address in
-  the Vercel project's [Edge Config](https://vercel.com/docs/edge-config), a
+  the Vercel project's [Global Config](https://vercel.com/docs/global-config), a
   small key-value store that is free on every plan. It only writes on a change.
 - When the app opens, it asks `/api/server-origin` (a Vercel function,
   `api/server-origin.js`) where the server is now, then connects there. It
@@ -198,13 +198,13 @@ If the Pi is off, creating a lobby says "The game server is offline".
    deploy. `vercel.json` sets everything: the build (`npm run build:vercel`),
    the `dist` output, and a rewrite so invite links like `/lobby/<id>` open
    the app. Note the site's address, e.g. `https://your-project.vercel.app`.
-2. **Create the Edge Config.** In the project, open **Storage → Create
-   Database → Edge Config**, name it (`manhunt`), and connect it to the
-   project for all environments. Connecting adds an `EDGE_CONFIG` environment
-   variable that the function reads. Copy the store's ID, which starts with
-   `ecfg_`.
+2. **Create the Global Config store.** In the project, open the
+   **Storage** tab and pick **Global Config** (formerly Edge Config), name it
+   (`manhunt`), and connect it to the project for all environments.
+   Connecting adds a `GLOBAL_CONFIG` environment variable that the function
+   reads. Copy the store's ID, which starts with `ecfg_`.
 3. **Redeploy** (Deployments → the latest one → ⋯ → Redeploy) so the function
-   picks up `EDGE_CONFIG`.
+   picks up `GLOBAL_CONFIG`.
 4. **Create an access token** for the Pi under **Account Settings → Tokens**.
    Pick the scope that owns the project. Choosing *No expiration* saves
    renewing it. If the project belongs to a team rather than your personal
@@ -216,7 +216,7 @@ If the Pi is off, creating a lobby says "The game server is offline".
    scripts/setup-server.sh --quick \
      --vercel-site https://your-project.vercel.app \
      --vercel-token <TOKEN> \
-     --edge-config ecfg_xxxxxxxx
+     --global-config ecfg_xxxxxxxx
    ```
 
    Add `--vercel-team team_xxxxxxxx` for a team project. The script also
@@ -249,7 +249,7 @@ want to play on with `--allow-origin https://….vercel.app`.
 ### With your own domain instead
 
 A tunnel on your own domain (`--hostname`, below) has a fixed address, so no
-Edge Config is needed. In the Vercel project, set the environment variable
+Global Config store is needed. In the Vercel project, set the environment variable
 `VITE_API_ORIGIN` to `https://manhunt.yourdomain.com` (no trailing slash) and
 redeploy. Then allow the site on the server with
 `scripts/setup-server.sh --allow-origin https://your-project.vercel.app`.

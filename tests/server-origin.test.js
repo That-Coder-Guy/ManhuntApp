@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeServerOrigin } from '../shared/serverOrigin.js';
-import { edgeConfigRequest, publishIfChanged } from '../scripts/publish-address.mjs';
+import { globalConfigRequest, publishIfChanged } from '../scripts/publish-address.mjs';
 import handler from '../api/server-origin.js';
 
 const TUNNEL = 'https://calm-river-otter.trycloudflare.com';
@@ -15,13 +15,13 @@ test('normalizeServerOrigin keeps only HTTPS origins', () => {
     }
 });
 
-test('edgeConfigRequest upserts the address, with the team when given', () => {
-    const { url, init } = edgeConfigRequest({ token: 'tok', edgeConfigId: 'ecfg_abc', origin: TUNNEL });
+test('globalConfigRequest upserts the address, with the team when given', () => {
+    const { url, init } = globalConfigRequest({ token: 'tok', globalConfigId: 'ecfg_abc', origin: TUNNEL });
     assert.equal(url, 'https://api.vercel.com/v1/edge-config/ecfg_abc/items');
     assert.equal(init.method, 'PATCH');
     assert.equal(init.headers.Authorization, 'Bearer tok');
     assert.deepEqual(JSON.parse(init.body), { items: [{ operation: 'upsert', key: 'server_origin', value: TUNNEL }] });
-    assert.match(edgeConfigRequest({ token: 't', edgeConfigId: 'ecfg_abc', teamId: 'team_1', origin: TUNNEL }).url, /\?teamId=team_1$/);
+    assert.match(globalConfigRequest({ token: 't', globalConfigId: 'ecfg_abc', teamId: 'team_1', origin: TUNNEL }).url, /\?teamId=team_1$/);
 });
 
 // A fetch stand-in: the tunnel's metrics, its health check, and Vercel's API
@@ -40,7 +40,7 @@ function fakeFetch({ hostname = 'calm-river-otter.trycloudflare.com', healthy = 
     return { fetchImpl, calls };
 }
 
-const config = { token: 'tok', edgeConfigId: 'ecfg_abc', metrics: '127.0.0.1:20241' };
+const config = { token: 'tok', globalConfigId: 'ecfg_abc', metrics: '127.0.0.1:20241' };
 
 test('publishes a new address once it answers', async () => {
     const { fetchImpl, calls } = fakeFetch();
@@ -68,8 +68,9 @@ test('reports a rejected token with a hint', async () => {
     assert.match(outcome.detail, /403.*VERCEL_TOKEN/);
 });
 
-test('the Vercel function answers null, uncached, when no Edge Config is connected', async () => {
-    const saved = process.env.EDGE_CONFIG;
+test('the Vercel function answers null, uncached, when no Global Config is connected', async () => {
+    const saved = { GLOBAL_CONFIG: process.env.GLOBAL_CONFIG, EDGE_CONFIG: process.env.EDGE_CONFIG };
+    delete process.env.GLOBAL_CONFIG;
     delete process.env.EDGE_CONFIG;
     const headers = {};
     let status, body;
@@ -81,7 +82,10 @@ test('the Vercel function answers null, uncached, when no Edge Config is connect
     const error = console.error;
     console.error = () => {};
     try { await handler({}, res); }
-    finally { console.error = error; if (saved !== undefined) process.env.EDGE_CONFIG = saved; }
+    finally {
+        console.error = error;
+        for (const [key, value] of Object.entries(saved)) if (value !== undefined) process.env[key] = value;
+    }
     assert.equal(status, 200);
     assert.deepEqual(body, { origin: null });
     assert.equal(headers['Cache-Control'], 'no-store');

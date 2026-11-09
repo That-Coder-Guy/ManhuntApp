@@ -1,7 +1,7 @@
 // The game server's public address, as the Raspberry Pi publishes it to the
 // Vercel site (see api/server-origin.js and scripts/publish-address.mjs)
 
-// Edge Config key the address is stored under
+// Global Config key the address is stored under
 export const SERVER_ORIGIN_KEY = 'server_origin';
 
 /**

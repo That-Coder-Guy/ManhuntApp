@@ -4,13 +4,13 @@
  *
  * A Cloudflare quick tunnel gets a new https://….trycloudflare.com address
  * each time it starts. This watches the tunnel and, whenever its address
- * changes and answers, writes it to the Vercel project's Edge Config, where
+ * changes and answers, writes it to the Vercel project's Global Config, where
  * the app's /api/server-origin reads it. scripts/setup-server.sh installs it
  * as the manhunt-publish service; it only writes when the address changes.
  *
  * Environment:
  *   VERCEL_TOKEN     Vercel access token (Account Settings → Tokens)
- *   EDGE_CONFIG_ID   The Edge Config store's ID (ecfg_…)
+ *   GLOBAL_CONFIG_ID The Global Config store's ID (ecfg_…)
  *   VERCEL_TEAM_ID   Only if the project belongs to a Vercel team (team_…)
  *   QUICK_METRICS    cloudflared's metrics address (127.0.0.1:20241)
  *   STATE_DIRECTORY  Set by systemd; remembers the last published address
@@ -27,12 +27,13 @@ const REQUEST_TIMEOUT_MS = 8_000;
 
 const timeout = () => AbortSignal.timeout(REQUEST_TIMEOUT_MS);
 
-/** The request that stores `origin` in Edge Config. */
-export function edgeConfigRequest({ token, edgeConfigId, teamId, origin })
+/** The request that stores `origin` in Global Config. */
+export function globalConfigRequest({ token, globalConfigId, teamId, origin })
 {
     const query = teamId ? `?teamId=${encodeURIComponent(teamId)}` : '';
     return {
-        url: `https://api.vercel.com/v1/edge-config/${encodeURIComponent(edgeConfigId)}/items${query}`,
+        // Global Config was called Edge Config; Vercel keeps this endpoint working
+        url: `https://api.vercel.com/v1/edge-config/${encodeURIComponent(globalConfigId)}/items${query}`,
         init: {
             method: 'PATCH',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -76,14 +77,14 @@ export async function publishIfChanged({ config, lastPublished, fetchImpl = fetc
     // Don't hand phones an address that doesn't work yet
     if (!(await answers(origin, fetchImpl))) return { result: 'not-answering', origin };
 
-    const { url, init } = edgeConfigRequest({ ...config, origin });
+    const { url, init } = globalConfigRequest({ ...config, origin });
     try {
         const response = await fetchImpl(url, { ...init, signal: timeout() });
         if (response.ok) return { result: 'published', origin };
         const body = await response.text().catch(() => '');
         const hint = response.status === 401 || response.status === 403
             ? ' (check VERCEL_TOKEN, and VERCEL_TEAM_ID if the project is in a team)'
-            : response.status === 404 ? ' (check EDGE_CONFIG_ID)' : '';
+            : response.status === 404 ? ' (check GLOBAL_CONFIG_ID)' : '';
         return { result: 'failed', origin, detail: `Vercel answered ${response.status}${hint}: ${body.slice(0, 200)}` };
     } catch (error) {
         return { result: 'failed', origin, detail: `Couldn't reach Vercel: ${error.message}` };
@@ -94,11 +95,11 @@ function readConfig(env)
 {
     const config = {
         token: env.VERCEL_TOKEN,
-        edgeConfigId: env.EDGE_CONFIG_ID,
+        globalConfigId: env.GLOBAL_CONFIG_ID,
         teamId: env.VERCEL_TEAM_ID || undefined,
         metrics: env.QUICK_METRICS || '127.0.0.1:20241'
     };
-    const missing = ['VERCEL_TOKEN', 'EDGE_CONFIG_ID'].filter((name) => !env[name]);
+    const missing = ['VERCEL_TOKEN', 'GLOBAL_CONFIG_ID'].filter((name) => !env[name]);
     if (missing.length) throw new Error(`Missing ${missing.join(' and ')}`);
     return config;
 }

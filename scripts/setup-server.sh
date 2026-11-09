@@ -27,7 +27,7 @@
 #       Only the app service (for example behind your own reverse proxy).
 #
 # Frontend on Vercel with a --quick tunnel: add --vercel-site, --vercel-token
-# and --edge-config, and a small service keeps the Vercel site pointed at the
+# and --global-config, and a small service keeps the Vercel site pointed at the
 # tunnel's current address, even after it changes (see the README).
 #
 # Run it as your normal user from inside the repository; it uses sudo where
@@ -56,7 +56,7 @@ QUICK=0
 SHOW_URL=0
 VERCEL_SITE=""
 VERCEL_TOKEN=""
-EDGE_CONFIG_ID=""
+GLOBAL_CONFIG_ID=""
 VERCEL_TEAM_ID=""
 NO_BUILD=0
 DRY_RUN=0
@@ -90,7 +90,7 @@ Options:
                          with the next two, publishes the quick tunnel's
                          address to it whenever it changes
   --vercel-token TOKEN   Vercel access token (Account Settings → Tokens)
-  --edge-config ID       The Vercel project's Edge Config ID (ecfg_…)
+  --global-config ID     The Vercel project's Global Config ID (ecfg_…)
   --vercel-team ID       Only if the project is in a Vercel team (team_…)
   --no-build             Skip npm install and the build (restart only)
   --dry-run              Show what would be done without doing it
@@ -111,7 +111,7 @@ while [[ $# -gt 0 ]]; do
         --url)          SHOW_URL=1; shift ;;
         --vercel-site)  VERCEL_SITE="${2:-}"; shift 2 ;;
         --vercel-token) VERCEL_TOKEN="${2:-}"; shift 2 ;;
-        --edge-config)  EDGE_CONFIG_ID="${2:-}"; shift 2 ;;
+        --global-config) GLOBAL_CONFIG_ID="${2:-}"; shift 2 ;;
         --vercel-team)  VERCEL_TEAM_ID="${2:-}"; shift 2 ;;
         --no-build)     NO_BUILD=1; shift ;;
         --dry-run)      DRY_RUN=1; shift ;;
@@ -133,7 +133,7 @@ done
 (( QUICK == 0 || NO_TUNNEL == 0 )) || die "--quick and --no-tunnel can't be used together"
 [[ -z "$VERCEL_SITE" || "$VERCEL_SITE" =~ ^https://[^/]+$ ]] || die "--vercel-site must look like https://your-app.vercel.app (no path, no trailing slash)"
 [[ -z "$VERCEL_TOKEN" || "$VERCEL_TOKEN" =~ ^[A-Za-z0-9_-]{16,}$ ]] || die "--vercel-token doesn't look like a Vercel access token"
-[[ -z "$EDGE_CONFIG_ID" || "$EDGE_CONFIG_ID" =~ ^ecfg_[A-Za-z0-9]+$ ]] || die "--edge-config must be the store's ID, like ecfg_abc123 (Vercel → Storage → your Edge Config)"
+[[ -z "$GLOBAL_CONFIG_ID" || "$GLOBAL_CONFIG_ID" =~ ^ecfg_[A-Za-z0-9]+$ ]] || die "--global-config must be the store's ID, like ecfg_abc123 (Vercel → Storage → your Global Config store)"
 [[ -z "$VERCEL_TEAM_ID" || "$VERCEL_TEAM_ID" =~ ^team_[A-Za-z0-9]+$ ]] || die "--vercel-team must look like team_abc123"
 
 # ---------- helpers ----------
@@ -261,14 +261,14 @@ PUBLISH_ENV="$CF_DIR/$PUBLISH_SERVICE_NAME.env"
 PUBLISH_UNIT="$SYSTEMD_DIR/$PUBLISH_SERVICE_NAME.service"
 [[ -n "$VERCEL_SITE" ]] || VERCEL_SITE="$(existing_secret "$PUBLISH_ENV" VERCEL_SITE)"
 [[ -n "$VERCEL_TOKEN" ]] || VERCEL_TOKEN="$(existing_secret "$PUBLISH_ENV" VERCEL_TOKEN)"
-[[ -n "$EDGE_CONFIG_ID" ]] || EDGE_CONFIG_ID="$(existing_secret "$PUBLISH_ENV" EDGE_CONFIG_ID)"
+[[ -n "$GLOBAL_CONFIG_ID" ]] || GLOBAL_CONFIG_ID="$(existing_secret "$PUBLISH_ENV" GLOBAL_CONFIG_ID)"
 [[ -n "$VERCEL_TEAM_ID" ]] || VERCEL_TEAM_ID="$(existing_secret "$PUBLISH_ENV" VERCEL_TEAM_ID)"
 PUBLISH=0
-if [[ -n "$VERCEL_SITE$VERCEL_TOKEN$EDGE_CONFIG_ID" ]]; then
+if [[ -n "$VERCEL_SITE$VERCEL_TOKEN$GLOBAL_CONFIG_ID" ]]; then
     missing=()
     [[ -n "$VERCEL_SITE" ]] || missing+=(--vercel-site)
     [[ -n "$VERCEL_TOKEN" ]] || missing+=(--vercel-token)
-    [[ -n "$EDGE_CONFIG_ID" ]] || missing+=(--edge-config)
+    [[ -n "$GLOBAL_CONFIG_ID" ]] || missing+=(--global-config)
     (( ${#missing[@]} == 0 )) || die "Publishing to Vercel also needs: ${missing[*]}"
     [[ "$MODE" == quick ]] || die "Publishing to Vercel is for --quick tunnels. With a fixed address, set VITE_API_ORIGIN in Vercel instead (see the README)."
     PUBLISH=1
@@ -536,7 +536,7 @@ if (( PUBLISH )); then
     step "Pointing $VERCEL_SITE at this server"
     PUBLISH_ENV_CONTENT="VERCEL_SITE=$VERCEL_SITE
 VERCEL_TOKEN=$VERCEL_TOKEN
-EDGE_CONFIG_ID=$EDGE_CONFIG_ID${VERCEL_TEAM_ID:+
+GLOBAL_CONFIG_ID=$GLOBAL_CONFIG_ID${VERCEL_TEAM_ID:+
 VERCEL_TEAM_ID=$VERCEL_TEAM_ID}"
     PUBLISH_CHANGED=0
     # The token is a secret: root-only, like the tunnel token
@@ -588,9 +588,9 @@ WantedBy=multi-user.target"
             ok "$VERCEL_SITE/api/server-origin → $PUBLIC_URL"
         else
             warn "The Vercel site doesn't report this server's address yet."
-            warn "  1. journalctl -u $PUBLISH_SERVICE_NAME -n 20 shows a wrong token or Edge Config ID."
-            warn "     Fix it by re-running with --vercel-token / --edge-config."
-            warn "  2. If it says \"Published\", connect the Edge Config store to the Vercel"
+            warn "  1. journalctl -u $PUBLISH_SERVICE_NAME -n 20 shows a wrong token or Global Config ID."
+            warn "     Fix it by re-running with --vercel-token / --global-config."
+            warn "  2. If it says \"Published\", connect the Global Config store to the Vercel"
             warn "     project and redeploy, then: curl $VERCEL_SITE/api/server-origin"
         fi
     fi
@@ -619,7 +619,7 @@ note "Update:   git pull && scripts/setup-server.sh"
 if (( PUBLISH )); then
     :
 elif [[ "$MODE" == quick ]]; then
-    note "Frontend on Vercel? Re-run with --vercel-site, --vercel-token and --edge-config"
+    note "Frontend on Vercel? Re-run with --vercel-site, --vercel-token and --global-config"
     note "          so it follows this changing address (see the README)."
 else
     SHOWN_HOST="${PUBLIC_HOST:-YOUR-SERVER-HOSTNAME}"
