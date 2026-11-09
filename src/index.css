@@ -254,14 +254,24 @@ ion-modal ion-toolbar ion-buttons ion-button {
   font-weight: 600;
 }
 
+/* The app icon at glyph size (public/icon.svg), sized to sit with the title */
 .brand-mark {
-  width: var(--icon-size);
-  height: var(--icon-size);
+  width: 1.5rem;
+  height: 1.5rem;
   flex-shrink: 0;
 }
 
-.brand-mark-tip { fill: var(--accent); }
-.brand-mark-tail { fill: var(--text-3); }
+/* Same faces as the icon: the needle lit from the left */
+.brand-mark-tip-light { fill: #ffa05c; }
+.brand-mark-tip-dark { fill: #e2600f; }
+.brand-mark-tail-light { fill: #7a8296; }
+.brand-mark-tail-dark { fill: #4d5466; }
+.brand-mark-hub { fill: var(--text-1); }
+.brand-mark-dot {
+  fill: var(--positive);
+  stroke: var(--ink-1);   /* a gap between the dot and the needle's tip */
+  stroke-width: 1.4;
+}
 
 /* ===== CONNECTION / GPS BANNERS (inside the fixed header) ===== */
 .connection-banner {
