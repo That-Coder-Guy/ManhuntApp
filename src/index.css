@@ -64,13 +64,13 @@
   /* ---- Type ---- */
   --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  --fs-meta: 0.75rem;      /* 12 / 16 */
-  --fs-caption: 0.8125rem; /* 13 / 20 */
-  --fs-body: 0.9375rem;    /* 15 / 20 */
-  --fs-title: 1.0625rem;   /* 17 / 24 */
-  --fs-heading: 1.25rem;   /* 20 / 28 */
-  --fs-page: 1.75rem;      /* 28 / 32 */
-  --fs-figure: 2.5rem;     /* 40 / 48 */
+  --fs-meta: 0.8125rem;    /* 13 / 16 */
+  --fs-caption: 0.875rem;  /* 14 / 20 */
+  --fs-body: 1rem;         /* 16 / 20 */
+  --fs-title: 1.125rem;    /* 18 / 24 */
+  --fs-heading: 1.375rem;  /* 22 / 28 */
+  --fs-page: 1.875rem;     /* 30 / 32 */
+  --fs-figure: 2.75rem;    /* 44 / 48 */
 
   /* ---- Ink ramp (night) ---- */
   --ink-0: #07080d;
@@ -1423,6 +1423,11 @@ ion-item.lobby-player-row ion-label h2 {
 }
 
 .meta-warning {
+  /* Sized to the meta line, so the mono font's taller text box never
+     pokes out of a row's clipped freshness line */
+  display: inline-block;
+  line-height: 1rem;
+  vertical-align: top;
   color: var(--negative);
 }
 
@@ -1554,7 +1559,7 @@ ion-content .name-card.settings-row {
 .status-value {
   white-space: nowrap;
   font-family: var(--font-mono);
-  font-size: 2rem;
+  font-size: 2.125rem;
   line-height: 2.5rem;
   font-weight: 500;
   color: var(--text-1);
