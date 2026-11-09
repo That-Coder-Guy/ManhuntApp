@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeServerOrigin } from '../shared/serverOrigin.js';
-import { globalConfigRequest, publishIfChanged } from '../scripts/publish-address.mjs';
+import { globalConfigRequest, publishIfChanged, writeOrigin } from '../scripts/publish-address.mjs';
 import handler from '../api/server-origin.js';
 
 const TUNNEL = 'https://calm-river-otter.trycloudflare.com';
@@ -17,7 +17,7 @@ test('normalizeServerOrigin keeps only HTTPS origins', () => {
 
 test('globalConfigRequest upserts the address, with the team when given', () => {
     const { url, init } = globalConfigRequest({ token: 'tok', globalConfigId: 'ecfg_abc', origin: TUNNEL });
-    assert.equal(url, 'https://api.vercel.com/v1/edge-config/ecfg_abc/items');
+    assert.equal(url, 'https://api.vercel.com/v1/global-config/ecfg_abc/items');
     assert.equal(init.method, 'PATCH');
     assert.equal(init.headers.Authorization, 'Bearer tok');
     assert.deepEqual(JSON.parse(init.body), { items: [{ operation: 'upsert', key: 'server_origin', value: TUNNEL }] });
@@ -25,7 +25,7 @@ test('globalConfigRequest upserts the address, with the team when given', () => 
 });
 
 // A fetch stand-in: the tunnel's metrics, its health check, and Vercel's API
-function fakeFetch({ hostname = 'calm-river-otter.trycloudflare.com', healthy = true, vercelStatus = 200 } = {})
+function fakeFetch({ hostname = 'calm-river-otter.trycloudflare.com', healthy = true, vercelStatus = 200, vercel } = {})
 {
     const calls = [];
     const fetchImpl = async (url, init = {}) => {
@@ -34,7 +34,10 @@ function fakeFetch({ hostname = 'calm-river-otter.trycloudflare.com', healthy = 
             return hostname ? Response.json({ hostname }) : new Response('', { status: 404 });
         }
         if (url.endsWith('/manhunt-api/health')) return new Response('{}', { status: healthy ? 200 : 530 });
-        if (url.startsWith('https://api.vercel.com/')) return new Response('{"error":"x"}', { status: vercelStatus });
+        if (url.startsWith('https://api.vercel.com/')) {
+            if (vercel) return vercel(url, JSON.parse(init.body).items[0].operation);
+            return new Response('{"error":"x"}', { status: vercelStatus });
+        }
         throw new Error(`unexpected ${url}`);
     };
     return { fetchImpl, calls };
@@ -89,4 +92,45 @@ test('the Vercel function answers null, uncached, when no Global Config is conne
     assert.equal(status, 200);
     assert.deepEqual(body, { origin: null });
     assert.equal(headers['Cache-Control'], 'no-store');
+});
+
+const ITEM_NOT_FOUND = () => new Response('{"error":{"code":"not_found","message":"Edge Config Item not found."}}', { status: 404 });
+
+test('falls back to "create" when upsert says the item is not found', async () => {
+    // What a Pi saw: the store exists, but upsert of a new key is refused
+    const tried = [];
+    const vercel = (url, op) => {
+        tried.push(`${url.split('/')[4]} ${op}`);
+        return op === 'create' && url.includes('/global-config/') ? Response.json({ status: 'ok' }) : ITEM_NOT_FOUND();
+    };
+    const { fetchImpl } = fakeFetch({ vercel });
+    const cfg = { ...config };
+    assert.equal((await publishIfChanged({ config: cfg, lastPublished: '', fetchImpl })).result, 'published');
+    assert.deepEqual(tried, ['global-config upsert', 'global-config create']);
+
+    // The way that worked is tried first next time
+    tried.length = 0;
+    assert.equal((await publishIfChanged({ config: cfg, lastPublished: 'https://old.trycloudflare.com', fetchImpl })).result, 'published');
+    assert.deepEqual(tried, ['global-config create']);
+});
+
+test('falls back to the older edge-config API', async () => {
+    const vercel = (url) => (url.includes('/edge-config/') ? Response.json({ status: 'ok' }) : new Response('Not Found', { status: 404 }));
+    const { fetchImpl } = fakeFetch({ vercel });
+    const written = await writeOrigin(config, TUNNEL, fetchImpl);
+    assert.equal(written.ok, true);
+    assert.deepEqual(written.attempt, { api: 'edge-config', operation: 'upsert' });
+});
+
+test('a refused token stops at the first try; all-404 names the store ID', async () => {
+    let count = 0;
+    let { fetchImpl } = fakeFetch({ vercel: () => { count++; return new Response('{}', { status: 403 }); } });
+    let outcome = await publishIfChanged({ config: { ...config }, lastPublished: '', fetchImpl });
+    assert.equal(count, 1);
+    assert.match(outcome.detail, /403.*VERCEL_TOKEN/);
+
+    ({ fetchImpl } = fakeFetch({ vercel: ITEM_NOT_FOUND }));
+    outcome = await publishIfChanged({ config: { ...config }, lastPublished: '', fetchImpl });
+    assert.equal(outcome.result, 'failed');
+    assert.match(outcome.detail, /^Vercel answered 404 \(check GLOBAL_CONFIG_ID.*Tried: global-config upsert → 404, global-config create → 404, edge-config upsert → 404, edge-config create → 404/);
 });

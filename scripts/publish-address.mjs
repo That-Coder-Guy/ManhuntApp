@@ -27,19 +27,59 @@ const REQUEST_TIMEOUT_MS = 8_000;
 
 const timeout = () => AbortSignal.timeout(REQUEST_TIMEOUT_MS);
 
+// Ways to store the address, tried in order until one works. Vercel's current
+// API is /global-config; /edge-config is the older name for the same stores.
+// "upsert" creates or replaces the key, but if the API refuses it for a key
+// that doesn't exist yet, "create" adds it.
+export const WRITE_ATTEMPTS = [
+    { api: 'global-config', operation: 'upsert' },
+    { api: 'global-config', operation: 'create' },
+    { api: 'edge-config', operation: 'upsert' },
+    { api: 'edge-config', operation: 'create' }
+];
+
 /** The request that stores `origin` in Global Config. */
-export function globalConfigRequest({ token, globalConfigId, teamId, origin })
+export function globalConfigRequest({ token, globalConfigId, teamId, origin }, attempt = WRITE_ATTEMPTS[0])
 {
     const query = teamId ? `?teamId=${encodeURIComponent(teamId)}` : '';
     return {
-        // Global Config was called Edge Config; Vercel keeps this endpoint working
-        url: `https://api.vercel.com/v1/edge-config/${encodeURIComponent(globalConfigId)}/items${query}`,
+        url: `https://api.vercel.com/v1/${attempt.api}/${encodeURIComponent(globalConfigId)}/items${query}`,
         init: {
             method: 'PATCH',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ items: [{ operation: 'upsert', key: SERVER_ORIGIN_KEY, value: origin }] })
+            body: JSON.stringify({ items: [{ operation: attempt.operation, key: SERVER_ORIGIN_KEY, value: origin }] })
         }
     };
+}
+
+/**
+ * Store `origin`, trying each way in turn. 'not found' or 'conflict' answers
+ * move on to the next way; anything else (a refused token, say) stops.
+ * `preferred` is the attempt that worked last time, tried first.
+ */
+export async function writeOrigin(config, origin, fetchImpl = fetch, preferred = null)
+{
+    const attempts = preferred ? [preferred, ...WRITE_ATTEMPTS.filter((a) => a !== preferred)] : WRITE_ATTEMPTS;
+    const failures = [];
+    for (const attempt of attempts) {
+        const { url, init } = globalConfigRequest({ ...config, origin }, attempt);
+        const response = await fetchImpl(url, { ...init, signal: timeout() });
+        if (response.ok) return { ok: true, attempt };
+        const body = (await response.text().catch(() => '')).slice(0, 160);
+        failures.push({ attempt, status: response.status, body });
+        if (![400, 404, 409].includes(response.status)) break;
+    }
+    return { ok: false, failures };
+}
+
+function describeFailures(failures)
+{
+    const last = failures[failures.length - 1];
+    const tried = failures.map((f) => `${f.attempt.api} ${f.attempt.operation} → ${f.status}`).join(', ');
+    const hint = last.status === 401 || last.status === 403
+        ? ' (check VERCEL_TOKEN, and VERCEL_TEAM_ID if the project is in a team)'
+        : failures.every((f) => f.status === 404) ? ' (check GLOBAL_CONFIG_ID, and VERCEL_TEAM_ID if the project is in a team)' : '';
+    return `Vercel answered ${last.status}${hint}. Tried: ${tried}. Last reply: ${last.body}`;
 }
 
 /** The quick tunnel's current origin, or null while it has none. */
@@ -77,15 +117,13 @@ export async function publishIfChanged({ config, lastPublished, fetchImpl = fetc
     // Don't hand phones an address that doesn't work yet
     if (!(await answers(origin, fetchImpl))) return { result: 'not-answering', origin };
 
-    const { url, init } = globalConfigRequest({ ...config, origin });
     try {
-        const response = await fetchImpl(url, { ...init, signal: timeout() });
-        if (response.ok) return { result: 'published', origin };
-        const body = await response.text().catch(() => '');
-        const hint = response.status === 401 || response.status === 403
-            ? ' (check VERCEL_TOKEN, and VERCEL_TEAM_ID if the project is in a team)'
-            : response.status === 404 ? ' (check GLOBAL_CONFIG_ID)' : '';
-        return { result: 'failed', origin, detail: `Vercel answered ${response.status}${hint}: ${body.slice(0, 200)}` };
+        const written = await writeOrigin(config, origin, fetchImpl, config.preferredAttempt);
+        if (written.ok) {
+            config.preferredAttempt = written.attempt; // skip straight to it next time
+            return { result: 'published', origin };
+        }
+        return { result: 'failed', origin, detail: describeFailures(written.failures) };
     } catch (error) {
         return { result: 'failed', origin, detail: `Couldn't reach Vercel: ${error.message}` };
     }

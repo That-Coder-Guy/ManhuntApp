@@ -264,8 +264,8 @@ check_vercel_site() {
         warn "Vercel refused the Pi's token: re-run with --vercel-token <a new token>, and add"
         warn "--vercel-team team_… if the project is in a team."
     elif [[ "$publisher" == "Vercel answered 404"* ]]; then
-        warn "Vercel doesn't know store $GLOBAL_CONFIG_ID: re-run with --global-config <the store's ID>,"
-        warn "and --vercel-team team_… if the project is in a team."
+        warn "Vercel wouldn't store the address in $GLOBAL_CONFIG_ID. Check the ID on the store's"
+        warn "page (Storage → the store), and add --vercel-team team_… if the project is in a team."
     else
         warn "The site answered: $(head -c 200 "$body_file" 2>/dev/null)"
     fi
