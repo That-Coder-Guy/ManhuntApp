@@ -1,4 +1,6 @@
 # Runs the Manhunt server (frontend + API + Socket.IO) on boot.
+# scripts/setup-server.sh writes an equivalent unit for you; this file is
+# for setting it up by hand.
 # Install on the Pi (edit User / paths first if yours differ):
 #   sudo cp deploy/manhunt.service /etc/systemd/system/
 #   sudo systemctl daemon-reload && sudo systemctl enable --now manhunt

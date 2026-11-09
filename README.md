@@ -174,8 +174,9 @@ the server runs somewhere always-on (a Raspberry Pi with a Cloudflare tunnel,
 below, works well).
 
 1. **Get the server a public HTTPS address first**, e.g.
-   `https://manhunt-api.yourdomain.com` from a named Cloudflare tunnel. It must
-   be HTTPS: a page on Vercel can't talk to a plain `http://` server.
+   `https://manhunt-api.yourdomain.com`; `scripts/setup-server.sh` does this
+   with a Cloudflare tunnel ([below](#set-up-the-server-with-cloudflare-raspberry-pi-or-any-linux-box)).
+   It must be HTTPS: a page on Vercel can't talk to a plain `http://` server.
 2. **Import the repo in Vercel** (Add New → Project → this repository).
    `vercel.json` already sets the Vite build, the `dist` output, and a rewrite
    so invite links like `/lobby/<id>` open the app instead of a 404.
@@ -184,11 +185,10 @@ below, works well).
    `VITE_API_ORIGIN` = `https://manhunt-api.yourdomain.com` (no trailing
    slash). It's read at build time, so redeploy after changing it. If it's
    missing, the app falls back to `https://api.hankinit.work`.
-4. **Allow the Vercel site on the server**: start it with
-   `ALLOWED_ORIGINS=https://your-project.vercel.app` (comma-separate several,
-   e.g. a custom domain too). On the Pi, add
-   `Environment=ALLOWED_ORIGINS=https://your-project.vercel.app` to
-   `deploy/manhunt.service` and restart it. Without this, browsers block the
+4. **Allow the Vercel site on the server**: run
+   `scripts/setup-server.sh --allow-origin https://your-project.vercel.app`
+   on it (repeat `--allow-origin` for a custom domain too), or set
+   `ALLOWED_ORIGINS` yourself if you run the server another way. Without this, browsers block the
    requests: creating a lobby says "Couldn't create the lobby" and invite
    links show "Can't join this lobby".
 5. **Deploy**, then open the Vercel URL on a phone and create a lobby. The
@@ -215,71 +215,110 @@ tunnel**, and prints a random `https://….trycloudflare.com` URL. Open it on
 your phone, then use the in-app **Invite** button (QR code / link) to get
 everyone else in. The URL changes every run and needs no Cloudflare account.
 
-For a **permanent URL on your own domain**, create a named tunnel (below) and
-run `TUNNEL_TOKEN=<token> PUBLIC_URL=https://manhunt.yourdomain.com npm run tunnel`.
+For a **permanent URL on your own domain** on an always-on machine, use
+`scripts/setup-server.sh` ([below](#set-up-the-server-with-cloudflare-raspberry-pi-or-any-linux-box)).
 
 Prerequisite: the `cloudflared` CLI
 ([downloads](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)).
 
-## Host on a Raspberry Pi
+## Set up the server with Cloudflare (Raspberry Pi or any Linux box)
 
-A Pi 5 (or a Pi 4) runs the whole app comfortably. The server serves the built
-frontend itself, so there is one process and one port.
+`scripts/setup-server.sh` takes a fresh Raspberry Pi (or any Debian/Ubuntu
+machine) to a server anyone can reach at `https://manhunt.yourdomain.com`:
+it installs Node 22 if needed, builds the app, runs it as a service that
+starts on boot, installs `cloudflared`, and connects a Cloudflare Tunnel.
+A Pi 4 or 5 runs the whole app comfortably. Nothing on your router needs
+changing, and the tunnel is free with no bandwidth cap for an app like this.
 
-**1. Install Node 22 and the app**
+### What you need
+
+- The Pi (Raspberry Pi OS 64-bit) or another Debian/Ubuntu machine, online.
+- A free Cloudflare account with a **domain** on it, for a permanent address.
+  Add one under **Add a site** (then point your registrar's nameservers at
+  Cloudflare), or buy one through Cloudflare Registrar. No domain? See
+  [without a domain](#without-a-domain).
+
+### Run it
 
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt-get install -y nodejs git
-
+sudo apt-get update && sudo apt-get install -y git
 git clone https://github.com/That-Coder-Guy/ManhuntApp.git ~/ManhuntApp
 cd ~/ManhuntApp
-npm ci && npm --prefix server ci
-npm run build:selfhost
+scripts/setup-server.sh --hostname manhunt.yourdomain.com
 ```
 
-**2. Run it on boot** with the included systemd unit (edit `User` and the
-paths in it if your user isn't `pi`):
+The first run prints a Cloudflare login link. Open it on any device (your
+phone is fine), pick the domain, and the script carries on: it creates a
+tunnel called `manhunt`, adds the DNS record for the hostname, starts both
+services, and checks that `https://manhunt.yourdomain.com` answers. Run it as
+your normal user; it asks for `sudo` when it needs to.
+
+Prefer the dashboard? Create the tunnel there (**Zero Trust → Networks →
+Tunnels → Create a tunnel → Cloudflared**), give it a public hostname with
+service `http://localhost:3001`, copy the token from the install command it
+shows, and run:
 
 ```bash
-sudo cp deploy/manhunt.service /etc/systemd/system/
+scripts/setup-server.sh --token <TOKEN> --hostname manhunt.yourdomain.com
+```
+
+(`--hostname` is only used here to check the address works.) The token is
+stored in `/etc/cloudflared/manhunt-tunnel.env`, readable by root only.
+
+Frontend on Vercel? Add the Vercel address so browsers may use the server:
+
+```bash
+scripts/setup-server.sh --allow-origin https://your-project.vercel.app
+```
+
+Add `--dry-run` to any command to see what it would do without changing
+anything; `--help` lists every option (`--port`, `--tunnel-name`,
+`--no-tunnel`, `--no-build`).
+
+### Update
+
+```bash
+cd ~/ManhuntApp && git pull && scripts/setup-server.sh
+```
+
+Re-running keeps the port, allowed origins and tunnel from last time,
+rebuilds, and restarts. Restarting ends live games (lobbies are in memory),
+so update between rounds.
+
+### Check on it
+
+```bash
+systemctl status manhunt manhunt-tunnel        # both should be "active (running)"
+journalctl -u manhunt -f                       # app logs
+journalctl -u manhunt-tunnel -f                # tunnel logs
+curl https://manhunt.yourdomain.com/manhunt-api/health   # {"status":"success"}
+```
+
+- **Error 1033 or 530** from Cloudflare: the tunnel isn't connected; check
+  `journalctl -u manhunt-tunnel`.
+- **Error 502**: the tunnel is up but the app isn't; check `journalctl -u manhunt`.
+- **Not resolving yet**: a brand-new DNS record can take a few minutes.
+
+### Without a domain
+
+`npm run tunnel` (on any machine) builds, starts the server and opens a free
+Cloudflare *quick tunnel* with a random `https://….trycloudflare.com` address.
+It needs no account, but the address changes every time it starts, so it suits
+a one-off game rather than a permanent server. Install `cloudflared` first.
+
+### Remove it
+
+```bash
+sudo systemctl disable --now manhunt manhunt-tunnel
+sudo rm /etc/systemd/system/manhunt.service /etc/systemd/system/manhunt-tunnel.service
+sudo rm -f /etc/cloudflared/manhunt-tunnel.*   # tunnel config/token
 sudo systemctl daemon-reload
-sudo systemctl enable --now manhunt
-curl http://localhost:3001/manhunt-api/health   # {"status":"success"}
+cloudflared tunnel delete manhunt              # if the script created it
 ```
 
-**3. Put it online with a named Cloudflare tunnel** (needs a domain on your
-free Cloudflare account):
+Doing it by hand instead: `deploy/manhunt.service` is a plain systemd unit for
+the app. Server settings, as environment variables:
 
-```bash
-curl -L -o cloudflared.deb \
-  https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64.deb
-sudo dpkg -i cloudflared.deb
-```
-
-In the Cloudflare dashboard: **Zero Trust → Networks → Tunnels → Create a
-tunnel → Cloudflared**. Copy the install command it shows
-(`sudo cloudflared service install <token>`) and run it on the Pi; that keeps
-the tunnel running on boot. Then add a **public hostname** such as
-`manhunt.yourdomain.com` with service `http://localhost:3001`.
-
-No domain? `cloudflared tunnel --url http://localhost:3001` gives a free quick
-tunnel instead, with a random URL that changes when it restarts.
-
-**Updating**
-
-```bash
-cd ~/ManhuntApp && git pull
-npm ci && npm --prefix server ci && npm run build:selfhost
-sudo systemctl restart manhunt
-```
-
-Notes:
-- Restarting the server ends live games (lobbies are in memory).
-- A single-origin deployment works on any hostname; the origin allowlist only
-  matters for split hosting.
-
-Environment knobs (server):
 - `PORT` — server port (default `3001`).
 - `ALLOWED_ORIGINS` — extra comma-separated origins to allow (split hosting).
 - `TRUST_ALL_ORIGINS=1` — allow any origin (disables the CORS allowlist).

@@ -105,7 +105,7 @@ async function main()
     if (spawnSync('cloudflared', ['--version'], { stdio: 'ignore' }).error) {
         console.error('\n✖ cloudflared not found on PATH.');
         console.error('  Install: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/');
-        console.error('  (Raspberry Pi: see "Host on a Raspberry Pi" in the README.)\n');
+        console.error('  (A permanent server: scripts/setup-server.sh installs it for you.)\n');
         process.exit(1);
     }
 
