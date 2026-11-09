@@ -215,7 +215,8 @@ tunnel**, and prints a random `https://….trycloudflare.com` URL. Open it on
 your phone, then use the in-app **Invite** button (QR code / link) to get
 everyone else in. The URL changes every run and needs no Cloudflare account.
 
-For a **permanent URL on your own domain** on an always-on machine, use
+To keep the server running on an always-on machine such as a Raspberry Pi,
+with the same kind of trycloudflare.com address or your own domain, use
 `scripts/setup-server.sh` ([below](#set-up-the-server-with-cloudflare-raspberry-pi-or-any-linux-box)).
 
 Prerequisite: the `cloudflared` CLI
@@ -223,35 +224,71 @@ Prerequisite: the `cloudflared` CLI
 
 ## Set up the server with Cloudflare (Raspberry Pi or any Linux box)
 
-`scripts/setup-server.sh` takes a fresh Raspberry Pi (or any Debian/Ubuntu
-machine) to a server anyone can reach at `https://manhunt.yourdomain.com`:
-it installs Node 22 if needed, builds the app, runs it as a service that
-starts on boot, installs `cloudflared`, and connects a Cloudflare Tunnel.
-A Pi 4 or 5 runs the whole app comfortably. Nothing on your router needs
-changing, and the tunnel is free with no bandwidth cap for an app like this.
+`scripts/setup-server.sh` turns a fresh Raspberry Pi (or any Debian/Ubuntu
+machine) into a server anyone can reach over HTTPS. It installs Node 22 if
+needed, builds the app, and runs it as a service that starts on boot. It also
+installs `cloudflared` and connects a Cloudflare Tunnel. A Pi 4 or 5 runs
+the whole app comfortably. Nothing on your router needs changing, and the
+tunnel is free with no bandwidth cap for an app like this.
+
+There are two kinds of address:
+
+| | Cloudflare's address (`--quick`) | Your own domain (`--hostname`) |
+| --- | --- | --- |
+| Looks like | `https://calm-river-otter.trycloudflare.com` | `https://manhunt.yourdomain.com` |
+| Needs | Nothing: no account, no domain | A free Cloudflare account with a domain on it |
+| Address | Changes whenever the tunnel restarts (a reboot, say) | Fixed |
+| Frontend on Vercel | No; open the Pi's address directly | Yes |
 
 ### What you need
 
 - The Pi (Raspberry Pi OS 64-bit) or another Debian/Ubuntu machine, online.
-- A free Cloudflare account with a **domain** on it, for a permanent address.
-  Add one under **Add a site** (then point your registrar's nameservers at
-  Cloudflare), or buy one through Cloudflare Registrar. No domain? See
-  [without a domain](#without-a-domain).
+- For your own domain only: a free Cloudflare account with the domain added
+  under **Add a site** (point your registrar's nameservers at Cloudflare), or
+  bought through Cloudflare Registrar.
 
-### Run it
+### Run it: Cloudflare's address
 
 ```bash
 sudo apt-get update && sudo apt-get install -y git
 git clone https://github.com/That-Coder-Guy/ManhuntApp.git ~/ManhuntApp
 cd ~/ManhuntApp
+scripts/setup-server.sh --quick
+```
+
+Run it as your normal user; it asks for `sudo` when it needs to. At the end
+it prints the address:
+
+```
+  Play at:  https://calm-river-otter.trycloudflare.com
+```
+
+Open it on your phone and start a lobby. The in-app **Invite** QR code and
+link use whatever address you opened, so friends join through the same one.
+
+The address stays the same while the tunnel keeps running, but Cloudflare
+hands out a new one each time it restarts: after a reboot, a power cut, or
+re-running the script with a different `--port`. Re-running the script with
+nothing changed leaves the tunnel, and its address, alone. To see the current
+address at any time:
+
+```bash
+scripts/setup-server.sh --url
+```
+
+Cloudflare offers quick tunnels without any uptime guarantee. They are
+reliable enough for games with friends; for something permanent, use a domain.
+
+### Run it: your own domain
+
+```bash
 scripts/setup-server.sh --hostname manhunt.yourdomain.com
 ```
 
 The first run prints a Cloudflare login link. Open it on any device (your
-phone is fine), pick the domain, and the script carries on: it creates a
-tunnel called `manhunt`, adds the DNS record for the hostname, starts both
-services, and checks that `https://manhunt.yourdomain.com` answers. Run it as
-your normal user; it asks for `sudo` when it needs to.
+phone is fine) and pick the domain. The script then creates a tunnel called
+`manhunt`, adds the DNS record for the hostname, starts both services, and
+checks that `https://manhunt.yourdomain.com` answers.
 
 Prefer the dashboard? Create the tunnel there (**Zero Trust → Networks →
 Tunnels → Create a tunnel → Cloudflared**), give it a public hostname with
@@ -273,7 +310,8 @@ scripts/setup-server.sh --allow-origin https://your-project.vercel.app
 
 Add `--dry-run` to any command to see what it would do without changing
 anything; `--help` lists every option (`--port`, `--tunnel-name`,
-`--no-tunnel`, `--no-build`).
+`--no-tunnel`, `--no-build`). You can switch between kinds of address later
+by re-running with `--quick` or `--hostname`.
 
 ### Update
 
@@ -282,8 +320,9 @@ cd ~/ManhuntApp && git pull && scripts/setup-server.sh
 ```
 
 Re-running keeps the port, allowed origins and tunnel from last time,
-rebuilds, and restarts. Restarting ends live games (lobbies are in memory),
-so update between rounds.
+rebuilds, and restarts the app. The tunnel is only restarted if its settings
+changed, so a quick tunnel keeps its address. Restarting the app ends live
+games (lobbies are in memory), so update between rounds.
 
 ### Check on it
 
@@ -291,20 +330,22 @@ so update between rounds.
 systemctl status manhunt manhunt-tunnel        # both should be "active (running)"
 journalctl -u manhunt -f                       # app logs
 journalctl -u manhunt-tunnel -f                # tunnel logs
-curl https://manhunt.yourdomain.com/manhunt-api/health   # {"status":"success"}
+scripts/setup-server.sh --url                  # the public address
+curl https://<your-address>/manhunt-api/health   # {"status":"success"}
 ```
 
 - **Error 1033 or 530** from Cloudflare: the tunnel isn't connected; check
   `journalctl -u manhunt-tunnel`.
 - **Error 502**: the tunnel is up but the app isn't; check `journalctl -u manhunt`.
-- **Not resolving yet**: a brand-new DNS record can take a few minutes.
+- **Not resolving yet**: a brand-new DNS record or quick-tunnel address can
+  take a minute or two.
 
-### Without a domain
+### Just one game, no server
 
-`npm run tunnel` (on any machine) builds, starts the server and opens a free
-Cloudflare *quick tunnel* with a random `https://….trycloudflare.com` address.
-It needs no account, but the address changes every time it starts, so it suits
-a one-off game rather than a permanent server. Install `cloudflared` first.
+`npm run tunnel` (on any machine with `cloudflared` installed) builds, starts
+the server and opens a quick tunnel in the foreground, without installing any
+services. It prints the `https://….trycloudflare.com` address, and Ctrl-C
+stops everything.
 
 ### Remove it
 

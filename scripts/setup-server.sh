@@ -4,11 +4,16 @@
 # Ubuntu, Debian) and publish it over HTTPS with a Cloudflare Tunnel.
 #
 # Safe to re-run: it skips what is already installed, rebuilds the app, and
-# restarts the services, so it is also how you deploy an update after
-# `git pull`. Settings from earlier runs (port, allowed origins, tunnel) are
-# kept unless you pass new ones.
+# restarts it, so it is also how you deploy an update after `git pull`.
+# Settings from earlier runs (port, allowed origins, tunnel) are kept unless
+# you pass new ones, and the tunnel is only restarted if its settings changed.
 #
 # Tunnel modes:
+#   --quick
+#       No domain or Cloudflare account needed: Cloudflare gives the server a
+#       free https://<random-words>.trycloudflare.com address. The address
+#       changes whenever the tunnel restarts (a reboot, for example); run
+#       `scripts/setup-server.sh --url` to see the current one.
 #   --hostname manhunt.example.com
 #       Fully scripted. Needs a domain on your (free) Cloudflare account. The
 #       first run prints a login link to open in any browser; then it creates
@@ -27,6 +32,7 @@
 set -euo pipefail
 
 # ---------- settings ----------
+QUICK_METRICS="127.0.0.1:20241"   # cloudflared reports the quick tunnel's address here
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVICE_NAME="manhunt"
 TUNNEL_SERVICE_NAME="manhunt-tunnel"
@@ -41,6 +47,8 @@ TOKEN=""
 TUNNEL_NAME="manhunt"
 ORIGINS=()
 NO_TUNNEL=0
+QUICK=0
+SHOW_URL=0
 NO_BUILD=0
 DRY_RUN=0
 
@@ -56,10 +64,12 @@ die()  { printf '\n%s✖ %s%s\n' "$RED" "$*" "$RESET" >&2; exit 1; }
 did()  { if (( DRY_RUN )); then ok "Would: $*"; else ok "$*"; fi; }
 
 usage() {
-    sed -n '3,26p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '3,31p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
     cat <<'EOF'
 
 Options:
+  --quick                Free trycloudflare.com address, no domain needed
+  --url                  Print the server's current public address and exit
   --hostname HOST        Public hostname, e.g. manhunt.example.com
   --token TOKEN          Token of a dashboard-managed tunnel
   --tunnel-name NAME     Tunnel name for --hostname mode (default: manhunt)
@@ -82,6 +92,8 @@ while [[ $# -gt 0 ]]; do
         --port)         PORT="${2:-}"; shift 2 ;;
         --allow-origin) ORIGINS+=("${2:-}"); shift 2 ;;
         --no-tunnel)    NO_TUNNEL=1; shift ;;
+        --quick)        QUICK=1; shift ;;
+        --url)          SHOW_URL=1; shift ;;
         --no-build)     NO_BUILD=1; shift ;;
         --dry-run)      DRY_RUN=1; shift ;;
         -h|--help)      usage; exit 0 ;;
@@ -98,12 +110,14 @@ for origin in "${ORIGINS[@]+"${ORIGINS[@]}"}"; do
 done
 [[ -z "$TOKEN" || "$TOKEN" =~ ^[A-Za-z0-9+/=_-]{20,}$ ]] || die "--token doesn't look like a Cloudflare tunnel token"
 (( NO_TUNNEL == 0 )) || [[ -z "$TOKEN" ]] || die "--token and --no-tunnel can't be used together"
+(( QUICK == 0 )) || [[ -z "$TOKEN$PUBLIC_HOST" ]] || die "--quick gives you a Cloudflare address; it can't be combined with --token or --hostname"
+(( QUICK == 0 || NO_TUNNEL == 0 )) || die "--quick and --no-tunnel can't be used together"
 
 # ---------- helpers ----------
 if [[ $EUID -eq 0 ]]; then
     SUDO=()
     APP_USER="${SUDO_USER:-root}"
-    [[ "$APP_USER" == root ]] && warn "Running as root, so the app service will run as root too. A normal user with sudo is better."
+    (( SHOW_URL )) || [[ "$APP_USER" != root ]] || warn "Running as root, so the app service will run as root too. A normal user with sudo is better."
 else
     command -v sudo >/dev/null || die "sudo is needed (or run as root)"
     SUDO=(sudo)
@@ -145,6 +159,22 @@ wait_for_url() {
     return 1
 }
 
+# The quick tunnel's current https://….trycloudflare.com address, or nothing
+quick_url() {
+    local host
+    host="$(curl -fsS --max-time 3 "http://$QUICK_METRICS/quicktunnel" 2>/dev/null \
+        | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(JSON.parse(s).hostname||"")}catch{}})' || true)"
+    if [[ -n "$host" ]]; then echo "https://$host"; return; fi
+    # Older cloudflared: read it from the tunnel's log instead
+    journalctl -u "$TUNNEL_SERVICE_NAME" --no-pager -n 300 2>/dev/null \
+        | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | tail -n 1 || true
+}
+
+# Which tunnel mode the installed tunnel service uses (quick/token/hostname)
+saved_mode() {
+    [[ -r "$1" ]] && sed -n 's/^# tunnel-mode: //p' "$1" | head -n 1
+}
+
 node_is_new_enough() {
     command -v node >/dev/null || return 1
     # The server shares an ES module with the app, which needs Node 20.19+ or 22.12+
@@ -154,6 +184,23 @@ node_is_new_enough() {
 
 APP_UNIT="$SYSTEMD_DIR/$SERVICE_NAME.service"
 TUNNEL_UNIT="$SYSTEMD_DIR/$TUNNEL_SERVICE_NAME.service"
+
+# --url: just report where the server can be reached
+if (( SHOW_URL )); then
+    case "$(saved_mode "$TUNNEL_UNIT")" in
+        quick)
+            url="$(quick_url)"
+            [[ -n "$url" ]] || die "The quick tunnel has no address yet. Is it running? systemctl status $TUNNEL_SERVICE_NAME"
+            echo "$url" ;;
+        hostname)
+            echo "https://$(sed -n 's/^  - hostname: //p' "$CF_DIR/$TUNNEL_SERVICE_NAME.yml" | head -n 1)" ;;
+        token)
+            echo "The address is the public hostname set for this tunnel in the Cloudflare dashboard." ;;
+        *)
+            die "No tunnel is set up. Run: scripts/setup-server.sh --quick" ;;
+    esac
+    exit 0
+fi
 
 # Keep earlier settings unless new ones were given
 [[ -n "$PORT" ]] || PORT="$(existing_env "$APP_UNIT" PORT)"
@@ -252,13 +299,18 @@ fi
 MODE="none"
 if (( NO_TUNNEL )); then
     MODE="none"
+elif (( QUICK )); then
+    MODE="quick"
 elif [[ -n "$TOKEN" ]]; then
     MODE="token"
 elif [[ -n "$PUBLIC_HOST" ]]; then
     MODE="hostname"
+elif [[ "$(saved_mode "$TUNNEL_UNIT")" == quick ]]; then
+    MODE="quick"    # keep it; rewritten only if the port changed
 elif [[ -f "$TUNNEL_UNIT" ]]; then
     MODE="existing"
 fi
+TUNNEL_CHANGED=0
 
 install_cloudflared() {
     if command -v cloudflared >/dev/null; then ok "$(cloudflared --version 2>&1 | head -n 1)"; return; fi
@@ -295,22 +347,30 @@ case "$MODE" in
     none)
         if (( NO_TUNNEL )); then note "Skipped (--no-tunnel)"
         else
-            note "No tunnel configured. Re-run with --hostname manhunt.example.com (scripted)"
-            note "or --token <TOKEN> (a tunnel made in the Cloudflare dashboard) to publish the server."
+            note "No tunnel configured. Re-run with --quick (a free trycloudflare.com address),"
+            note "--hostname manhunt.example.com (your own domain), or --token <TOKEN> (a dashboard tunnel)."
         fi
         ;;
     existing)
+        # Nothing about the tunnel changed: make sure it runs, don't restart it
+        as_root systemctl enable --now "$TUNNEL_SERVICE_NAME" --quiet
+        did "Tunnel $TUNNEL_SERVICE_NAME left running"
+        ;;
+    quick)
+        install_cloudflared
         CF_BIN="$(command -v cloudflared || echo /usr/bin/cloudflared)"
-        as_root systemctl restart "$TUNNEL_SERVICE_NAME"
-        did "Restarted the existing tunnel ($TUNNEL_SERVICE_NAME)"
+        # A config.yml in the default place makes cloudflared ignore --url
+        [[ ! -f "$CF_DIR/config.yml" ]] || warn "$CF_DIR/config.yml exists and may stop the quick tunnel from starting; move it aside if it does"
+        TUNNEL_EXEC="$CF_BIN --no-autoupdate tunnel --metrics $QUICK_METRICS --url http://localhost:$PORT"
+        TUNNEL_ENV_LINE=""
         ;;
     token)
         install_cloudflared
         CF_BIN="$(command -v cloudflared || echo /usr/bin/cloudflared)"
         # The token is a secret: keep it out of the (world-readable) unit file
-        write_root_file "$CF_DIR/$TUNNEL_SERVICE_NAME.env" 600 "TUNNEL_TOKEN=$TOKEN" >/dev/null
+        [[ "$(write_root_file "$CF_DIR/$TUNNEL_SERVICE_NAME.env" 600 "TUNNEL_TOKEN=$TOKEN")" == same ]] || TUNNEL_CHANGED=1
         TUNNEL_EXEC="$CF_BIN --no-autoupdate tunnel run"
-        TUNNEL_ENV_LINE="EnvironmentFile=$CF_DIR/$TUNNEL_SERVICE_NAME.env"
+        TUNNEL_ENV_LINE=$'\n'"EnvironmentFile=$CF_DIR/$TUNNEL_SERVICE_NAME.env"
         did "Token saved to $CF_DIR/$TUNNEL_SERVICE_NAME.env (readable by root only)"
         note "In the dashboard, the tunnel's public hostname must point to http://localhost:$PORT"
         ;;
@@ -354,33 +414,55 @@ ingress:
   - hostname: $PUBLIC_HOST
     service: http://localhost:$PORT
   - service: http_status:404"
-        write_root_file "$CF_DIR/$TUNNEL_SERVICE_NAME.yml" 644 "$CONFIG_CONTENT" >/dev/null
+        [[ "$(write_root_file "$CF_DIR/$TUNNEL_SERVICE_NAME.yml" 644 "$CONFIG_CONTENT")" == same ]] || TUNNEL_CHANGED=1
         TUNNEL_EXEC="$CF_BIN --no-autoupdate --config $CF_DIR/$TUNNEL_SERVICE_NAME.yml tunnel run"
         TUNNEL_ENV_LINE=""
         ;;
 esac
 
-if [[ "$MODE" == token || "$MODE" == hostname ]]; then
+if [[ "$MODE" == quick || "$MODE" == token || "$MODE" == hostname ]]; then
     TUNNEL_UNIT_CONTENT="# Written by scripts/setup-server.sh; re-run it rather than editing this file.
+# tunnel-mode: $MODE
 [Unit]
 Description=Cloudflare Tunnel for Manhunt
 After=network-online.target $SERVICE_NAME.service
 Wants=network-online.target
 
 [Service]
-Type=simple
-${TUNNEL_ENV_LINE}
+Type=simple${TUNNEL_ENV_LINE}
 ExecStart=$TUNNEL_EXEC
 Restart=always
 RestartSec=5
 
 [Install]
 WantedBy=multi-user.target"
-    write_root_file "$TUNNEL_UNIT" 644 "$TUNNEL_UNIT_CONTENT" >/dev/null
+    [[ "$(write_root_file "$TUNNEL_UNIT" 644 "$TUNNEL_UNIT_CONTENT")" == same ]] || TUNNEL_CHANGED=1
     as_root systemctl daemon-reload
-    as_root systemctl enable "$TUNNEL_SERVICE_NAME" --quiet
-    as_root systemctl restart "$TUNNEL_SERVICE_NAME"
-    did "Tunnel service $TUNNEL_SERVICE_NAME running"
+    if (( TUNNEL_CHANGED )); then
+        # New settings need a restart (a quick tunnel gets a new address)
+        as_root systemctl enable "$TUNNEL_SERVICE_NAME" --quiet
+        as_root systemctl restart "$TUNNEL_SERVICE_NAME"
+        did "Tunnel service $TUNNEL_SERVICE_NAME started"
+    else
+        as_root systemctl enable --now "$TUNNEL_SERVICE_NAME" --quiet
+        did "Tunnel $TUNNEL_SERVICE_NAME unchanged, left running"
+    fi
+fi
+
+# A quick tunnel's address is only known once cloudflared has it
+if [[ "$MODE" == quick ]]; then
+    if (( DRY_RUN )); then
+        PUBLIC_URL="https://<random-words>.trycloudflare.com"
+    else
+        PUBLIC_URL=""
+        for (( i = 0; i < 30; i++ )); do
+            PUBLIC_URL="$(quick_url)"
+            [[ -z "$PUBLIC_URL" ]] || break
+            sleep 1
+        done
+        [[ -n "$PUBLIC_URL" ]] || die "The quick tunnel didn't report an address. See: journalctl -u $TUNNEL_SERVICE_NAME -n 50"
+    fi
+    PUBLIC_HOST="${PUBLIC_URL#https://}"
 fi
 
 # ---------- 5. Public check ----------
@@ -391,7 +473,7 @@ if [[ -n "$PUBLIC_HOST" && "$MODE" != none ]]; then
     elif wait_for_url "https://$PUBLIC_HOST/manhunt-api/health" 24 5; then
         ok "Live: https://$PUBLIC_HOST"
     else
-        warn "Not reachable yet. New DNS records can take a few minutes; try:"
+        warn "Not reachable yet. New addresses can take a minute or two to work; try:"
         warn "  curl https://$PUBLIC_HOST/manhunt-api/health"
         warn "Tunnel logs: journalctl -u $TUNNEL_SERVICE_NAME -n 50"
     fi
@@ -399,10 +481,24 @@ fi
 
 # ---------- Summary ----------
 step "Done"
-[[ -n "$PUBLIC_HOST" ]] && note "Play:     https://$PUBLIC_HOST"
+if [[ -n "$PUBLIC_HOST" && "$MODE" != none ]]; then
+    printf '\n  %sPlay at:  https://%s%s\n\n' "$BOLD" "$PUBLIC_HOST" "$RESET"
+fi
+if [[ "$MODE" == quick ]]; then
+    note "This address changes whenever the tunnel restarts (a reboot, for example)."
+    note "See the current one any time with: scripts/setup-server.sh --url"
+    note "Open it on your phone and use the in-app Invite button: the QR code follows the address."
+fi
 note "Local:    http://127.0.0.1:$PORT"
-note "Logs:     journalctl -u $SERVICE_NAME -f$( [[ -f "$TUNNEL_UNIT" || "$MODE" == token || "$MODE" == hostname ]] && echo "   ·   journalctl -u $TUNNEL_SERVICE_NAME -f")"
+TUNNEL_LOGS=""
+[[ -f "$TUNNEL_UNIT" || "$MODE" != none ]] && TUNNEL_LOGS="   ·   journalctl -u $TUNNEL_SERVICE_NAME -f"
+note "Logs:     journalctl -u $SERVICE_NAME -f$TUNNEL_LOGS"
 note "Update:   git pull && scripts/setup-server.sh"
-SHOWN_HOST="${PUBLIC_HOST:-YOUR-SERVER-HOSTNAME}"
-note "Frontend on Vercel? Set VITE_API_ORIGIN=https://$SHOWN_HOST there and"
-note "          re-run with --allow-origin https://<your-app>.vercel.app"
+if [[ "$MODE" == quick ]]; then
+    note "Hosting the frontend on Vercel needs a fixed server address, so with a quick"
+    note "tunnel open the address above directly instead."
+else
+    SHOWN_HOST="${PUBLIC_HOST:-YOUR-SERVER-HOSTNAME}"
+    note "Frontend on Vercel? Set VITE_API_ORIGIN=https://$SHOWN_HOST there and"
+    note "          re-run with --allow-origin https://<your-app>.vercel.app"
+fi
