@@ -52,8 +52,10 @@ export function PlayerRow({ player, avatar, distance, now, danger = false, proxi
                 <h2 data-testid={testIds.name}>{playerName(player)}</h2>
                 <p className="player-freshness">
                     {/* Out of bounds leads the line, so it is never the part cut off */}
-                    {player.out_of_bounds && <span className="meta-warning" data-testid="row-out-of-bounds">Outside · </span>}
-                    {label}
+                    {player.out_of_bounds && <span className="meta-warning" data-testid="row-out-of-bounds">Outside ·</span>}
+                    {player.out_of_bounds && ' '}
+                    {/* "Outside · 8s ago": the shorter form keeps the time from being cut off */}
+                    {player.out_of_bounds ? label.replace('updated ', '') : label}
                 </p>
             </IonLabel>
             <span

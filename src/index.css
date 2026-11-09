@@ -1016,6 +1016,7 @@ ion-item.targets-item .fix-dot {
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: var(--space-1);
   width: 100%;
   margin-top: var(--space-4);
 }
@@ -1040,11 +1041,13 @@ ion-item.targets-item .fix-dot {
   white-space: nowrap;
 }
 
+/* The line is as tall as the mono figures' own box, so it never crowds the
+   name above or the freshness below */
 .compass-distance-display {
-  height: 3rem;
+  height: 3.5rem;
   font-family: var(--font-mono);
   font-size: var(--fs-figure);
-  line-height: 3rem;
+  line-height: 3.5rem;
   font-weight: 500;
   color: var(--text-1);
 }
@@ -1067,10 +1070,12 @@ ion-item.targets-item .fix-dot {
   align-items: center;
   justify-content: center;
   height: var(--calibration-hint-slot);
+  margin-top: var(--space-3);
   padding-inline: var(--space-4);
   font-size: var(--fs-caption);
   line-height: 1.25rem;
   text-align: center;
+  text-wrap: balance;
   color: var(--text-3);
 }
 
@@ -1121,10 +1126,12 @@ ion-modal.permissions-dialog .permissions-dialog-body > h2 {
 }
 
 /* The permission list rests on the dialog, one step up */
-ion-modal ion-list[inset],
-ion-modal ion-list.list-inset {
+/* Flush with the sheet's other content (map, buttons, notes). The doubled
+   class outranks Ionic's own .list-ios.list-inset side margins; its top and
+   bottom margins stay, as the sheets' vertical rhythm */
+ion-modal ion-list.list-inset.list-inset {
   --ion-item-background: transparent;
-  margin: 0;
+  margin-inline: 0;
   background: var(--ink-3);
   border: var(--hairline);
   border-radius: var(--radius-track);
@@ -1264,6 +1271,11 @@ ion-item.share-id-row {
 ion-item.share-id-row ion-label {
   min-width: 0;
   overflow: hidden;
+}
+
+ion-item.share-id-row ion-button {
+  --padding-start: var(--space-3);
+  --padding-end: var(--space-3);
 }
 
 ion-item.share-id-row ion-note {
@@ -1616,6 +1628,10 @@ ion-content .name-card.settings-row {
 }
 
 /* ===== GAME OVER ===== */
+ion-card.game-over-card ion-card-content {
+  padding-inline: var(--space-4);
+}
+
 ion-card.game-over-card ion-card-title {
   font-size: var(--fs-heading);
   line-height: 2rem;
