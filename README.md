@@ -360,6 +360,18 @@ writes every image above to `docs/walkthrough/`. Options:
   (for machines that can't reach it).
 - `--no-build` reuses the current `dist/`.
 
+## App icon
+
+The icon is the in-game compass needle pointing at a player's green fix dot.
+Its source is `public/icon.svg`; `public/favicon.svg` is a simplified version
+for browser tabs, without the ring that disappears at that size. After editing
+either, render the PNGs (manifest icons, the iOS Home Screen icon and the
+favicon) with:
+
+```bash
+npm run icons
+```
+
 ## Compass / device orientation (Android & iOS)
 
 The compass arrow works across platforms via `src/hooks/useCompassHeading.js`

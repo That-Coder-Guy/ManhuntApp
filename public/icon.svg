@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Manhunt app icon: the in-game compass needle pointing at a player's
+       green fix dot, on the app's night ink. Everything sits inside the
+       central 80% circle, so the same art works as a maskable icon.
+       PNGs are rendered from this file by scripts/make-icons.mjs -->
+  <defs>
+    <radialGradient id="face" cx="256" cy="232" r="330" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#171b26"/>
+      <stop offset="1" stop-color="#0b0d14"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#face)"/>
+
+  <!-- Bezel -->
+  <circle cx="256" cy="256" r="176" fill="none" stroke="#262b39" stroke-width="12"/>
+
+  <!-- The needle, bevelled like the one in the game, turned toward the dot -->
+  <g transform="rotate(40 256 256)">
+    <polygon points="256,124 216,256 256,256" fill="#ffa05c"/>
+    <polygon points="256,124 296,256 256,256" fill="#e2600f"/>
+    <polygon points="256,388 216,256 256,256" fill="#7a8296"/>
+    <polygon points="256,388 296,256 256,256" fill="#4d5466"/>
+  </g>
+
+  <!-- Hub -->
+  <circle cx="256" cy="256" r="24" fill="#eef0f5"/>
+  <circle cx="256" cy="256" r="9" fill="#0b0d14"/>
+
+  <!-- The hider: a live fix on the bezel, where the needle points -->
+  <circle cx="369.1" cy="121.2" r="24" fill="#4cc38a" stroke="#0b0d14" stroke-width="10"/>
+</svg>

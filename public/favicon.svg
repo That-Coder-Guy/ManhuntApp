@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Browser-tab version of icon.svg: no bezel (lost at this size), so the
+       needle and the green fix dot can fill the tile -->
+  <rect width="32" height="32" rx="7" fill="#0b0d14"/>
+  <g transform="rotate(40 15 17)">
+    <polygon points="15,4.5 11.5,17 15,17" fill="#ffa05c"/>
+    <polygon points="15,4.5 18.5,17 15,17" fill="#e2600f"/>
+    <polygon points="15,29.5 11.5,17 15,17" fill="#7a8296"/>
+    <polygon points="15,29.5 18.5,17 15,17" fill="#4d5466"/>
+  </g>
+  <circle cx="15" cy="17" r="2.4" fill="#eef0f5"/>
+  <circle cx="25.5" cy="5.8" r="3.4" fill="#4cc38a" stroke="#0b0d14" stroke-width="1.4"/>
+</svg>
