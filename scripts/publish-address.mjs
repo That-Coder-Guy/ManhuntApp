@@ -72,12 +72,51 @@ export async function writeOrigin(config, origin, fetchImpl = fetch, preferred =
     return { ok: false, failures };
 }
 
+/** The teams this token can act for, as [{ id, slug }]; [] if it can't list them. */
+export async function listTeams(token, fetchImpl = fetch)
+{
+    try {
+        const response = await fetchImpl('https://api.vercel.com/v2/teams?limit=50', {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: timeout()
+        });
+        if (!response.ok) return [];
+        const { teams } = await response.json();
+        return Array.isArray(teams) ? teams.filter((t) => typeof t?.id === 'string').map(({ id, slug }) => ({ id, slug })) : [];
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * writeOrigin, and if no team was given (VERCEL_TEAM_ID) and Vercel refused or couldn't find
+ * the store, try each of the token's teams: Vercel keeps most projects, even
+ * personal ones, in a team, and the API only finds a team's store when the
+ * request names that team. Sets config.teamId to the team that worked.
+ */
+export async function writeOriginFindingTeam(config, origin, fetchImpl = fetch, log = () => {})
+{
+    const written = await writeOrigin(config, origin, fetchImpl, config.preferredAttempt);
+    const lastStatus = written.failures?.at(-1)?.status;
+    if (written.ok || config.teamGiven || ![403, 404].includes(lastStatus)) return written;
+
+    for (const team of await listTeams(config.token, fetchImpl)) {
+        const inTeam = await writeOrigin({ ...config, teamId: team.id }, origin, fetchImpl, config.preferredAttempt);
+        if (inTeam.ok) {
+            config.teamId = team.id;
+            log(`The store belongs to the team ${team.slug || team.id} (${team.id})`);
+            return inTeam;
+        }
+    }
+    return written;
+}
+
 function describeFailures(failures)
 {
     const last = failures[failures.length - 1];
     const tried = failures.map((f) => `${f.attempt.api} ${f.attempt.operation} → ${f.status}`).join(', ');
     const hint = last.status === 401 || last.status === 403
-        ? ' (check VERCEL_TOKEN, and VERCEL_TEAM_ID if the project is in a team)'
+        ? ' (check VERCEL_TOKEN, and that its scope includes the team that owns the store)'
         : failures.every((f) => f.status === 404) ? ' (check GLOBAL_CONFIG_ID, and VERCEL_TEAM_ID if the project is in a team)' : '';
     return `Vercel answered ${last.status}${hint}. Tried: ${tried}. Last reply: ${last.body}`;
 }
@@ -118,7 +157,7 @@ export async function publishIfChanged({ config, lastPublished, fetchImpl = fetc
     if (!(await answers(origin, fetchImpl))) return { result: 'not-answering', origin };
 
     try {
-        const written = await writeOrigin(config, origin, fetchImpl, config.preferredAttempt);
+        const written = await writeOriginFindingTeam(config, origin, fetchImpl, console.log);
         if (written.ok) {
             config.preferredAttempt = written.attempt; // skip straight to it next time
             return { result: 'published', origin };
@@ -135,6 +174,7 @@ function readConfig(env)
         token: env.VERCEL_TOKEN,
         globalConfigId: env.GLOBAL_CONFIG_ID,
         teamId: env.VERCEL_TEAM_ID || undefined,
+        teamGiven: Boolean(env.VERCEL_TEAM_ID),
         metrics: env.QUICK_METRICS || '127.0.0.1:20241'
     };
     const missing = ['VERCEL_TOKEN', 'GLOBAL_CONFIG_ID'].filter((name) => !env[name]);
@@ -145,10 +185,13 @@ function readConfig(env)
 async function main()
 {
     const config = readConfig(process.env);
-    const stateFile = process.env.STATE_DIRECTORY
-        ? path.join(process.env.STATE_DIRECTORY.split(':')[0], 'published-origin')
-        : null;
+    const stateDir = process.env.STATE_DIRECTORY?.split(':')[0];
+    const stateFile = stateDir ? path.join(stateDir, 'published-origin') : null;
+    const teamFile = stateDir ? path.join(stateDir, 'team-id') : null;
     let lastPublished = stateFile ? (await readFile(stateFile, 'utf8').catch(() => '')).trim() : '';
+    // A team found on an earlier run, unless one was given
+    if (!config.teamId && teamFile) config.teamId = (await readFile(teamFile, 'utf8').catch(() => '')).trim() || undefined;
+    const savedTeam = config.teamId;
     let lastResult = '';
 
     console.log(`Watching the tunnel at ${config.metrics}${lastPublished ? `; last published ${lastPublished}` : ''}`);
@@ -158,6 +201,9 @@ async function main()
             lastPublished = origin;
             console.log(`Published ${origin}`);
             if (stateFile) await writeFile(stateFile, `${origin}\n`).catch((error) => console.error(error.message));
+            if (teamFile && config.teamId && !config.teamGiven && config.teamId !== savedTeam) {
+                await writeFile(teamFile, `${config.teamId}\n`).catch((error) => console.error(error.message));
+            }
         } else if (result === 'failed') {
             console.error(detail);
         } else if (result !== lastResult && result !== 'unchanged') {

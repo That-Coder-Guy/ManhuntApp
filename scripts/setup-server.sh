@@ -261,8 +261,9 @@ check_vercel_site() {
         warn "Connect the Global Config store to this project (Storage tab → the store → Projects),"
         warn "make sure it's the store with ID $GLOBAL_CONFIG_ID, then redeploy."
     elif [[ "$publisher" == "Vercel answered 40"[13]* ]]; then
-        warn "Vercel refused the Pi's token: re-run with --vercel-token <a new token>, and add"
-        warn "--vercel-team team_… if the project is in a team."
+        warn "Vercel refused the Pi's token for this store, in every team the token can see."
+        warn "Make a new token whose Scope is the team that owns the project (Vercel shows your"
+        warn "personal projects under a team too) and re-run with --vercel-token <the new token>."
     elif [[ "$publisher" == "Vercel answered 404"* ]]; then
         warn "Vercel wouldn't store the address in $GLOBAL_CONFIG_ID. Check the ID on the store's"
         warn "page (Storage → the store), and add --vercel-team team_… if the project is in a team."

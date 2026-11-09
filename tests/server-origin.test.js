@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeServerOrigin } from '../shared/serverOrigin.js';
-import { globalConfigRequest, publishIfChanged, writeOrigin } from '../scripts/publish-address.mjs';
+import { globalConfigRequest, publishIfChanged, writeOrigin, writeOriginFindingTeam } from '../scripts/publish-address.mjs';
 import handler from '../api/server-origin.js';
 
 const TUNNEL = 'https://calm-river-otter.trycloudflare.com';
@@ -133,4 +133,34 @@ test('a refused token stops at the first try; all-404 names the store ID', async
     outcome = await publishIfChanged({ config: { ...config }, lastPublished: '', fetchImpl });
     assert.equal(outcome.result, 'failed');
     assert.match(outcome.detail, /^Vercel answered 404 \(check GLOBAL_CONFIG_ID.*Tried: global-config upsert → 404, global-config create → 404, edge-config upsert → 404, edge-config create → 404/);
+});
+
+test('finds the team that owns the store when the personal scope is refused', async () => {
+    // What a Pi saw: no team in the request → upsert 404, create 403
+    const tried = [];
+    const vercel = (url, op) => {
+        const team = new URL(url).searchParams.get('teamId');
+        tried.push(`${op}${team ? ` ${team}` : ''}`);
+        if (team === 'team_owner') return Response.json({ status: 'ok' });
+        if (team) return new Response('{}', { status: 403 });
+        return op === 'upsert' ? ITEM_NOT_FOUND() : new Response('{"error":{"code":"forbidden"}}', { status: 403 });
+    };
+    const { fetchImpl: base } = fakeFetch({ vercel });
+    const fetchImpl = async (url, init) => (String(url).startsWith('https://api.vercel.com/v2/teams')
+        ? Response.json({ teams: [{ id: 'team_other', slug: 'other' }, { id: 'team_owner', slug: 'hgglenn518-6656' }] })
+        : base(url, init));
+
+    const cfg = { ...config };
+    const logs = [];
+    const written = await writeOriginFindingTeam(cfg, TUNNEL, fetchImpl, (line) => logs.push(line));
+    assert.equal(written.ok, true);
+    assert.equal(cfg.teamId, 'team_owner');
+    assert.deepEqual(tried, ['upsert', 'create', 'upsert team_other', 'upsert team_owner']);
+    assert.match(logs[0], /hgglenn518-6656 \(team_owner\)/);
+
+    // A team given explicitly is trusted: no lookup
+    tried.length = 0;
+    const given = await writeOriginFindingTeam({ ...config, teamId: 'team_other', teamGiven: true }, TUNNEL, fetchImpl);
+    assert.equal(given.ok, false);
+    assert.deepEqual(tried, ['upsert team_other']);
 });

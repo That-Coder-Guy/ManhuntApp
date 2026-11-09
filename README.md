@@ -222,7 +222,9 @@ If the Pi is off, creating a lobby says "The game server is offline".
      --global-config ecfg_xxxxxxxx
    ```
 
-   Add `--vercel-team team_xxxxxxxx` for a team project. The script also
+   The publisher finds which of your Vercel teams owns the store by itself
+   (Vercel keeps even personal projects in a team), or you can name it with
+   `--vercel-team team_xxxxxxxx`. The script also
    allows the Vercel site to use the server. At the end it checks that the
    site reports the tunnel's address:
 
@@ -256,7 +258,7 @@ If the script says the site doesn't point at the server yet, it explains why:
 | Asks visitors to log in to Vercel | Use the production address with `--vercel-site`, or turn off **Vercel Authentication** in Settings → Deployment Protection |
 | No `/api/server-origin` / answers with the app's page | Redeploy the latest `main`; Settings → General → Root Directory must be empty |
 | The Pi published its address, but the site reads null | Connect the Global Config store to the project (Storage tab), then redeploy |
-| Vercel refused the Pi's token | Re-run with a new `--vercel-token` (and `--vercel-team` for a team project) |
+| Vercel refused the Pi's token | Make a new token whose **Scope** is the team that owns the project, and re-run with `--vercel-token` |
 
 ### With your own domain instead
 
