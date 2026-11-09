@@ -68,7 +68,7 @@ test('reports a rejected token with a hint', async () => {
     const { fetchImpl } = fakeFetch({ vercelStatus: 403 });
     const outcome = await publishIfChanged({ config, lastPublished: '', fetchImpl });
     assert.equal(outcome.result, 'failed');
-    assert.match(outcome.detail, /403.*VERCEL_TOKEN/);
+    assert.match(outcome.detail, /403.*Full Account or team scope/);
 });
 
 test('the Vercel function answers null, uncached, when no Global Config is connected', async () => {
@@ -127,7 +127,7 @@ test('a refused token stops at the first try; all-404 names the store ID', async
     let { fetchImpl } = fakeFetch({ vercel: () => { count++; return new Response('{}', { status: 403 }); } });
     let outcome = await publishIfChanged({ config: { ...config }, lastPublished: '', fetchImpl });
     assert.equal(count, 1);
-    assert.match(outcome.detail, /403.*VERCEL_TOKEN/);
+    assert.match(outcome.detail, /403.*Full Account or team scope/);
 
     ({ fetchImpl } = fakeFetch({ vercel: ITEM_NOT_FOUND }));
     outcome = await publishIfChanged({ config: { ...config }, lastPublished: '', fetchImpl });
@@ -163,4 +163,15 @@ test('finds the team that owns the store when the personal scope is refused', as
     const given = await writeOriginFindingTeam({ ...config, teamId: 'team_other', teamGiven: true }, TUNNEL, fetchImpl);
     assert.equal(given.ok, false);
     assert.deepEqual(tried, ['upsert team_other']);
+});
+
+test('says when the token cannot list teams (a project-scoped token)', async () => {
+    const vercel = (url, op) => (op === 'upsert' ? ITEM_NOT_FOUND() : new Response('{"error":{"code":"forbidden"}}', { status: 403 }));
+    const { fetchImpl: base } = fakeFetch({ vercel });
+    const fetchImpl = async (url, init) => (String(url).startsWith('https://api.vercel.com/v2/teams')
+        ? new Response('{"error":{"code":"forbidden"}}', { status: 403 })
+        : base(url, init));
+    const outcome = await publishIfChanged({ config: { ...config }, lastPublished: '', fetchImpl });
+    assert.equal(outcome.result, 'failed');
+    assert.match(outcome.detail, /Full Account or team scope.*the token can't list teams \(403\)/);
 });

@@ -209,9 +209,9 @@ If the Pi is off, creating a lobby says "The game server is offline".
 3. **Redeploy** (Deployments → the latest one → ⋯ → Redeploy) so the function
    picks up `GLOBAL_CONFIG`.
 4. **Create an access token** for the Pi under **Account Settings → Tokens**.
-   Pick the scope that owns the project. Choosing *No expiration* saves
-   renewing it. If the project belongs to a team rather than your personal
-   account, also copy the team ID (Team Settings → General, `team_…`).
+   Set **Scope** to *Full Account* or to the team that owns the project.
+   A token limited to a single project can't write to the store, which
+   belongs to the team. Choosing *No expiration* saves renewing it.
 5. **Set up the Pi** (see [the full guide](#set-up-the-server-with-cloudflare-raspberry-pi-or-any-linux-box)
    for a fresh machine):
 
@@ -258,7 +258,7 @@ If the script says the site doesn't point at the server yet, it explains why:
 | Asks visitors to log in to Vercel | Use the production address with `--vercel-site`, or turn off **Vercel Authentication** in Settings → Deployment Protection |
 | No `/api/server-origin` / answers with the app's page | Redeploy the latest `main`; Settings → General → Root Directory must be empty |
 | The Pi published its address, but the site reads null | Connect the Global Config store to the project (Storage tab), then redeploy |
-| Vercel refused the Pi's token | Make a new token whose **Scope** is the team that owns the project, and re-run with `--vercel-token` |
+| Vercel won't let the Pi's token write to the store | Make a new token with **Scope** set to *Full Account* or the team that owns the project (not a single project), and re-run with `--vercel-token` |
 
 ### With your own domain instead
 

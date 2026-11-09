@@ -72,7 +72,10 @@ export async function writeOrigin(config, origin, fetchImpl = fetch, preferred =
     return { ok: false, failures };
 }
 
-/** The teams this token can act for, as [{ id, slug }]; [] if it can't list them. */
+/**
+ * The teams this token can act for: { teams: [{ id, slug }] } or, when it
+ * can't list them, { teams: [], status } (a token scoped to one project can't).
+ */
 export async function listTeams(token, fetchImpl = fetch)
 {
     try {
@@ -80,19 +83,20 @@ export async function listTeams(token, fetchImpl = fetch)
             headers: { Authorization: `Bearer ${token}` },
             signal: timeout()
         });
-        if (!response.ok) return [];
+        if (!response.ok) return { teams: [], status: response.status };
         const { teams } = await response.json();
-        return Array.isArray(teams) ? teams.filter((t) => typeof t?.id === 'string').map(({ id, slug }) => ({ id, slug })) : [];
-    } catch {
-        return [];
+        return { teams: Array.isArray(teams) ? teams.filter((t) => typeof t?.id === 'string').map(({ id, slug }) => ({ id, slug })) : [] };
+    } catch (error) {
+        return { teams: [], status: error.message };
     }
 }
 
 /**
- * writeOrigin, and if no team was given (VERCEL_TEAM_ID) and Vercel refused or couldn't find
- * the store, try each of the token's teams: Vercel keeps most projects, even
- * personal ones, in a team, and the API only finds a team's store when the
- * request names that team. Sets config.teamId to the team that worked.
+ * writeOrigin, and if no team was given (VERCEL_TEAM_ID) and Vercel refused or
+ * couldn't find the store, try each of the token's teams: Vercel keeps most
+ * projects, even personal ones, in a team, and the API only finds a team's
+ * store when the request names that team. Sets config.teamId to the team that
+ * worked. A failure carries `teams`, a note on what the team search found.
  */
 export async function writeOriginFindingTeam(config, origin, fetchImpl = fetch, log = () => {})
 {
@@ -100,25 +104,31 @@ export async function writeOriginFindingTeam(config, origin, fetchImpl = fetch, 
     const lastStatus = written.failures?.at(-1)?.status;
     if (written.ok || config.teamGiven || ![403, 404].includes(lastStatus)) return written;
 
-    for (const team of await listTeams(config.token, fetchImpl)) {
+    const { teams, status } = await listTeams(config.token, fetchImpl);
+    if (!teams.length) {
+        return { ...written, teams: status ? `the token can't list teams (${status})` : 'the token sees no teams' };
+    }
+    const results = [];
+    for (const team of teams) {
         const inTeam = await writeOrigin({ ...config, teamId: team.id }, origin, fetchImpl, config.preferredAttempt);
         if (inTeam.ok) {
             config.teamId = team.id;
             log(`The store belongs to the team ${team.slug || team.id} (${team.id})`);
             return inTeam;
         }
+        results.push(`${team.slug || team.id} → ${inTeam.failures.at(-1).status}`);
     }
-    return written;
+    return { ...written, teams: `in each team: ${results.join(', ')}` };
 }
 
-function describeFailures(failures)
+function describeFailures(failures, teams)
 {
     const last = failures[failures.length - 1];
     const tried = failures.map((f) => `${f.attempt.api} ${f.attempt.operation} → ${f.status}`).join(', ');
     const hint = last.status === 401 || last.status === 403
-        ? ' (check VERCEL_TOKEN, and that its scope includes the team that owns the store)'
+        ? ' (the token needs Full Account or team scope, not a single project)'
         : failures.every((f) => f.status === 404) ? ' (check GLOBAL_CONFIG_ID, and VERCEL_TEAM_ID if the project is in a team)' : '';
-    return `Vercel answered ${last.status}${hint}. Tried: ${tried}. Last reply: ${last.body}`;
+    return `Vercel answered ${last.status}${hint}. Tried: ${tried}${teams ? `; ${teams}` : ''}. Last reply: ${last.body}`;
 }
 
 /** The quick tunnel's current origin, or null while it has none. */
@@ -162,7 +172,7 @@ export async function publishIfChanged({ config, lastPublished, fetchImpl = fetc
             config.preferredAttempt = written.attempt; // skip straight to it next time
             return { result: 'published', origin };
         }
-        return { result: 'failed', origin, detail: describeFailures(written.failures) };
+        return { result: 'failed', origin, detail: describeFailures(written.failures, written.teams) };
     } catch (error) {
         return { result: 'failed', origin, detail: `Couldn't reach Vercel: ${error.message}` };
     }
