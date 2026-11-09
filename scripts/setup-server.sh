@@ -26,12 +26,6 @@
 #   --no-tunnel
 #       Only the app service (for example behind your own reverse proxy).
 #
-# A permanent address for a --quick tunnel: add --cf-api-token (a free
-# Cloudflare account's API token). It deploys a small Cloudflare Worker at
-# https://manhunt.<you>.workers.dev that forwards players to the tunnel, and a
-# service that tells it the tunnel's address whenever that changes. The token
-# is only used to deploy; it isn't stored.
-#
 # Run it as your normal user from inside the repository; it uses sudo where
 # it needs to.
 
@@ -42,7 +36,6 @@ QUICK_METRICS="127.0.0.1:20241"   # cloudflared reports the quick tunnel's addre
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVICE_NAME="manhunt"
 TUNNEL_SERVICE_NAME="manhunt-tunnel"
-PUBLISH_SERVICE_NAME="manhunt-publish"
 # Overridable so the script can be exercised without touching the real system
 SYSTEMD_DIR="${SYSTEMD_DIR:-/etc/systemd/system}"
 CF_DIR="${CF_DIR:-/etc/cloudflared}"
@@ -56,10 +49,6 @@ ORIGINS=()
 NO_TUNNEL=0
 QUICK=0
 SHOW_URL=0
-CF_API_TOKEN="${CF_API_TOKEN:-}"   # may also come from the environment
-WORKER_NAME="manhunt"
-WORKERS_SUBDOMAIN=""
-CF_ACCOUNT_ID=""
 NO_BUILD=0
 DRY_RUN=0
 
@@ -75,7 +64,7 @@ die()  { printf '\n%s✖ %s%s\n' "$RED" "$*" "$RESET" >&2; exit 1; }
 did()  { if (( DRY_RUN )); then ok "Would: $*"; else ok "$*"; fi; }
 
 usage() {
-    sed -n '3,36p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '3,31p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
     cat <<'EOF'
 
 Options:
@@ -88,14 +77,6 @@ Options:
   --allow-origin URL     Extra site allowed to use the server, e.g. a frontend
                          hosted elsewhere. Repeatable.
   --no-tunnel            Set up the app service only
-  --cf-api-token TOKEN   With --quick: deploy a permanent workers.dev address
-                         (a Cloudflare API token, "Edit Cloudflare Workers"
-                         template). Also read from $CF_API_TOKEN.
-  --worker-name NAME     The Worker's name, the first part of the address
-                         (default: manhunt)
-  --workers-subdomain S  Only if your Cloudflare account has no workers.dev
-                         subdomain yet: the one to register
-  --cf-account ID        Only if the token can reach several accounts
   --no-build             Skip npm install and the build (restart only)
   --dry-run              Show what would be done without doing it
   -h, --help             Show this help
@@ -113,10 +94,6 @@ while [[ $# -gt 0 ]]; do
         --no-tunnel)    NO_TUNNEL=1; shift ;;
         --quick)        QUICK=1; shift ;;
         --url)          SHOW_URL=1; shift ;;
-        --cf-api-token) CF_API_TOKEN="${2:-}"; shift 2 ;;
-        --worker-name)  WORKER_NAME="${2:-}"; shift 2 ;;
-        --workers-subdomain) WORKERS_SUBDOMAIN="${2:-}"; shift 2 ;;
-        --cf-account)   CF_ACCOUNT_ID="${2:-}"; shift 2 ;;
         --no-build)     NO_BUILD=1; shift ;;
         --dry-run)      DRY_RUN=1; shift ;;
         -h|--help)      usage; exit 0 ;;
@@ -135,10 +112,6 @@ done
 (( NO_TUNNEL == 0 )) || [[ -z "$TOKEN" ]] || die "--token and --no-tunnel can't be used together"
 (( QUICK == 0 )) || [[ -z "$TOKEN$PUBLIC_HOST" ]] || die "--quick gives you a Cloudflare address; it can't be combined with --token or --hostname"
 (( QUICK == 0 || NO_TUNNEL == 0 )) || die "--quick and --no-tunnel can't be used together"
-[[ -z "$CF_API_TOKEN" || "$CF_API_TOKEN" =~ ^[A-Za-z0-9_-]{20,}$ ]] || die "--cf-api-token doesn't look like a Cloudflare API token"
-[[ "$WORKER_NAME" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || die "--worker-name may only use a-z, 0-9 and - (it becomes part of the address)"
-[[ -z "$WORKERS_SUBDOMAIN" || "$WORKERS_SUBDOMAIN" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || die "--workers-subdomain may only use a-z, 0-9 and -"
-[[ -z "$CF_ACCOUNT_ID" || "$CF_ACCOUNT_ID" =~ ^[a-f0-9]{32}$ ]] || die "--cf-account must be a 32-character account ID"
 
 # ---------- helpers ----------
 if [[ $EUID -eq 0 ]]; then
@@ -175,13 +148,6 @@ existing_env() {
     local file="$1" key="$2"
     [[ -r "$file" ]] || return 0
     sed -n "s/^Environment=${key}=//p; s/^${key}=//p" "$file" | head -n 1
-}
-
-# Like existing_env, for root-only files (they hold tokens)
-existing_secret() {
-    local file="$1" key="$2"
-    [[ -e "$file" ]] || return 0
-    "${SUDO[@]+"${SUDO[@]}"}" sed -n "s/^${key}=//p" "$file" 2>/dev/null | head -n 1 || true
 }
 
 wait_for_url() {
@@ -223,8 +189,6 @@ TUNNEL_UNIT="$SYSTEMD_DIR/$TUNNEL_SERVICE_NAME.service"
 if (( SHOW_URL )); then
     case "$(saved_mode "$TUNNEL_UNIT")" in
         quick)
-            worker="$(existing_secret "$CF_DIR/$PUBLISH_SERVICE_NAME.env" WORKER_URL)"
-            if [[ -n "$worker" ]]; then echo "$worker"; exit 0; fi
             url="$(quick_url)"
             [[ -n "$url" ]] || die "The quick tunnel has no address yet. Is it running? systemctl status $TUNNEL_SERVICE_NAME"
             echo "$url" ;;
@@ -244,38 +208,6 @@ PORT="${PORT:-3001}"
 if (( ${#ORIGINS[@]} == 0 )); then
     PREVIOUS_ORIGINS="$(existing_env "$APP_UNIT" ALLOWED_ORIGINS)"
     [[ -z "$PREVIOUS_ORIGINS" ]] || IFS=',' read -r -a ORIGINS <<< "$PREVIOUS_ORIGINS"
-fi
-
-# Which tunnel to run
-MODE="none"
-if (( NO_TUNNEL )); then
-    MODE="none"
-elif (( QUICK )); then
-    MODE="quick"
-elif [[ -n "$TOKEN" ]]; then
-    MODE="token"
-elif [[ -n "$PUBLIC_HOST" ]]; then
-    MODE="hostname"
-elif [[ "$(saved_mode "$TUNNEL_UNIT")" == quick ]]; then
-    MODE="quick"    # keep it; rewritten only if the port changed
-elif [[ -f "$TUNNEL_UNIT" ]]; then
-    MODE="existing"
-fi
-
-# A permanent workers.dev address in front of a quick tunnel
-PUBLISH_ENV="$CF_DIR/$PUBLISH_SERVICE_NAME.env"
-PUBLISH_UNIT="$SYSTEMD_DIR/$PUBLISH_SERVICE_NAME.service"
-WORKER_SOURCE="$REPO_DIR/cloudflare/worker.js"
-WORKER_URL="$(existing_secret "$PUBLISH_ENV" WORKER_URL)"
-PUBLISH_SECRET="$(existing_secret "$PUBLISH_ENV" PUBLISH_SECRET)"
-DEPLOYED_HASH="$(existing_secret "$PUBLISH_ENV" WORKER_HASH)"
-WORKER_HASH="$(sha256sum "$WORKER_SOURCE" | cut -d' ' -f1)"
-STATIC=0
-if [[ -n "$CF_API_TOKEN" ]]; then
-    [[ "$MODE" == quick ]] || die "--cf-api-token gives a quick tunnel a permanent address; use it with --quick"
-    STATIC=1
-elif [[ -n "$WORKER_URL" && "$MODE" == quick ]]; then
-    STATIC=1    # set up on an earlier run
 fi
 
 printf '%sManhunt server setup%s\n' "$BOLD" "$RESET"
@@ -364,6 +296,20 @@ fi
 (( ${#ORIGINS[@]} == 0 )) || note "Also allows: ${ORIGINS[*]}"
 
 # ---------- 4. Cloudflare Tunnel ----------
+MODE="none"
+if (( NO_TUNNEL )); then
+    MODE="none"
+elif (( QUICK )); then
+    MODE="quick"
+elif [[ -n "$TOKEN" ]]; then
+    MODE="token"
+elif [[ -n "$PUBLIC_HOST" ]]; then
+    MODE="hostname"
+elif [[ "$(saved_mode "$TUNNEL_UNIT")" == quick ]]; then
+    MODE="quick"    # keep it; rewritten only if the port changed
+elif [[ -f "$TUNNEL_UNIT" ]]; then
+    MODE="existing"
+fi
 TUNNEL_CHANGED=0
 
 install_cloudflared() {
@@ -519,6 +465,16 @@ if [[ "$MODE" == quick ]]; then
     PUBLIC_HOST="${PUBLIC_URL#https://}"
 fi
 
+# An earlier version could install a manhunt-publish service (for a Vercel
+# frontend); stop it and delete its file, which holds a Vercel token
+LEGACY_PUBLISH_UNIT="$SYSTEMD_DIR/manhunt-publish.service"
+if [[ -f "$LEGACY_PUBLISH_UNIT" ]]; then
+    as_root systemctl disable --now manhunt-publish --quiet || true
+    as_root rm -f "$LEGACY_PUBLISH_UNIT" "$CF_DIR/manhunt-publish.env"
+    as_root systemctl daemon-reload
+    did "Removed the old manhunt-publish service and its token file"
+fi
+
 # ---------- 5. Public check ----------
 if [[ -n "$PUBLIC_HOST" && "$MODE" != none ]]; then
     step "Checking https://$PUBLIC_HOST"
@@ -533,102 +489,18 @@ if [[ -n "$PUBLIC_HOST" && "$MODE" != none ]]; then
     fi
 fi
 
-# ---------- 6. Permanent address ----------
-if (( STATIC )); then
-    step "Permanent address (Cloudflare Worker)"
-    if [[ -n "$CF_API_TOKEN" ]]; then
-        # Shared by the Worker and the Pi; kept across deploys
-        [[ -n "$PUBLISH_SECRET" ]] || PUBLISH_SECRET="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64url"))')"
-        if (( DRY_RUN )); then
-            WORKER_URL="${WORKER_URL:-https://$WORKER_NAME.<your-subdomain>.workers.dev}"
-            note "Would deploy cloudflare/worker.js as the Worker $WORKER_NAME"
-        else
-            WORKER_URL="$(CLOUDFLARE_API_TOKEN="$CF_API_TOKEN" PUBLISH_SECRET="$PUBLISH_SECRET" \
-                WORKER_NAME="$WORKER_NAME" WORKERS_SUBDOMAIN="$WORKERS_SUBDOMAIN" CF_ACCOUNT_ID="$CF_ACCOUNT_ID" \
-                node "$REPO_DIR/scripts/deploy-worker.mjs" 2> >(sed 's/^/  /' >&2))" \
-                || die "Deploying the Worker failed (see above)"
-            ok "Worker deployed at $WORKER_URL"
-        fi
-        DEPLOYED_HASH="$WORKER_HASH"
-    else
-        ok "Worker at $WORKER_URL"
-        [[ "$DEPLOYED_HASH" == "$WORKER_HASH" ]] \
-            || warn "cloudflare/worker.js changed since it was deployed; re-run with --cf-api-token <TOKEN> to update it"
-    fi
-
-    # The secret lets anyone repoint the address: root-only, like the tunnel token
-    PUBLISH_ENV_CONTENT="WORKER_URL=$WORKER_URL
-PUBLISH_SECRET=$PUBLISH_SECRET
-WORKER_HASH=$DEPLOYED_HASH"
-    PUBLISH_CHANGED=0
-    [[ "$(write_root_file "$PUBLISH_ENV" 600 "$PUBLISH_ENV_CONTENT")" == same ]] || PUBLISH_CHANGED=1
-    PUBLISH_UNIT_CONTENT="# Written by scripts/setup-server.sh; re-run it rather than editing this file.
-[Unit]
-Description=Point Manhunt's workers.dev address at the tunnel
-After=network-online.target $TUNNEL_SERVICE_NAME.service
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=$APP_USER
-WorkingDirectory=$REPO_DIR
-ExecStart=$NODE_BIN scripts/publish-address.mjs
-EnvironmentFile=$PUBLISH_ENV
-Environment=QUICK_METRICS=$QUICK_METRICS
-Restart=always
-RestartSec=10
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=full
-
-[Install]
-WantedBy=multi-user.target"
-    [[ "$(write_root_file "$PUBLISH_UNIT" 644 "$PUBLISH_UNIT_CONTENT")" == same ]] || PUBLISH_CHANGED=1
-    as_root systemctl daemon-reload
-    if (( PUBLISH_CHANGED || NO_BUILD == 0 )) || [[ -n "$CF_API_TOKEN" ]]; then
-        # Also after a rebuild or deploy: tell the (possibly new) Worker right away
-        as_root systemctl enable "$PUBLISH_SERVICE_NAME" --quiet
-        as_root systemctl restart "$PUBLISH_SERVICE_NAME"
-    else
-        as_root systemctl enable --now "$PUBLISH_SERVICE_NAME" --quiet
-    fi
-    did "Service $PUBLISH_SERVICE_NAME points it at the tunnel"
-
-    if (( DRY_RUN )); then
-        note "Check skipped in a dry run"
-    elif wait_for_url "$WORKER_URL/manhunt-api/health" 36 5; then
-        ok "Live: $WORKER_URL"
-    else
-        warn "$WORKER_URL doesn't reach the server yet. A new workers.dev address can take a"
-        warn "few minutes to start working. Then check:"
-        warn "  curl $WORKER_URL/manhunt-api/health"
-        warn "  journalctl -u $PUBLISH_SERVICE_NAME -n 20     (the publisher's reports)"
-    fi
-elif [[ -f "$PUBLISH_UNIT" ]]; then
-    # Left over from an earlier setup (a Worker with another tunnel mode, or the old Vercel publisher)
-    as_root systemctl disable --now "$PUBLISH_SERVICE_NAME" --quiet || true
-    # The old Vercel publisher's file holds a Vercel token that is no longer used
-    [[ -n "$WORKER_URL" ]] || as_root rm -f "$PUBLISH_ENV"
-    note "Stopped $PUBLISH_SERVICE_NAME: nothing to publish to with this setup"
-fi
-
 # ---------- Summary ----------
 step "Done"
-if (( STATIC )); then
-    printf '\n  %sPlay at:  %s%s\n\n' "$BOLD" "$WORKER_URL" "$RESET"
-    note "This address stays the same, even when the tunnel's changes."
-    note "Tunnel:   $PUBLIC_URL"
-elif [[ -n "$PUBLIC_HOST" && "$MODE" != none ]]; then
+if [[ -n "$PUBLIC_HOST" && "$MODE" != none ]]; then
     printf '\n  %sPlay at:  https://%s%s\n\n' "$BOLD" "$PUBLIC_HOST" "$RESET"
 fi
-if [[ "$MODE" == quick ]] && (( ! STATIC )); then
+if [[ "$MODE" == quick ]]; then
     note "This address changes whenever the tunnel restarts (a reboot, for example)."
     note "See the current one any time with: scripts/setup-server.sh --url"
-    note "For one that never changes, re-run with --cf-api-token (see the README)."
+    note "Open it on your phone and use the in-app Invite button: the QR code follows the address."
 fi
 note "Local:    http://127.0.0.1:$PORT"
 TUNNEL_LOGS=""
 [[ -f "$TUNNEL_UNIT" || "$MODE" != none ]] && TUNNEL_LOGS="   ·   journalctl -u $TUNNEL_SERVICE_NAME -f"
-(( ! STATIC )) || TUNNEL_LOGS="$TUNNEL_LOGS   ·   journalctl -u $PUBLISH_SERVICE_NAME -f"
 note "Logs:     journalctl -u $SERVICE_NAME -f$TUNNEL_LOGS"
 note "Update:   git pull && scripts/setup-server.sh"

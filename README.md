@@ -117,7 +117,6 @@ OpenStreetMap streets. To refresh the images after a UI change, run
 - Repo root — React + Vite frontend (this used to be the whole repo)
 - `server/` — Express + Socket.IO backend (merged in from the old ManhuntApi repo)
 - `shared/` — code both sides use (play-area geometry)
-- `cloudflare/` — the Worker behind the permanent `workers.dev` address
 
 ## Development
 
@@ -201,16 +200,13 @@ installs `cloudflared` and connects a Cloudflare Tunnel. A Pi 4 or 5 runs
 the whole app comfortably. Nothing on your router needs changing, and the
 tunnel is free with no bandwidth cap for an app like this.
 
-There are three kinds of address, all free:
+There are two kinds of address:
 
-| | Quick tunnel (`--quick`) | Permanent `workers.dev` (`--quick --cf-api-token`) | Your own domain (`--hostname`) |
-| --- | --- | --- | --- |
-| Looks like | `https://calm-river-otter.trycloudflare.com` | `https://manhunt.yourname.workers.dev` | `https://manhunt.yourdomain.com` |
-| Needs | Nothing | A free Cloudflare account | A Cloudflare account with a domain you own |
-| Address | Changes whenever the tunnel restarts (a reboot, say) | **Never changes** | Never changes |
-
-Without a domain, the `workers.dev` address is the most permanent one
-Cloudflare offers for free.
+| | Cloudflare's address (`--quick`) | Your own domain (`--hostname`) |
+| --- | --- | --- |
+| Looks like | `https://calm-river-otter.trycloudflare.com` | `https://manhunt.yourdomain.com` |
+| Needs | Nothing: no account, no domain | A free Cloudflare account with a domain on it |
+| Address | Changes whenever the tunnel restarts (a reboot, say) | Fixed |
 
 ### What you need
 
@@ -249,53 +245,7 @@ scripts/setup-server.sh --url
 ```
 
 Cloudflare offers quick tunnels without any uptime guarantee. They are
-reliable enough for games with friends. For an address that never changes,
-add the permanent `workers.dev` address below.
-
-### Run it: a permanent address on workers.dev
-
-A small [Cloudflare Worker](https://developers.cloudflare.com/workers/)
-(`cloudflare/worker.js`) sits at `https://manhunt.<yourname>.workers.dev` and
-forwards everything (pages, API calls and the game's WebSocket) to the quick
-tunnel. A service on the Pi (`manhunt-publish`) tells the Worker the
-tunnel's address whenever it changes, using a secret only the two of them
-share. Players only ever use the `workers.dev` address, so links and invite QR
-codes keep working after a reboot.
-
-1. **Make a free Cloudflare account** at [dash.cloudflare.com](https://dash.cloudflare.com/sign-up).
-2. **Create an API token**: My Profile → **API Tokens** → **Create Token** →
-   use the **Edit Cloudflare Workers** template. Under *Account Resources*
-   pick your account, under *Zone Resources* pick *All zones*, then
-   **Continue to summary → Create Token**, and copy it.
-3. **Run the script** with it:
-
-   ```bash
-   scripts/setup-server.sh --quick --cf-api-token <TOKEN>
-   ```
-
-   If your account has never used Workers, it has no `workers.dev` name yet:
-   add `--workers-subdomain <yourname>` to pick one. The address becomes
-   `https://manhunt.<yourname>.workers.dev`, and `--worker-name` changes the
-   `manhunt` part.
-
-It ends with:
-
-```
-  ✓ Live: https://manhunt.yourname.workers.dev
-
-  Play at:  https://manhunt.yourname.workers.dev
-```
-
-The token is only used to deploy the Worker; the script doesn't store it, so
-you can delete it in the dashboard afterwards. You need a token again only
-to update the Worker; the script says when `cloudflare/worker.js` changed.
-A new `workers.dev` address can take a few minutes to start working.
-
-After a reboot, the tunnel gets a new address. The publisher tells the
-Worker within seconds of the address answering, and the Worker picks it up
-within about a minute. If the Pi is off, the address shows "The game server
-is offline". Workers' free plan covers 100,000 requests a day; a game uses a
-few requests per player, since locations travel over the WebSocket.
+reliable enough for games with friends; for something permanent, use a domain.
 
 ### Run it: your own domain
 
@@ -342,7 +292,6 @@ games (lobbies are in memory), so update between rounds.
 systemctl status manhunt manhunt-tunnel        # both should be "active (running)"
 journalctl -u manhunt -f                       # app logs
 journalctl -u manhunt-tunnel -f                # tunnel logs
-journalctl -u manhunt-publish -f               # workers.dev publisher: "Published https://…"
 scripts/setup-server.sh --url                  # the public address
 curl https://<your-address>/manhunt-api/health   # {"status":"success"}
 ```
@@ -350,10 +299,8 @@ curl https://<your-address>/manhunt-api/health   # {"status":"success"}
 - **Error 1033 or 530** from Cloudflare: the tunnel isn't connected; check
   `journalctl -u manhunt-tunnel`.
 - **Error 502**: the tunnel is up but the app isn't; check `journalctl -u manhunt`.
-- **Not resolving yet**: a brand-new DNS record, quick-tunnel or `workers.dev`
-  address can take a few minutes.
-- **"The game server is offline"** on `workers.dev`: the Pi or its tunnel is
-  down, or the publisher hasn't caught up; check `journalctl -u manhunt-publish`.
+- **Not resolving yet**: a brand-new DNS record or quick-tunnel address can
+  take a minute or two.
 
 ### Just one game, no server
 
@@ -365,16 +312,12 @@ stops everything.
 ### Remove it
 
 ```bash
-sudo systemctl disable --now manhunt manhunt-tunnel manhunt-publish
-sudo rm -f /etc/systemd/system/manhunt{,-tunnel,-publish}.service
-sudo rm -f /etc/cloudflared/manhunt-tunnel.* /etc/cloudflared/manhunt-publish.env   # config and tokens
+sudo systemctl disable --now manhunt manhunt-tunnel
+sudo rm /etc/systemd/system/manhunt.service /etc/systemd/system/manhunt-tunnel.service
+sudo rm -f /etc/cloudflared/manhunt-tunnel.*   # tunnel config/token
 sudo systemctl daemon-reload
 cloudflared tunnel delete manhunt              # if the script created it
 ```
-
-For the `workers.dev` address, also delete the `manhunt` Worker and the
-`manhunt-tunnel` KV namespace in the Cloudflare dashboard (Workers & Pages,
-and Storage & Databases → KV).
 
 Doing it by hand instead: `deploy/manhunt.service` is a plain systemd unit for
 the app. Server settings, as environment variables:
