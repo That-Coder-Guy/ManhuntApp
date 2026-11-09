@@ -4,16 +4,17 @@ import {
     headingFromEuler,
     applyScreenRotation,
     smoothHeading,
+    smoothDamp,
     bearingToCardinal
 } from '../src/utils/orientation.js';
 
-function assertClose(actual, expected, message)
+function assertClose(actual, expected, message, tolerance = 1e-9)
 {
     assert.ok(actual != null, `${message} (got null)`);
     // Compare on the circle so 359.9999 ≈ 0
     let diff = Math.abs(actual - expected) % 360;
     if (diff > 180) diff = 360 - diff;
-    assert.ok(diff < 1e-9, `${message}: expected ~${expected}, got ${actual}`);
+    assert.ok(diff < tolerance, `${message}: expected ~${expected}, got ${actual}`);
 }
 
 test('headingFromEuler: flat device pointing north (alpha=0) → heading 0', () => {
@@ -99,4 +100,31 @@ test('bearingToCardinal buckets', () => {
     assert.equal(bearingToCardinal(270), 'W');
     assert.equal(bearingToCardinal(315), 'NW');
     assert.equal(bearingToCardinal(null), null);
+});
+
+test('smoothDamp settles on the target without overshooting', () => {
+    let value = 0;
+    let velocity = 0;
+    let max = 0;
+    for (let i = 0; i < 120; i++) { // 2 s at 60 fps
+        [value, velocity] = smoothDamp(value, 90, velocity, 0.3, 1 / 60);
+        max = Math.max(max, value);
+    }
+    assertClose(value, 90, 'settled', 0.01);
+    assert.ok(max <= 90, `overshot to ${max}`);
+});
+
+test('smoothDamp eases in rather than jumping', () => {
+    const [first] = smoothDamp(0, 90, 0, 0.3, 1 / 60);
+    assert.ok(first > 0 && first < 5, `first frame moved ${first}°`);
+});
+
+test('smoothDamp takes about the same path at 30 and 120 fps', () => {
+    const run = (fps) => {
+        let value = 0;
+        let velocity = 0;
+        for (let i = 0; i < fps * 0.3; i++) [value, velocity] = smoothDamp(value, 100, velocity, 0.3, 1 / fps);
+        return value;
+    };
+    assertClose(run(30), run(120), 'after 0.3 s', 4);
 });

@@ -958,12 +958,12 @@ ion-item.targets-item .fix-dot {
 .compass-hub { fill: var(--text-1); }
 .compass-hub-pin { fill: var(--ink-1); }
 
-/* Both turn about the dial's centre in SVG user units */
+/* Both turn about the dial's centre in SVG user units. No CSS transition:
+   CompassArrow eases them frame by frame (useSmoothRotation) */
 .compass-rose,
 .compass-arrow {
   transform-box: view-box;
   transform-origin: 100px 100px;
-  transition: transform 120ms var(--ease);
 }
 
 .compass-circle-interactive.inactive .compass-dial {
@@ -1847,8 +1847,6 @@ ion-action-sheet {
 @media (prefers-reduced-motion: reduce) {
   ion-segment.role-segment::before,
   .proximity-bar-fill,
-  .compass-rose,
-  .compass-arrow,
   ion-content ion-button[expand="block"] {
     transition: none;
   }

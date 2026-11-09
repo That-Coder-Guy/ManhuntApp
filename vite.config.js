@@ -16,8 +16,8 @@ export default defineConfig({
         description: 'Real-world hide and seek game',
         start_url: '/',
         display: 'standalone',
-        background_color: '#1a1a1a',
-        theme_color: '#1a1a1a',
+        background_color: '#0b0d14',
+        theme_color: '#0b0d14',
         orientation: 'portrait',
         icons: [
           {

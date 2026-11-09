@@ -8,12 +8,16 @@
     <!-- Mobile web app meta tags -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- "default", not "black-translucent": since iOS 26.1, translucent makes iOS
+         draw a blur and dark gradient over the top of the installed app. With
+         "default" the status bar is solid, in theme-color, and the page starts
+         below it. (iOS reads this when the app is added to the Home Screen.) -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Manhunt" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
-    <!-- Theme color -->
-    <meta name="theme-color" content="#1a1a1a" />
+    <!-- Theme color: the toolbar's colour (--ink-1), so the status bar blends in -->
+    <meta name="theme-color" content="#0b0d14" />
 
     <title>Manhunt</title>
   </head>

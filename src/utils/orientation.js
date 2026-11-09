@@ -83,6 +83,30 @@ export function smoothHeading(previous, next, factor = 0.3)
 }
 
 /**
+ * One step of a critically damped spring ("smooth damp"): moves `current`
+ * toward `target` like a compass needle settling, without overshoot, in about
+ * `smoothTime` seconds. Stable for any frame time `dt` (seconds). Angles here
+ * are continuous (unwrapped), so there is no 0/360 seam to cross.
+ * Returns [next value, next velocity].
+ */
+export function smoothDamp(current, target, velocity, smoothTime, dt)
+{
+    const omega = 2 / Math.max(smoothTime, 1e-4);
+    const x = omega * dt;
+    const decay = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+    const change = current - target;
+    const temp = (velocity + omega * change) * dt;
+    let next = target + (change + temp) * decay;
+    let nextVelocity = (velocity - omega * temp) * decay;
+    // Never shoot past the target
+    if ((target - current > 0) === (next > target)) {
+        next = target;
+        nextVelocity = 0;
+    }
+    return [next, nextVelocity];
+}
+
+/**
  * Compass point ("N", "NE", ...) for a bearing in degrees — used by the
  * no-compass fallback to describe the direction in words.
  */

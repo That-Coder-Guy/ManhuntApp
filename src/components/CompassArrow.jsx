@@ -1,45 +1,95 @@
-import { useState, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import useCompassHeading, { COMPASS_STATUS } from '../hooks/useCompassHeading';
 import { calculateBearing, formatDistance } from '../utils/geo';
-import { bearingToCardinal } from '../utils/orientation';
+import { bearingToCardinal, smoothDamp } from '../utils/orientation';
 import { playerFreshness } from '../utils/players';
 import useNow from '../hooks/useNow';
 import FixDot from './FixDot';
 
-/**
- * Turn a 0–360 angle that wraps into a continuous one, so CSS always rotates
- * the short way (350° → 10° animates +20°, not −340°).
- */
-function useUnwrappedAngle(angle)
+// How long the dial takes to settle on a new heading, in seconds: long
+// enough to feel like a needle swinging, short enough to keep up while turning
+const SETTLE_TIME_S = 0.3;
+
+function prefersReducedMotion()
 {
-    const [unwrapped, setUnwrapped] = useState(angle ?? 0);
-    const previousRef = useRef(null);
+    return typeof window !== 'undefined'
+        && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+}
+
+/**
+ * Rotate an SVG group smoothly toward `angle` (0–360, wrapping). Each frame a
+ * critically damped spring eases the drawn angle toward the latest reading,
+ * the short way around (350° → 10° turns +20°), and stops once settled. It
+ * writes the transform directly, so React doesn't re-render every frame.
+ * Returns a ref callback for the group.
+ */
+function useSmoothRotation(angle)
+{
+    const nodeRef = useRef(null);
+    // target and current are continuous (unwrapped) angles
+    const motion = useRef({ target: null, current: null, velocity: 0, lastRaw: null, lastTime: 0, frame: 0 });
+
+    const paint = useCallback(() =>
+    {
+        const m = motion.current;
+        if (nodeRef.current && m.current !== null) {
+            nodeRef.current.style.transform = `rotate(${m.current}deg)`;
+        }
+    }, []);
+
+    const step = useCallback((time) =>
+    {
+        const m = motion.current;
+        const dt = Math.min((time - m.lastTime) / 1000, 0.1); // a stalled tab mustn't jump
+        m.lastTime = time;
+        [m.current, m.velocity] = smoothDamp(m.current, m.target, m.velocity, SETTLE_TIME_S, dt);
+        if (Math.abs(m.target - m.current) < 0.05 && Math.abs(m.velocity) < 0.05) {
+            m.current = m.target;
+            m.velocity = 0;
+            m.frame = 0;
+        } else {
+            m.frame = requestAnimationFrame(step);
+        }
+        paint();
+    }, [paint]);
 
     useEffect(() =>
     {
         if (angle === null || angle === undefined) return;
+        const m = motion.current;
+        const raw = ((angle % 360) + 360) % 360;
 
-        let normalized = angle % 360;
-        if (normalized < 0) normalized += 360;
-
-        if (previousRef.current === null) {
-            previousRef.current = normalized;
-            setUnwrapped(normalized);
+        if (m.target === null) {
+            // First reading: start there rather than spinning in from 0
+            m.target = m.current = m.lastRaw = raw;
+            paint();
             return;
         }
 
-        let diff = normalized - previousRef.current;
+        let diff = raw - m.lastRaw;
         if (diff > 180) diff -= 360;
         else if (diff < -180) diff += 360;
+        m.lastRaw = raw;
+        m.target += diff;
 
-        // Ignore floating-point noise
-        if (Math.abs(diff) > 0.1) {
-            setUnwrapped(prev => prev + diff);
-            previousRef.current = normalized;
+        if (prefersReducedMotion()) {
+            m.current = m.target;
+            m.velocity = 0;
+            paint();
+        } else if (!m.frame) {
+            m.lastTime = performance.now();
+            m.frame = requestAnimationFrame(step);
         }
-    }, [angle]);
+    }, [angle, paint, step]);
 
-    return unwrapped;
+    useEffect(() => () => cancelAnimationFrame(motion.current.frame), []);
+
+    // The needle mounts later than the rose; draw it in place straight away
+    return useCallback((node) =>
+    {
+        nodeRef.current = node;
+        paint();
+    }, [paint]);
 }
 
 // Bezel ticks every 5°, longer every 30°; computed once
@@ -74,8 +124,8 @@ function CompassArrow({ target, targetName, currentLocation, distance, onClick }
         : targetBearing;
     const rawRose = isLive ? (heading !== null ? -heading : null) : 0;
 
-    const needleRotation = useUnwrappedAngle(rawNeedle);
-    const roseRotation = useUnwrappedAngle(rawRose);
+    const needleRef = useSmoothRotation(rawNeedle);
+    const roseRef = useSmoothRotation(rawRose);
     const showNeedle = (isLive || isFallback) && rawNeedle !== null;
 
     const { fresh, offline, label: freshness } = playerFreshness(target, now);
@@ -124,7 +174,7 @@ function CompassArrow({ target, targetName, currentLocation, distance, onClick }
                     <circle className="compass-bezel" cx="100" cy="100" r="98" />
 
                     {/* Rose: ticks and cardinal letters, turning with the phone */}
-                    <g className="compass-rose" style={{ transform: `rotate(${roseRotation}deg)` }}>
+                    <g className="compass-rose" ref={roseRef}>
                         {TICKS.map((angle) => {
                             const major = angle % 30 === 0;
                             return (
@@ -153,7 +203,7 @@ function CompassArrow({ target, targetName, currentLocation, distance, onClick }
                     <circle className="compass-face" cx="100" cy="100" r="62" fill="url(#dial-face)" />
 
                     {showNeedle && (
-                        <g className="compass-arrow" style={{ transform: `rotate(${needleRotation}deg)` }}>
+                        <g className="compass-arrow" ref={needleRef}>
                             <polygon points="100,44 91,100 100,100" fill="url(#needle-tip-light)" />
                             <polygon points="100,44 109,100 100,100" fill="url(#needle-tip-dark)" />
                             <polygon className="compass-needle-tail compass-needle-tail--light" points="100,156 91,100 100,100" />
