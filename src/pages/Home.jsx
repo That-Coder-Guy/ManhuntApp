@@ -72,7 +72,7 @@ function Home()
                 </IonToolbar>
             </IonHeader>
             <IonContent className="ion-padding">
-                <div className="home-center page-column">
+                <div className="home-center">
                 <header className="home-intro">
                     <h1>Play manhunt outdoors</h1>
                     <p>
