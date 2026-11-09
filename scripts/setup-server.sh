@@ -205,6 +205,75 @@ saved_mode() {
     [[ -r "$1" ]] && sed -n 's/^# tunnel-mode: //p' "$1" | head -n 1
 }
 
+# The publisher's latest report, e.g. "Published https://…" or "Vercel answered 403 …"
+publisher_status() {
+    "${SUDO[@]+"${SUDO[@]}"}" journalctl -u "$PUBLISH_SERVICE_NAME" --no-pager -o cat -n 50 2>/dev/null \
+        | grep -E '^(Watching|Published|Vercel answered|Couldn.t reach|Missing|Waiting)' | tail -n 1 || true
+}
+
+# Ask the Vercel site where the server is until it says PUBLIC_URL, or explain
+# exactly why it doesn't
+check_vercel_site() {
+    local endpoint="$VERCEL_SITE/api/server-origin" body_file reply code redirect origin="" since_published=0
+    body_file="$(mktemp)"
+    for (( i = 0; i < 30; i++ )); do
+        reply="$(curl -sS --max-time 8 -o "$body_file" -w '%{http_code} %{redirect_url}' "$endpoint" 2>/dev/null || true)"
+        code="${reply%% *}"; redirect="${reply#* }"
+        origin="$(grep -o '"origin":[^,}]*' "$body_file" 2>/dev/null | head -n 1 | sed 's/^"origin"://; s/"//g' || true)"
+        if [[ "$code" == 200 && "$origin" == "$PUBLIC_URL" ]]; then
+            rm -f "$body_file"
+            ok "$endpoint → $PUBLIC_URL"
+            return 0
+        fi
+        # Only "not published yet" is worth waiting for, and only while the
+        # publisher hasn't already been refused
+        if [[ "$code" != 200 ]] || ! grep -q '"origin"' "$body_file"; then break; fi
+        case "$(publisher_status)" in
+            "Vercel answered"*) break ;;
+            # Published, but the site still can't see it: a store problem
+            "Published $PUBLIC_URL") (( ++since_published < 10 )) || break ;;
+        esac
+        sleep 3
+    done
+
+    local publisher
+    publisher="$(publisher_status)"
+    warn "$VERCEL_SITE doesn't point at this server yet."
+    if [[ "$code" == 401 || "$code" == 403 || "$redirect" == *vercel.com* ]] || grep -qi 'vercel authentication\|sso-api' "$body_file" 2>/dev/null; then
+        warn "It asks visitors to log in to Vercel (Deployment Protection), so the app can't"
+        warn "read the address, and friends would get a Vercel login page too."
+        [[ "$VERCEL_SITE" != *-git-* ]] || warn "Addresses with -git-<branch>- in them are branch links, which Vercel protects by default."
+        warn "Fix: use the project's production address (Vercel → project → Overview → Domains,"
+        warn "e.g. https://<project>.vercel.app) and re-run with --vercel-site <that address>,"
+        warn "or turn off Vercel Authentication in Settings → Deployment Protection."
+    elif [[ "$code" == 000 || -z "$code" ]]; then
+        warn "Couldn't reach $VERCEL_SITE at all. Check the address (open it in a browser)."
+    elif [[ "$code" == 404 ]]; then
+        warn "This deployment has no /api/server-origin. In Vercel, redeploy the latest main"
+        warn "(Deployments → ⋯ → Redeploy), and check Settings → General → Root Directory is empty."
+    elif [[ "$code" =~ ^5 ]]; then
+        warn "The site's /api/server-origin function failed (HTTP $code). See Vercel → project → Logs."
+    elif [[ "$code" == 200 ]] && ! grep -q '"origin"' "$body_file"; then
+        warn "It answers with the app's page instead of the function, so Vercel didn't deploy"
+        warn "the api/ folder. Check Settings → General → Root Directory is empty, then redeploy."
+    elif [[ "$publisher" == Published* ]]; then
+        warn "The Pi published its address, but the site reads ${origin:-nothing}."
+        warn "Connect the Global Config store to this project (Storage tab → the store → Projects),"
+        warn "make sure it's the store with ID $GLOBAL_CONFIG_ID, then redeploy."
+    elif [[ "$publisher" == "Vercel answered 40"[13]* ]]; then
+        warn "Vercel refused the Pi's token: re-run with --vercel-token <a new token>, and add"
+        warn "--vercel-team team_… if the project is in a team."
+    elif [[ "$publisher" == "Vercel answered 404"* ]]; then
+        warn "Vercel doesn't know store $GLOBAL_CONFIG_ID: re-run with --global-config <the store's ID>,"
+        warn "and --vercel-team team_… if the project is in a team."
+    else
+        warn "The site answered: $(head -c 200 "$body_file" 2>/dev/null)"
+    fi
+    [[ -z "$publisher" ]] || warn "Publisher's latest report: $publisher"
+    warn "Check again any time: curl $endpoint"
+    rm -f "$body_file"
+}
+
 node_is_new_enough() {
     command -v node >/dev/null || return 1
     # The server shares an ES module with the app, which needs Node 20.19+ or 22.12+
@@ -577,22 +646,7 @@ WantedBy=multi-user.target"
     if (( DRY_RUN )); then
         note "Check skipped in a dry run"
     else
-        published=0
-        for (( i = 0; i < 30; i++ )); do
-            if curl -fsS --max-time 5 "$VERCEL_SITE/api/server-origin" 2>/dev/null | grep -qF "\"origin\":\"$PUBLIC_URL\""; then
-                published=1; break
-            fi
-            sleep 3
-        done
-        if (( published )); then
-            ok "$VERCEL_SITE/api/server-origin → $PUBLIC_URL"
-        else
-            warn "The Vercel site doesn't report this server's address yet."
-            warn "  1. journalctl -u $PUBLISH_SERVICE_NAME -n 20 shows a wrong token or Global Config ID."
-            warn "     Fix it by re-running with --vercel-token / --global-config."
-            warn "  2. If it says \"Published\", connect the Global Config store to the Vercel"
-            warn "     project and redeploy, then: curl $VERCEL_SITE/api/server-origin"
-        fi
+        check_vercel_site
     fi
 fi
 

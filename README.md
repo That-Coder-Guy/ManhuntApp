@@ -197,7 +197,10 @@ If the Pi is off, creating a lobby says "The game server is offline".
 1. **Import the repo in Vercel** (Add New → Project → this repository) and
    deploy. `vercel.json` sets everything: the build (`npm run build:vercel`),
    the `dist` output, and a rewrite so invite links like `/lobby/<id>` open
-   the app. Note the site's address, e.g. `https://your-project.vercel.app`.
+   the app. Note the site's **production** address, listed under **Domains**
+   on the project's Overview, e.g. `https://your-project.vercel.app`. Don't use
+   a link with `-git-main-` or a random hash in it: those are deployment
+   links, and Vercel puts its own login page in front of them by default.
 2. **Create the Global Config store.** In the project, open the
    **Storage** tab and pick **Global Config** (formerly Edge Config), name it
    (`manhunt`), and connect it to the project for all environments.
@@ -245,6 +248,15 @@ Re-run the script with `--vercel-token <NEW TOKEN>` to replace it.
 
 Preview deployments get their own `*.vercel.app` addresses. Allow any you
 want to play on with `--allow-origin https://….vercel.app`.
+
+If the script says the site doesn't point at the server yet, it explains why:
+
+| It says | Fix |
+| --- | --- |
+| Asks visitors to log in to Vercel | Use the production address with `--vercel-site`, or turn off **Vercel Authentication** in Settings → Deployment Protection |
+| No `/api/server-origin` / answers with the app's page | Redeploy the latest `main`; Settings → General → Root Directory must be empty |
+| The Pi published its address, but the site reads null | Connect the Global Config store to the project (Storage tab), then redeploy |
+| Vercel refused the Pi's token | Re-run with a new `--vercel-token` (and `--vercel-team` for a team project) |
 
 ### With your own domain instead
 
