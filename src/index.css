@@ -354,17 +354,28 @@ ion-note {
   margin-block-end: auto;
 }
 
+/* Landing page: the intro sits at the top and the two cards are centred on
+   the screen as one block. The outer rows share the leftover height equally,
+   so the cards sit dead centre; on a short screen the first row grows to fit
+   the intro and the cards move down instead of overlapping it */
 .home-center {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
+  display: grid;
+  grid-template-rows: 1fr auto 1fr;
+  row-gap: var(--space-6);
+  min-height: 100%;
   max-width: 30rem;
   width: 100%;
   margin-inline: auto;
 }
 
+.home-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
 .home-intro {
-  margin-bottom: var(--space-3);
+  align-self: start;
   padding-inline: var(--space-1);
 }
 

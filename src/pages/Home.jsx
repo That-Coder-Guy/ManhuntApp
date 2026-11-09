@@ -81,6 +81,7 @@ function Home()
                     </p>
                 </header>
 
+                <div className="home-cards">
                 <IonCard>
                     <IonCardHeader>
                         <IonCardTitle>Start a game</IonCardTitle>
@@ -139,6 +140,7 @@ function Home()
                         </IonButton>
                     </IonCardContent>
                 </IonCard>
+                </div>
                 </div>
 
                 <QrScanModal
