@@ -59,6 +59,8 @@ real app, captured at phone size (390 × 844) from a scripted game.
       <br><br>
       <b>Time limit and head start.</b> Seekers wait out the head start while hiders' positions stay hidden. The clock starts when seekers set off; the hiders win if it runs out.
       <br><br>
+      <b>Found range.</b> How close a seeker must get before a hider can declare themselves found (50 m by default).
+      <br><br>
       Everyone else can open the same sheet to see the rules and the area, but can't change them.
     </td>
   </tr>
@@ -83,12 +85,12 @@ real app, captured at phone size (390 × 844) from a scripted game.
 
 <table>
   <tr>
-    <td width="33%" valign="top"><img src="docs/walkthrough/11-hider.png" alt="Hider's list of seekers; the closest is flagged at 52 m with a warning icon and a full red proximity bar" width="100%"></td>
+    <td width="33%" valign="top"><img src="docs/walkthrough/11-hider.png" alt="Hider's list of seekers; Theo is flagged at 30 m with a warning icon and a red proximity bar, and the I've been found button is unlocked: Theo is 30 m away" width="100%"></td>
     <td width="33%" valign="top"><img src="docs/walkthrough/12-outside.png" alt="Hider outside the play area: Outside, 251 m back, head N" width="100%"></td>
     <td width="33%" valign="top"><img src="docs/walkthrough/13-area-map.png" alt="Map of the play area with the player's position outside it" width="100%"></td>
   </tr>
   <tr>
-    <td valign="top"><b>Watch them close in.</b> Seekers sorted by distance, with a bar that fills as each one gets closer. Under 100 m it turns red with a warning icon.</td>
+    <td valign="top"><b>Watch them close in.</b> Seekers sorted by distance, with a bar that fills as each one gets closer. Under 100 m it turns red with a warning icon. Once a seeker is within the found range (50 m unless the host changes it), <b>I’ve been found</b> unlocks: tap it and you join the seekers.</td>
     <td valign="top"><b>Stay in bounds.</b> Step outside the area and the status card says how far back it is and which way to go.</td>
     <td valign="top"><b>See the area.</b> Tap the status card to open the map, framed to show both the area and you.</td>
   </tr>
@@ -99,11 +101,11 @@ real app, captured at phone size (390 × 844) from a scripted game.
 <table>
   <tr>
     <td width="33%" valign="top"><img src="docs/walkthrough/14-offline.png" alt="Offline banner: positions from 6 s ago, with the list still showing" width="100%"></td>
-    <td width="33%" valign="top"><img src="docs/walkthrough/15-game-over.png" alt="Game over screen with a Back to the lobby button for the host" width="100%"></td>
+    <td width="33%" valign="top"><img src="docs/walkthrough/15-game-over.png" alt="Game over: Everyone was found, the seekers win, with the order hiders were found and a Back to the lobby button for the host" width="100%"></td>
     <td valign="top">
       <b>Built for patchy signal.</b> When the connection drops, the game keeps showing the last known positions with their age, reconnects on its own and resumes the same player. Nobody is kicked out by a dead zone.
       <br><br>
-      <b>Game over.</b> The round ends when time runs out or the host ends it. The host takes everyone back to the lobby for another round with the same group.
+      <b>Game over.</b> The round ends when every hider is found, time runs out, or the host ends it. Everyone sees the result, and who was found when, until the host takes the group back to the lobby; only the host has that button. Everyone gets their starting role back.
     </td>
   </tr>
 </table>
@@ -338,6 +340,11 @@ name, a small profile picture and a role; the host sets the rules and starts.
   lives in `shared/geofence.js`, used by both the app and the server.
 - **Time limit** (the hiders win when it runs out) and **head start** (seekers
   wait; hiders' positions stay hidden until it ends).
+- **Found range** (50 m by default, 10–300 m): once a seeker is this close, a
+  hider can tap **I've been found** and joins the seekers. The server checks
+  the distance itself, against seekers' positions from the last two minutes,
+  and not during the head start. When the last hider is found the seekers win
+  and the game ends for everyone.
 - The host can move players between roles, hand over the host role, remove
   players, end the game and start another round. The server enforces all of
   this, not just the UI.

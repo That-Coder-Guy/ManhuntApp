@@ -363,6 +363,11 @@ try {
         }
     });
     await shot(theo.page, '10-compass');
+    // Theo gets within the found range of Maya: her Found button unlocks
+    await move(players.find((p) => p.page === theo.page), at(0.00025, 0.00015));
+    await maya.page.waitForFunction(() => /away$/.test(document.querySelector('[data-testid="found-hint"]')?.innerText || '')
+        && /m away/.test(document.querySelector('[data-testid="found-hint"]').innerText)
+        && !/Nearest/.test(document.querySelector('[data-testid="found-hint"]').innerText), null, { timeout: 15000 });
     await shot(maya.page, '11-hider');
     await sam.page.waitForSelector('[data-testid="out-of-bounds"]');
     await shot(sam.page, '12-outside');
@@ -370,6 +375,8 @@ try {
     await sam.page.waitForSelector('[data-testid="play-area-map"] .leaflet-tile-loaded', { timeout: 15000 });
     await pause(800);
     await shot(sam.page, '13-area-map');
+    await sam.page.locator('ion-modal.show-modal [data-testid="settings-cancel"]').click();
+    await sam.page.waitForSelector('[data-testid="settings-sheet"]', { state: 'hidden' }).catch(() => {});
 
     // 8. Signal drops: last known positions stay, clearly labelled
     await jordan.context.setOffline(true);
@@ -379,11 +386,25 @@ try {
     await shot(jordan.page, '14-offline');
     await jordan.context.setOffline(false);
 
-    // 9. The host ends the round
-    await maya.page.locator('[data-testid="end-game-btn"]').click();
-    await maya.page.waitForSelector('.end-alert');
-    await maya.page.locator('.end-alert button:has-text("End game")').click();
+    // 9. Each hider is caught: they walk up to Theo and tap "I've been found";
+    // the last one found ends the round for everyone
+    for (const hider of [priya, sam, maya])
+    {
+        await move(players.find((p) => p.page === hider.page), at(0.00033, 0.0002));
+        await hider.page.waitForFunction(() =>
+        {
+            const button = document.querySelector('[data-testid="found-btn"]');
+            return button && !button.classList.contains('button-disabled');
+        }, null, { timeout: 20000 });
+        await hider.page.locator('[data-testid="found-btn"]').click();
+        await hider.page.waitForSelector('ion-alert.found-alert');
+        await hider.page.locator('ion-alert.found-alert button:has-text("I’ve been found")').click();
+        await hider.page.waitForFunction(() => document.querySelector('[data-testid="game-role"]')?.innerText === 'Seeker'
+            || document.querySelector('[data-phase="ended"]'), null, { timeout: 10000 });
+        await pause(1200);
+    }
     await maya.page.waitForSelector('[data-phase="ended"]');
+    await pause(4000); // let the "found" notice fade
     await shot(maya.page, '15-game-over');
 
     // Hero: three phones side by side

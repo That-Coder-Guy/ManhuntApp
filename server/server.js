@@ -8,7 +8,7 @@ const { Server } = require('socket.io');
 const { v4: uuidv4 } = require('uuid');
 
 const { isAllowedOrigin } = require('./origins');
-const { PHASE, DEFAULT_SETTINGS, applySettings, isOutOfBounds, isValidAvatar } = require('./game');
+const { PHASE, DEFAULT_SETTINGS, applySettings, isOutOfBounds, isValidAvatar, nearestSeeker } = require('./game');
 
 const API_PREFIX = '/manhunt-api';
 const SOCKET_PATH = `${API_PREFIX}/socket.io`;
@@ -169,13 +169,24 @@ function createGameServer(options = {})
 
         if (lobby.players.size === 0) return deleteLobby(lobbyId);
         if (lobby.host_token === token) chooseNewHost(lobby);
+        endIfNoHiders(lobbyId, lobby, { reason: 'no_hiders', winner: null });
         scheduleBroadcast(lobbyId);
+    }
+
+    // A running game ends once nobody is left hiding
+    function endIfNoHiders(lobbyId, lobby, result)
+    {
+        if (lobby.phase !== PHASE.PLAYING) return;
+        if ([...lobby.players.values()].some((p) => !p.is_seeker)) return;
+        endGame(lobbyId, result);
     }
 
     function startGame(lobbyId, lobby)
     {
         const now = Date.now();
         const headStartEnds = now + lobby.settings.head_start_s * 1000;
+        // Found hiders turn into seekers; this is what "Back to the lobby" restores
+        for (const p of lobby.players.values()) p.role_at_start = p.is_seeker;
         lobby.phase = PHASE.PLAYING;
         lobby.game = {
             started_at: now,
@@ -184,6 +195,7 @@ function createGameServer(options = {})
             ends_at: lobby.settings.time_limit_s ? headStartEnds + lobby.settings.time_limit_s * 1000 : null,
             ended_at: null,
             result: null,
+            found: [],  // [{ player_id, at }] in the order hiders were found
         };
 
         clearGameTimers(lobby);
@@ -416,6 +428,39 @@ function createGameServer(options = {})
             reply(ack, { status: 'success' });
         });
 
+        // A hider a seeker has caught: within the lobby's found range of a
+        // seeker with a recent fix, they declare it and join the seekers
+        on('found', ({ latitude, longitude } = {}, ack, currentLobby, p) =>
+        {
+            const now = Date.now();
+            const game = currentLobby.game;
+            if (currentLobby.phase !== PHASE.PLAYING) return reply(ack, { status: 'wrong_phase', description: 'No game is running.' });
+            if (p.is_seeker) return reply(ack, { status: 'already_seeker', description: "You're already a seeker." });
+            if (now < game.head_start_ends_at) return reply(ack, { status: 'head_start', description: 'Seekers are still waiting out the head start.' });
+
+            // The freshest position: the one the phone sends with the request
+            if (isCoordinate(latitude, 90) && isCoordinate(longitude, 180))
+            {
+                p.latitude = latitude;
+                p.longitude = longitude;
+                p.location_last_updated = now;
+            }
+            const range = currentLobby.settings.found_range_m;
+            const nearest = nearestSeeker(p, currentLobby.players.values(), now);
+            if (!nearest || nearest.distance > range)
+            {
+                return reply(ack, { status: 'too_far', description: `No seeker is within ${range} m of you.` });
+            }
+
+            p.is_seeker = true;
+            game.found = [...(game.found || []), { player_id: p.player_id, at: now }];
+            const hidersLeft = [...currentLobby.players.values()].filter((q) => !q.is_seeker).length;
+            io.to(lobbyId).emit('player-found', { player_id: p.player_id, name: p.name, hiders_left: hidersLeft });
+            endIfNoHiders(lobbyId, currentLobby, { reason: 'all_found', winner: 'seekers' });
+            scheduleBroadcast(lobbyId);
+            reply(ack, { status: 'success' });
+        });
+
         on('leave-lobby', (data, ack) =>
         {
             removePlayer(lobbyId, token);
@@ -463,6 +508,12 @@ function createGameServer(options = {})
             clearGameTimers(currentLobby);
             currentLobby.phase = PHASE.LOBBY;
             currentLobby.game = null;
+            // Everyone goes back to the role they started the round with
+            for (const p of currentLobby.players.values())
+            {
+                if (typeof p.role_at_start === 'boolean') p.is_seeker = p.role_at_start;
+                delete p.role_at_start;
+            }
             scheduleBroadcast(lobbyId);
             reply(ack, { status: 'success' });
         }, { hostOnly: true });
@@ -472,6 +523,7 @@ function createGameServer(options = {})
             const [, target] = findPlayer(currentLobby, playerId);
             if (!target || typeof isSeeker !== 'boolean') return reply(ack, { status: 'validation_error' });
             target.is_seeker = isSeeker;
+            endIfNoHiders(lobbyId, currentLobby, { reason: 'all_found', winner: 'seekers' });
             scheduleBroadcast(lobbyId);
             reply(ack, { status: 'success' });
         }, { hostOnly: true });

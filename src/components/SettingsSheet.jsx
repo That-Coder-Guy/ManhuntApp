@@ -4,11 +4,12 @@ import {
     IonList, IonItem, IonLabel, IonToggle, IonSelect, IonSelectOption, IonToast
 } from '@ionic/react';
 import PlayAreaMap from './PlayAreaMap';
-import { formatDuration, formatArea } from '../utils/game';
+import { formatDuration, formatArea, FOUND_RANGE_DEFAULT_M } from '../utils/game';
 import { polygonArea, polygonProblem, POLYGON_LIMITS } from '../../shared/geofence.js';
 
 const TIME_LIMITS_MIN = [0, 10, 15, 20, 30, 45, 60, 90, 120];
 const HEAD_STARTS_S = [0, 30, 60, 120, 180, 300];
+const FOUND_RANGES_M = [10, 25, 50, 75, 100, 150, 200, 300];
 
 /**
  * Game settings. The host edits a draft and saves it; everyone else sees the
@@ -182,6 +183,28 @@ function SettingsSheet({ isOpen, onClose, settings, isHost, canEdit, currentLoca
                 <p className="settings-note">
                     Seekers wait out the head start. The time limit starts when they set off, and the
                     hiders win if it runs out.
+                </p>
+
+                <h3 className="settings-section">Finding</h3>
+                <IonList inset className="settings-list">
+                    <IonItem>
+                        <IonSelect
+                            label="Found within"
+                            data-testid="found-range"
+                            interface="action-sheet"
+                            value={draft?.found_range_m ?? FOUND_RANGE_DEFAULT_M}
+                            disabled={!editable}
+                            onIonChange={(e) => setDraft((d) => ({ ...d, found_range_m: e.detail.value }))}
+                        >
+                            {FOUND_RANGES_M.map((m) => (
+                                <IonSelectOption key={m} value={m}>{`${m}\u202Fm`}</IonSelectOption>
+                            ))}
+                        </IonSelect>
+                    </IonItem>
+                </IonList>
+                <p className="settings-note">
+                    A hider can tap “I’ve been found” once a seeker is this close, and joins the
+                    seekers. When everyone is found, the seekers win.
                 </p>
 
                 <IonToast isOpen={!!error} message={error} duration={4000} onDidDismiss={() => setError('')} />

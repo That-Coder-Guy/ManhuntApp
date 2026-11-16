@@ -251,6 +251,9 @@ ion-modal ion-toolbar ion-buttons ion-button {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+  /* The 24px mark is taller than the title's line; centre the pair on the
+     toolbar instead of letting it sit on the text baseline */
+  vertical-align: middle;
   font-weight: 600;
 }
 
@@ -1647,11 +1650,63 @@ ion-card.game-over-card ion-card-title {
   line-height: 2rem;
 }
 
-.game-over-result {
-  margin: 0 0 var(--space-2);
+ion-card-content p.game-over-result {
+  margin: 0 0 var(--space-1);
   font-size: var(--fs-title) !important;
   line-height: 1.5rem;
   color: var(--text-1) !important;
+}
+
+/* Who was found, in order, with the game-clock time. Qualified so it
+   outranks Ionic's .card-content-ios h3, whose styles load after ours */
+ion-card-content h3.found-list-title {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--fs-caption);
+  line-height: 1.25rem;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.found-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: found;
+}
+
+.found-list li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  counter-increment: found;
+}
+
+.found-list li::before {
+  content: counter(found);
+  min-width: 1.25rem;
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  color: var(--text-3);
+}
+
+.found-list-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-body);
+  line-height: 1.375rem;
+  color: var(--text-1);
+}
+
+.found-list-time {
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  color: var(--text-3);
 }
 
 /* ===== FOOTER BAR: the host's next step, or what everyone waits for ===== */

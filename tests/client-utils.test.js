@@ -69,7 +69,7 @@ test('geo helpers handle missing and zero coordinates', () => {
     assert.ok(Math.abs(calculateBearing(0, 0, 0, 1) - 90) < 0.01, 'due east');
 });
 
-import { formatClock, formatDuration, formatArea, describeSettings, playAreaStatus, gameClock } from '../src/utils/game.js';
+import { formatClock, formatDuration, formatArea, describeSettings, playAreaStatus, gameClock, foundStatus } from '../src/utils/game.js';
 import { initials } from '../src/utils/avatar.js';
 
 test('clock and duration formats', () => {
@@ -93,7 +93,8 @@ const square = [
 
 test('settings summary', () => {
     assert.deepEqual(describeSettings({ geofence: null, time_limit_s: 0, head_start_s: 60 }),
-        { playArea: 'Anywhere', timeLimit: 'No limit', headStart: '1 min' });
+        { playArea: 'Anywhere', timeLimit: 'No limit', headStart: '1 min', foundRange: '50\u202Fm' });
+    assert.equal(describeSettings({ found_range_m: 100 }).foundRange, '100\u202Fm');
     assert.equal(describeSettings({ geofence: { points: square } }).playArea, '38,300\u202Fm²');
     assert.equal(formatArea(1_234_567), '1.2\u202Fkm²');
 });
@@ -126,4 +127,23 @@ test('initials for placeholder avatars', () => {
     assert.equal(initials('Maya Lopez'), 'ML');
     assert.equal(initials('  ana  de  la cruz '), 'AC');
     assert.equal(initials(''), '?');
+});
+
+test('foundStatus judges the found range the way the server does', () => {
+    const now = 1_000_000;
+    const me = { latitude: 39.19, longitude: -96.58 };
+    const seeker = (latitude, age = 0) => ({ is_seeker: true, latitude, longitude: -96.58, location_last_updated: now - age });
+    const game = { head_start_ends_at: now - 1 };
+    const status = (players, extra = {}) => foundStatus({ game, settings: { found_range_m: 50 }, location: me, players, serverNow: now, ...extra });
+
+    assert.equal(status([seeker(39.1903)]).state, 'in_range', '~33 m');
+    assert.equal(Math.round(status([seeker(39.1903)]).distance), 33);
+    assert.equal(status([seeker(39.192)]).state, 'out_of_range', '~220 m');
+    assert.equal(status([seeker(39.192), seeker(39.1903)]).state, 'in_range', 'the nearest seeker counts');
+    assert.equal(status([seeker(39.1903, 3 * 60 * 1000)]).state, 'no_seeker', 'a stale fix does not count');
+    assert.equal(status([{ ...seeker(39.1903), is_seeker: false }]).state, 'no_seeker', 'hiders do not count');
+    assert.equal(status([seeker(39.1903)], { location: null }).state, 'no_fix');
+    assert.equal(status([seeker(39.1903)], { game: { head_start_ends_at: now + 5000 } }).state, 'head_start');
+    assert.equal(status([seeker(39.192)], { settings: { found_range_m: 250 } }).state, 'in_range', "the host's range applies");
+    assert.equal(status([seeker(39.1903)], { settings: {} }).range, 50, 'defaults to 50 m');
 });

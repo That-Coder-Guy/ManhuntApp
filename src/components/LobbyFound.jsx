@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     IonPage, IonHeader, IonToolbar, IonTitle, IonContent, IonFooter,
@@ -15,7 +15,7 @@ import PlayerTableModal from './PlayerTableModal';
 import ShareModal from './ShareModal';
 import ConnectionBanner from './ConnectionBanner';
 import { PlayerListCard } from './PlayerList';
-import { SettingsRow, GameStatusCard, GameOverCard, PhaseFooter } from './GamePanels';
+import { SettingsRow, GameStatusCard, GameOverCard, PhaseFooter, FoundFooter } from './GamePanels';
 import { PHASE } from '../hooks/useLobbySocket';
 import useGeolocation from '../hooks/useGeolocation';
 import { withDummyPlayers } from '../utils/dummyPlayers';
@@ -35,7 +35,7 @@ function LobbyFound({ lobbyId, lobby, onLeft, permissionsGranted = false })
     const {
         lobbyName, selfPlayer, players, phase, hostId, isHost, settings, game, avatars,
         clockOffset, connectionState, lastSyncTime, updateLocation, updatePlayer, setAvatar,
-        hostActions, leaveLobby
+        declareFound, foundNotice, hostActions, leaveLobby
     } = lobby;
 
     const { location: currentLocation, gpsError } = useGeolocation(permissionsGranted, updateLocation);
@@ -46,6 +46,7 @@ function LobbyFound({ lobbyId, lobby, onLeft, permissionsGranted = false })
     const [isLeaveConfirmOpen, setIsLeaveConfirmOpen] = useState(false);
     const [isEndConfirmOpen, setIsEndConfirmOpen] = useState(false);
     const [error, setError] = useState('');
+    const [notice, setNotice] = useState('');
 
     const isSeeker = !!selfPlayer?.is_seeker;
     const everyone = selfPlayer ? [selfPlayer, ...players] : players;
@@ -61,6 +62,21 @@ function LobbyFound({ lobbyId, lobby, onLeft, permissionsGranted = false })
         avatars,
         hostActions
     };
+
+    // Tell everyone when a hider is found
+    useEffect(() =>
+    {
+        if (!foundNotice) return;
+        const isMe = foundNotice.player_id === selfPlayer?.player_id;
+        const who = everyone.find((p) => p.player_id === foundNotice.player_id);
+        const name = who ? playerName(who) : foundNotice.name || 'A hider';
+        const left = foundNotice.hiders_left;
+        setNotice(isMe
+            ? 'You’re a seeker now. Go find the others.'
+            : `${name} was found · ${left === 0 ? 'everyone is found' : `${left} ${left === 1 ? 'hider' : 'hiders'} left`}`);
+        // Only a new notice should trigger this, not every lobby update
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [foundNotice]);
 
     // leaveLobby never rejects: offline, the server just expires the player
     async function handleLeave()
@@ -151,11 +167,24 @@ function LobbyFound({ lobbyId, lobby, onLeft, permissionsGranted = false })
 
                     {phase === PHASE.ENDED && (
                         <div className="lobby-body-main">
-                            <GameOverCard game={game} />
+                            <GameOverCard game={game} players={everyone} />
                         </div>
                     )}
                 </div>
             </IonContent>
+
+            {phase === PHASE.PLAYING && !isSeeker && (
+                <IonFooter className="phase-footer-bar">
+                    <FoundFooter
+                        game={game}
+                        settings={settings}
+                        location={currentLocation}
+                        players={players}
+                        clockOffset={clockOffset}
+                        declareFound={declareFound}
+                    />
+                </IonFooter>
+            )}
 
             {phase !== PHASE.PLAYING && (
                 <IonFooter className="phase-footer-bar">
@@ -168,6 +197,15 @@ function LobbyFound({ lobbyId, lobby, onLeft, permissionsGranted = false })
                     />
                 </IonFooter>
             )}
+
+            <IonToast
+                isOpen={!!notice}
+                message={notice}
+                duration={3500}
+                position="top"
+                cssClass="found-toast"
+                onDidDismiss={() => setNotice('')}
+            />
 
             <IonAlert
                 isOpen={isLeaveConfirmOpen}

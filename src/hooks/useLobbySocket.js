@@ -94,6 +94,8 @@ function useLobbySocket(lobbyId, credentials, onJoined)
     const [selfId, setSelfId] = useState(null);
     const [lobby, setLobby] = useState(EMPTY_LOBBY);
     const [avatars, setAvatars] = useState({});
+    // The latest "someone was found" notice: { player_id, name, hiders_left, at }
+    const [foundNotice, setFoundNotice] = useState(null);
     // Server clock minus ours, so countdowns agree across phones
     const [clockOffset, setClockOffset] = useState(0);
     const [connectionState, setConnectionState] = useState(CONNECTION_STATE.RECONNECTING);
@@ -191,6 +193,7 @@ function useLobbySocket(lobbyId, credentials, onJoined)
         socket.on('avatars', (data) => setAvatars(data?.avatars && typeof data.avatars === 'object' ? data.avatars : {}));
         socket.on('avatar', ({ player_id: playerId, avatar } = {}) =>
             setAvatars((current) => ({ ...current, [playerId]: avatar || undefined })));
+        socket.on('player-found', (data) => { if (data) setFoundNotice({ ...data, at: Date.now() }); });
 
         socket.on('fatal-error', (data) =>
         {
@@ -231,6 +234,11 @@ function useLobbySocket(lobbyId, credentials, onJoined)
 
     const updatePlayer = useCallback((updates) => send('update-player', updates), [send]);
     const setAvatar = useCallback((avatar) => send('set-avatar', { avatar }), [send]);
+    // A hider a seeker reached: sends the phone's current position with it,
+    // and the server decides (it rejects with status 'too_far', 'head_start', …)
+    const declareFound = useCallback((location) => send('found', location
+        ? { latitude: location.latitude, longitude: location.longitude }
+        : {}), [send]);
 
     // Refused by the server unless this player is the host
     const hostActions = useMemo(() => ({
@@ -276,6 +284,8 @@ function useLobbySocket(lobbyId, credentials, onJoined)
         updateLocation,
         updatePlayer,
         setAvatar,
+        declareFound,
+        foundNotice,
         hostActions,
         leaveLobby
     };
