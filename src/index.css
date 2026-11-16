@@ -702,7 +702,8 @@ ion-segment.role-segment::before {
   pointer-events: none;
 }
 
-ion-segment.role-segment--hider::before {
+ion-segment.role-segment--hider::before,
+ion-segment.track-mode--map::before {
   transform: translateX(100%);
 }
 
@@ -928,6 +929,148 @@ ion-item.targets-item .fix-dot {
 .compass-screen ion-button.compass-back-btn {
   align-self: flex-start;
   margin: 0;
+}
+
+/* ===== TRACKING: compass or map ===== */
+/* Back to the list on the left, the Compass / Map switch on the right */
+.track-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.track-bar ion-button.compass-back-btn {
+  flex-shrink: 0;
+}
+
+/* 13.5rem where there's room; on the narrowest phones it gives way to the
+   back button, keeping enough for "Compass" */
+ion-segment.track-mode {
+  flex: 0 1 13.5rem;
+  min-width: 10rem;
+  height: 2.5rem;
+}
+
+ion-segment.track-mode ion-segment-button {
+  --padding-start: var(--space-2);
+  --padding-end: var(--space-2);
+  font-size: var(--fs-caption);
+}
+
+/* Map mode: the map takes the room between the switch and the readout */
+.track-screen--map {
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.track-map-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  /* Short phones keep the distance on screen below the map */
+  min-height: min(16rem, 30vh);
+  width: 100%;
+}
+
+.play-area-map.track-map {
+  height: 100%;
+}
+
+/* Over the map, top right: frame you and the hider again */
+.track-map-fit {
+  position: absolute;
+  z-index: 1000;
+  top: var(--space-3);
+  right: var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 2.25rem;
+  padding: 0 var(--space-3);
+  border: var(--hairline);
+  border-radius: var(--radius-control);
+  background: var(--ink-2);
+  color: var(--text-2);
+  font: 500 var(--fs-caption) / 1 var(--font-sans);
+  cursor: pointer;
+}
+
+.track-map-fit ion-icon {
+  font-size: 1rem;
+}
+
+/* Once the seeker has moved the map, Fit is the way back */
+.track-map-fit--active {
+  color: var(--text-1);
+  border-color: var(--accent);
+}
+
+.track-map-waiting {
+  position: absolute;
+  z-index: 1000;
+  left: 50%;
+  bottom: var(--space-4);
+  transform: translateX(-50%);
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-control);
+  background: rgba(11, 13, 20, 0.85);
+  max-width: calc(100% - var(--space-8));
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+  line-height: 1.25rem;
+  text-align: center;
+}
+
+/* Hider pins: initials in a disc, green ring while their fix is fresh.
+   The doubled class beats Leaflet's display:block on marker icons */
+.leaflet-marker-icon.track-pin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.track-pin-disc {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--positive);
+  border-radius: 50%;
+  background: var(--ink-3);
+  color: var(--text-1);
+  font: 500 11px / 1 var(--font-mono);
+}
+
+.track-pin--stale .track-pin-disc {
+  border-color: var(--text-3);
+  color: var(--text-2);
+}
+
+/* The hider being tracked: larger, raised, and named */
+.track-pin--tracked .track-pin-disc {
+  width: 38px;
+  height: 38px;
+  border-width: 3px;
+  background: var(--ink-4);
+  font-size: 13px;
+  box-shadow: 0 0 0 3px rgba(11, 13, 20, 0.7);
+}
+
+.track-pin-label {
+  position: absolute;
+  top: calc(100% + 4px);
+  padding: 1px var(--space-2);
+  border-radius: 6px;
+  background: rgba(11, 13, 20, 0.88);
+  color: var(--text-1);
+  font: 500 12px / 18px var(--font-sans);
+  white-space: nowrap;
 }
 
 .compass-arrow-container {

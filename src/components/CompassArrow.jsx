@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 import useCompassHeading, { COMPASS_STATUS } from '../hooks/useCompassHeading';
-import { calculateBearing, formatDistance } from '../utils/geo';
+import { calculateBearing } from '../utils/geo';
 import { bearingToCardinal, smoothDamp } from '../utils/orientation';
-import { playerFreshness } from '../utils/players';
-import useNow from '../hooks/useNow';
-import FixDot from './FixDot';
+import TargetReadout from './TargetReadout';
 
 // How long the dial takes to settle on a new heading, in seconds: long
 // enough to feel like a needle swinging, short enough to keep up while turning
@@ -104,7 +102,6 @@ const CARDINALS = [
 function CompassArrow({ target, targetName, currentLocation, distance, onClick })
 {
     const { heading, status, source, requestPermission } = useCompassHeading();
-    const now = useNow();
 
     // Bearing to the target from true north (null when either position is missing)
     const targetBearing = calculateBearing(
@@ -128,7 +125,6 @@ function CompassArrow({ target, targetName, currentLocation, distance, onClick }
     const roseRef = useSmoothRotation(rawRose);
     const showNeedle = (isLive || isFallback) && rawNeedle !== null;
 
-    const { fresh, offline, label: freshness } = playerFreshness(target, now);
 
     const handleCompassInteraction = (event) => {
         // Not yet asked, or refused this session: a tap asks (again)
@@ -220,20 +216,12 @@ function CompassArrow({ target, targetName, currentLocation, distance, onClick }
                 )}
             </div>
 
-            {/* Readout under the dial, always the same lines so nothing shifts */}
-            <div className="compass-readout">
-                <div className="compass-player-name">
-                    <FixDot fresh={fresh} offline={offline} />
-                    <span className="compass-player-name-text">{targetName}</span>
-                </div>
-                <div className="compass-distance-display">{formatDistance(distance)}</div>
-                <div className="compass-freshness">
-                    {isFallback && targetBearing !== null
-                        ? <span className="compass-cardinal-direction">Head {bearingToCardinal(targetBearing)} · </span>
-                        : null}
-                    {freshness}
-                </div>
-            </div>
+            <TargetReadout
+                target={target}
+                name={targetName}
+                distance={distance}
+                direction={isFallback && targetBearing !== null ? bearingToCardinal(targetBearing) : null}
+            />
 
             {/* Reserved slot, so the hints appearing never move the dial */}
             <div className="compass-calibration-hint">

@@ -363,6 +363,13 @@ try {
         }
     });
     await shot(theo.page, '10-compass');
+    // The same hunt on the street map
+    await theo.page.locator('[data-testid="track-map-btn"]').click();
+    await theo.page.waitForSelector('[data-testid="track-map"] .leaflet-tile-loaded', { timeout: 15000 });
+    await pause(1500);
+    await shot(theo.page, '10b-map');
+    await theo.page.locator('[data-testid="track-compass"]').click();
+    await pause(500);
     // Theo gets within the found range of Maya: her Found button unlocks
     await move(players.find((p) => p.page === theo.page), at(0.00025, 0.00015));
     await maya.page.waitForFunction(() => /away$/.test(document.querySelector('[data-testid="found-hint"]')?.innerText || '')

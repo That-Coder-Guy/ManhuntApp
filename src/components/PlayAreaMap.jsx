@@ -1,15 +1,8 @@
 import { useEffect, useImperativeHandle, useRef } from 'react';
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-
-// OpenStreetMap's standard tiles: free, no key, attribution required
-const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-const ATTRIBUTION = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
-const WORLD_VIEW = { center: [20, 0], zoom: 2 };
-const STREET_ZOOM = 17;
+import { createMap, showView, watchSize, toLatLng, STREET_ZOOM } from '../utils/leafletBase';
 
 const toPoint = (latlng) => ({ latitude: latlng.lat, longitude: latlng.lng });
-const toLatLng = (p) => [p.latitude, p.longitude];
 
 // Touch-sized handles drawn in CSS (.pa-vertex, .pa-midpoint), no image assets
 const vertexIcon = (n, editable) => L.divIcon({
@@ -20,23 +13,6 @@ const vertexIcon = (n, editable) => L.divIcon({
 const midpointIcon = L.divIcon({ className: 'pa-midpoint', html: '<span></span>', iconSize: [28, 28] });
 
 const boundsOf = (latlngs) => ({ bounds: L.latLngBounds(latlngs) });
-
-/**
- * Move the map to a view: { bounds } to frame, or { center, zoom }. A map in a
- * sheet that is still opening has no size yet, and fitting then picks the
- * wrong zoom, so the view waits in `pending` until the map has a size.
- */
-function showView(map, container, pending, view)
-{
-    if (!container.clientWidth || !container.clientHeight)
-    {
-        pending.current = view;
-        return;
-    }
-    pending.current = null;
-    if (view.bounds) map.fitBounds(view.bounds, { padding: [32, 32], maxZoom: STREET_ZOOM });
-    else map.setView(view.center, view.zoom);
-}
 
 /**
  * A map showing the play area polygon. With `editable`, the host builds it:
@@ -77,9 +53,7 @@ function PlayAreaMap({ ref, points, onChange, editable = false, you = null, maxC
     // Create the map once
     useEffect(() =>
     {
-        const map = L.map(containerRef.current, { zoomControl: true, attributionControl: true });
-        L.tileLayer(TILE_URL, { maxZoom: 19, attribution: ATTRIBUTION }).addTo(map);
-        map.attributionControl.setPrefix(false);
+        const map = createMap(containerRef.current);
         shapeLayerRef.current = L.layerGroup().addTo(map);
 
         map.on('click', (event) =>
@@ -89,8 +63,6 @@ function PlayAreaMap({ ref, points, onChange, editable = false, you = null, maxC
             change([...current, toPoint(event.latlng)]);
         });
 
-        // Leaflet needs some view before anything else; the real one follows
-        map.setView(WORLD_VIEW.center, WORLD_VIEW.zoom);
         const container = containerRef.current;
 
         // Opening point: the area if there is one, else the world until we know where you are
@@ -102,17 +74,12 @@ function PlayAreaMap({ ref, points, onChange, editable = false, you = null, maxC
 
         // The sheet animates in, so the container's size settles after mount;
         // a view chosen before then is applied once it has one
-        const resize = new ResizeObserver(() =>
-        {
-            map.invalidateSize();
-            if (pendingViewRef.current) showView(map, container, pendingViewRef, pendingViewRef.current);
-        });
-        resize.observe(container);
+        const stopWatching = watchSize(map, container, pendingViewRef);
 
         mapRef.current = map;
         return () =>
         {
-            resize.disconnect();
+            stopWatching();
             map.remove();
             mapRef.current = null;
         };

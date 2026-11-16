@@ -157,7 +157,12 @@ function LobbyFound({ lobbyId, lobby, onLeft, permissionsGranted = false })
                             </div>
                             <div className="lobby-body-main">
                                 {isSeeker ? (
-                                    <SeekerView players={withDummyPlayers(players)} avatars={avatars} currentLocation={currentLocation} />
+                                    <SeekerView
+                                        players={withDummyPlayers(players)}
+                                        avatars={avatars}
+                                        currentLocation={currentLocation}
+                                        playArea={settings?.geofence?.points ?? null}
+                                    />
                                 ) : (
                                     <HiderView players={withDummyPlayers(players)} avatars={avatars} currentLocation={currentLocation} />
                                 )}

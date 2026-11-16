@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import { IonButton, IonIcon } from '@ionic/react';
+import { IonButton, IonIcon, IonSegment, IonSegmentButton, IonLabel } from '@ionic/react';
 import { chevronBackOutline } from 'ionicons/icons';
 import CompassArrow from './CompassArrow';
+import TrackMap from './TrackMap';
+import TargetReadout from './TargetReadout';
 import useNow from '../hooks/useNow';
-import { calculateDistance } from '../utils/geo';
+import { calculateDistance, calculateBearing } from '../utils/geo';
+import { bearingToCardinal } from '../utils/orientation';
 import { PlayerListCard, PlayerRow } from './PlayerList';
 import { playerName } from '../utils/players';
 
@@ -12,10 +15,25 @@ const TEST_IDS = {
     row: 'target-card', name: 'target-name', distance: 'target-distance'
 };
 
-function SeekerView({ players, avatars = {}, currentLocation })
+// Each seeker's choice of compass or map is remembered on their phone
+const TRACK_MODE_KEY = 'manhunt.trackMode';
+
+function loadTrackMode()
+{
+    try { return localStorage.getItem(TRACK_MODE_KEY) === 'map' ? 'map' : 'compass'; } catch { return 'compass'; }
+}
+
+function SeekerView({ players, avatars = {}, currentLocation, playArea = null })
 {
     const now = useNow();
     const [selectedId, setSelectedId] = useState(null);
+    const [mode, setMode] = useState(loadTrackMode);
+
+    function chooseMode(next)
+    {
+        setMode(next);
+        try { localStorage.setItem(TRACK_MODE_KEY, next); } catch { /* not remembered */ }
+    }
 
     const hiders = players.filter((player) => !player.is_seeker);
     const distanceTo = (player) =>
@@ -26,25 +44,61 @@ function SeekerView({ players, avatars = {}, currentLocation })
 
     if (selected)
     {
+        const bearing = calculateBearing(currentLocation.latitude, currentLocation.longitude, selected.latitude, selected.longitude);
         return (
-            <div className="compass-screen" data-testid="compass-screen">
-                <IonButton
-                    data-testid="compass-back"
-                    fill="clear"
-                    size="small"
-                    className="compass-back-btn"
-                    onClick={() => setSelectedId(null)}
-                >
-                    <IonIcon slot="start" icon={chevronBackOutline} />
-                    All hiders
-                </IonButton>
-                <CompassArrow
-                    target={selected}
-                    targetName={playerName(selected)}
-                    currentLocation={currentLocation}
-                    distance={distanceTo(selected)}
-                    onClick={() => setSelectedId(null)}
-                />
+            <div className={`compass-screen track-screen track-screen--${mode}`} data-testid="compass-screen" data-mode={mode}>
+                <div className="track-bar">
+                    <IonButton
+                        data-testid="compass-back"
+                        fill="clear"
+                        size="small"
+                        className="compass-back-btn"
+                        onClick={() => setSelectedId(null)}
+                    >
+                        <IonIcon slot="start" icon={chevronBackOutline} />
+                        Hiders
+                    </IonButton>
+                    <IonSegment
+                        className={`role-segment track-mode track-mode--${mode}`}
+                        value={mode}
+                        onIonChange={(e) => chooseMode(e.detail.value)}
+                        aria-label="Track with"
+                    >
+                        <IonSegmentButton value="compass" data-testid="track-compass">
+                            <IonLabel>Compass</IonLabel>
+                        </IonSegmentButton>
+                        <IonSegmentButton value="map" data-testid="track-map-btn">
+                            <IonLabel>Map</IonLabel>
+                        </IonSegmentButton>
+                    </IonSegment>
+                </div>
+                {mode === 'compass' ? (
+                    <CompassArrow
+                        target={selected}
+                        targetName={playerName(selected)}
+                        currentLocation={currentLocation}
+                        distance={distanceTo(selected)}
+                        onClick={() => setSelectedId(null)}
+                    />
+                ) : (
+                    <>
+                        <TrackMap
+                            you={currentLocation}
+                            target={selected}
+                            hiders={hiders}
+                            playArea={playArea}
+                            onSelect={setSelectedId}
+                            now={now}
+                        />
+                        {/* The map is north-up, so the direction in words helps */}
+                        <TargetReadout
+                            target={selected}
+                            name={playerName(selected)}
+                            distance={distanceTo(selected)}
+                            direction={bearing === null ? null : bearingToCardinal(bearing)}
+                        />
+                    </>
+                )}
             </div>
         );
     }

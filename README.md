@@ -79,6 +79,10 @@ real app, captured at phone size (390 × 844) from a scripted game.
     <td valign="top"><b>The hunt.</b> Every hider with their distance and how fresh their position is. Anyone who leaves the play area is marked <i>Outside</i>.</td>
     <td valign="top"><b>The compass.</b> Tap a hider: the needle points at them, the dial turns so N stays north, and the distance updates as you move.</td>
   </tr>
+  <tr>
+    <td width="33%" valign="top"><img src="docs/walkthrough/10b-map.png" alt="The tracking map: the seeker's orange dot, a dashed line to Priya's labelled pin, the other hiders and the play area outline" width="100%"></td>
+    <td colspan="2" valign="top"><b>Or the map.</b> Switch from <i>Compass</i> to <i>Map</i> to track on a street map instead: you, a dashed line to the hider you're after, the other hiders (tap one to track them) and the play area. It frames you both, stays put while you pan and zoom, and <i>Fit</i> brings you both back into view. Each phone remembers which one its seeker prefers.</td>
+  </tr>
 </table>
 
 ### 5. Hide
