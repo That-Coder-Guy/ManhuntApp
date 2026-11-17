@@ -24,12 +24,12 @@ real app, captured at phone size (390 × 844) from a scripted game.
 <table>
   <tr>
     <td width="33%" valign="top"><img src="docs/walkthrough/01-home.png" alt="Home screen with Start a game and Join a game cards" width="100%"></td>
-    <td width="33%" valign="top"><img src="docs/walkthrough/02-permissions.png" alt="Set up Manhunt popup in the installed app, with switches for location, notifications and keeping the screen on" width="100%"></td>
+    <td width="33%" valign="top"><img src="docs/walkthrough/02-permissions.png" alt="Before you play popup with switches for location, notifications and keeping the screen on" width="100%"></td>
     <td width="33%" valign="top"><img src="docs/walkthrough/06-invite.png" alt="Invite sheet with a QR code and a Copy link button" width="100%"></td>
   </tr>
   <tr>
     <td valign="top"><b>Create or join.</b> Name the lobby and tap <i>Create lobby</i>. Friends join with the lobby ID, a pasted invite link, or the QR button, which scans an invite with the camera.</td>
-    <td valign="top"><b>Asked when needed.</b> In the browser, Manhunt asks for location as the game starts and offers notifications then; the compass asks when you first tap it. The installed app asks for everything once, in this popup, and keeps the same switches on the Settings page (the gear on the home page).</td>
+    <td valign="top"><b>Before you play.</b> In the browser, entering a lobby asks for what the game uses: location is needed to continue; notifications, the compass (iPhone) and keeping the screen on are optional. The installed app asks the same once, when it first opens, instead. Both keep the switches on the Settings page (the gear on the home page).</td>
     <td valign="top"><b>Invite.</b> The QR button in the top bar shows a code anyone can scan with their phone camera to land straight in the lobby.</td>
   </tr>
 </table>
@@ -381,13 +381,13 @@ name, a small profile picture and a role; the host sets the rules and starts.
   100 m by default), or nothing. The server enforces it: during a game a
   hider's phone is never sent anyone else's position, only what this setting
   allows, worked out on the server.
-- **Permissions** are asked for when they're needed. In the browser:
-  location as the game starts (or when the host taps *Centre on me* on the
-  play-area map), a one-time offer of notifications then too, and the compass
-  when it's first tapped; the screen is kept on during games without asking.
-  The installed app instead asks for everything in one popup when it first
-  opens. Both have the same switches on **Settings** (the gear on the home
-  page), where *Keep screen on* can also be turned off.
+- **Permissions**: in the browser, **Before you play** asks for them on
+  entering a lobby (location is needed to continue; notifications, the
+  compass on an iPhone, and keeping the screen on are optional). The
+  installed app asks for the same once, in a popup when it first opens, and
+  not in lobbies. Both have the same switches on **Settings** (the gear on
+  the home page), where *Keep screen on* can also be turned off; the screen
+  is kept on only during a game.
 - **Notifications**: anyone who turns them on gets one
   when another player is found ("Maya was found · 1 hider left"), even with
   the phone locked. Players looking at the app already see it on screen, so

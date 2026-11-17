@@ -1,9 +1,8 @@
 // What the app may use on this phone, and asking for it.
 //
-// In the browser each permission is asked for right before it's needed
-// (location when a game starts, notifications then too, the compass when
-// it's first tapped). The installed app asks for them all in one popup the
-// first time it opens (PermissionsSetup), and both have them on the
+// In the browser they're asked for on entering a lobby ("Before you play",
+// PermissionsGate). The installed app asks for them all in one popup the
+// first time it opens (PermissionsSetup) instead. Both have them on the
 // Settings page.
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { pushStatus } from '../utils/push';
@@ -12,7 +11,6 @@ import { permissionRequestRequired, readSavedPermission, savePermission } from '
 
 const KEEP_SCREEN_ON_KEY = 'manhunt.keepScreenOn';
 const SETUP_DONE_KEY = 'manhunt.setupDone';
-const NOTIFY_OFFERED_KEY = 'manhunt.notifyOffered';
 
 const read = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
 const write = (key, value) => { try { localStorage.setItem(key, value); } catch { /* not remembered */ } };
@@ -97,10 +95,6 @@ export function useNotificationPermission()
 
     return [status, request];
 }
-
-/** The browser's in-game offer to turn notifications on is made once */
-export const notifyOffered = () => read(NOTIFY_OFFERED_KEY) === '1';
-export const markNotifyOffered = () => write(NOTIFY_OFFERED_KEY, '1');
 
 // ---- Compass (motion and orientation: iPhone and iPad only ask) ----
 

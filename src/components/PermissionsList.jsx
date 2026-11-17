@@ -36,12 +36,19 @@ function PermissionRow({ id, title, requirement, description, status, onToggle, 
 
 /**
  * Everything Manhunt may use on this phone, each with a switch that asks for
- * it. The first-open popup in the installed app and the Settings page.
+ * it: "Before you play" in the browser, the installed app's first-open
+ * popup, and the Settings page. `location` lets the caller share its own
+ * location state; `onNotificationsOn` runs once notifications are allowed.
  */
-function PermissionsList()
+function PermissionsList({ location, onNotificationsOn })
 {
-    const [locationStatus, requestLocation] = useLocationPermission();
-    const [notifyStatus, requestNotifications] = useNotificationPermission();
+    const ownLocation = useLocationPermission();
+    const [locationStatus, requestLocation] = location ?? ownLocation;
+    const [notifyStatus, askNotifications] = useNotificationPermission();
+    const requestNotifications = async () =>
+    {
+        if (await askNotifications() === 'granted') onNotificationsOn?.();
+    };
     const [compassStatus, requestCompass] = useCompassPermission();
     const [keepScreenOn, setKeepScreenOn] = useKeepScreenOn();
     const canKeepOn = wakeLockSupported();

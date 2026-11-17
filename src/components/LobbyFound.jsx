@@ -19,9 +19,7 @@ import { SettingsRow, GameStatusCard, GameOverCard, PhaseFooter, FoundFooter } f
 import { PHASE } from '../hooks/useLobbySocket';
 import useGeolocation from '../hooks/useGeolocation';
 import useWakeLock from '../hooks/useWakeLock';
-import { useLocationPermission, useKeepScreenOn, notifyOffered, markNotifyOffered } from '../hooks/usePermissions';
-import { pushStatus, enablePush } from '../utils/push';
-import { isInstalled } from '../utils/install';
+import { useLocationPermission, useKeepScreenOn } from '../hooks/usePermissions';
 import { withDummyPlayers } from '../utils/dummyPlayers';
 import { playerName } from '../utils/players';
 import { useUpdateReady, applyAppUpdate } from '../utils/appUpdate';
@@ -40,11 +38,12 @@ function LobbyFound({ lobbyId, lobby, onLeft })
     const {
         lobbyName, selfPlayer, players, phase, hostId, isHost, settings, game, seekerInfo, avatars,
         clockOffset, connectionState, lastSyncTime, updateLocation, updatePlayer, setAvatar,
-        declareFound, foundNotice, pushKey, registerPush, hostActions, leaveLobby
+        declareFound, foundNotice, hostActions, leaveLobby
     } = lobby;
 
-    // Location is followed once it's allowed; otherwise it's asked for when
-    // the game starts (or when the host wants the map centred on them)
+    // Location is followed once it's allowed (in "Before you play", or the
+    // installed app's setup); otherwise it's asked for when the game starts,
+    // or when the host wants the map centred on them
     const [locationStatus] = useLocationPermission();
     const [locationAsked, setLocationAsked] = useState(false);
     const wantLocation = phase === PHASE.PLAYING || locationStatus === 'granted' || locationAsked;
@@ -53,24 +52,6 @@ function LobbyFound({ lobbyId, lobby, onLeft })
     // The screen stays on during a game, unless turned off in Settings
     const [keepScreenOn] = useKeepScreenOn();
     useWakeLock(phase === PHASE.PLAYING && keepScreenOn);
-
-    // In the browser, notifications are offered as a game starts (once; the
-    // installed app asked when it first opened). Turning them on needs a tap
-    const [notifyAnswered, setNotifyAnswered] = useState(false);
-    const offerNotifications = phase === PHASE.PLAYING && !!pushKey && !notifyAnswered
-        && !isInstalled() && pushStatus() === 'prompt' && !notifyOffered();
-
-    async function turnOnNotifications()
-    {
-        markNotifyOffered();
-        try {
-            // Asked first, in the tap itself
-            const permission = await Notification.requestPermission();
-            if (permission === 'granted') await registerPush(await enablePush(pushKey));
-        } catch (err) {
-            console.warn('[Notifications] Could not turn them on:', err);
-        }
-    }
 
     const [isPlayersOpen, setIsPlayersOpen] = useState(false);
     const [isShareOpen, setIsShareOpen] = useState(false);
@@ -282,22 +263,6 @@ function LobbyFound({ lobbyId, lobby, onLeft })
                 currentLocation={currentLocation}
                 onRequestLocation={() => setLocationAsked(true)}
                 updateSettings={hostActions.updateSettings}
-            />
-
-            <IonToast
-                isOpen={offerNotifications}
-                position="top"
-                cssClass="notify-offer-toast"
-                message="Get a notification when players are found, even with your phone locked?"
-                buttons={[
-                    { text: 'Not now', role: 'cancel' },
-                    { text: 'Turn on', handler: () => { turnOnNotifications(); } }
-                ]}
-                onDidDismiss={() =>
-                {
-                    markNotifyOffered();
-                    setNotifyAnswered(true);
-                }}
             />
 
             <ShareModal lobbyId={lobbyId} isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} />

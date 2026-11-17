@@ -216,8 +216,6 @@ async function phone(location, { hostKey, lobbyId, reducedMotion } = {})
         Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => {} } });
         // Desktop Chromium exposes iOS's motion permission gate; phones that matter don't
         if (window.DeviceOrientationEvent) Object.defineProperty(DeviceOrientationEvent, 'requestPermission', { value: undefined });
-        // Keep the game screenshots clear of the one-time notifications offer
-        try { localStorage.setItem('manhunt.notifyOffered', '1'); } catch { /* fine */ }
     });
     const page = await context.newPage();
     if (lobbyId !== undefined || hostKey) players.push({ context, page, location });
@@ -229,10 +227,20 @@ async function phone(location, { hostKey, lobbyId, reducedMotion } = {})
     return { context, page };
 }
 
-async function enterLobby(page, lobbyId)
+async function enterLobby(page, lobbyId, { stopAtGate = false } = {})
 {
     await page.goto(`${BASE}/lobby/${lobbyId}`);
-    await page.waitForSelector('[data-testid="lobby-page"]');
+    await page.waitForSelector('[data-testid="gate-continue"]');
+    if (stopAtGate) return;
+    await passGate(page);
+}
+
+// "Before you play": location is already allowed here, so just Continue
+async function passGate(page)
+{
+    await page.waitForSelector('[data-testid="gate-continue"]:not(.button-disabled)');
+    await page.locator('[data-testid="gate-continue"]').click();
+    await page.waitForSelector('[data-testid="gate-continue"]', { state: 'hidden' });
     await pause(300);
 }
 
@@ -273,28 +281,16 @@ try {
     })).json();
     const lobbyId = created.lobby_id;
 
-    // 2. The installed app's first open: what it may use, asked once
-    {
-        const { context, page } = await phone(PARK);
-        await context.addInitScript(() =>
-        {
-            Object.defineProperty(navigator, 'standalone', { get: () => true });
-            // As on a phone's first open: nothing allowed yet (headless
-            // Chromium would otherwise show notifications as blocked)
-            Object.defineProperty(Notification, 'permission', { get: () => 'default' });
-            const query = navigator.permissions.query.bind(navigator.permissions);
-            navigator.permissions.query = (d) => (d.name === 'geolocation' ? Promise.resolve({ state: 'prompt' }) : query(d));
-        });
-        await page.goto(BASE);
-        await page.waitForSelector('[data-testid="setup-done"]');
-        await pause(600);
-        await shot(page, '02-permissions');
-        await context.close();
-    }
-
-    // The host arrives and sets up their profile
+    // 2. The host arrives: "Before you play", then profile
     const maya = await phone(PARK, { hostKey: created.host_key, lobbyId });
-    await enterLobby(maya.page, lobbyId);
+    // As on a phone (headless Chromium would show notifications as blocked)
+    await maya.context.addInitScript(() => Object.defineProperty(Notification, 'permission', { get: () => 'default' }));
+    await enterLobby(maya.page, lobbyId, { stopAtGate: true });
+    await pause(600);
+    await shot(maya.page, '02-permissions');
+    await passGate(maya.page);
+
+    // The host sets up their profile
     await setUp(maya.page, { name: 'Maya', photo: await portrait({ bg: ['#7f9bb3', '#2f4458'], skin: '#d8a888', hair: '#3a2418', shirt: '#c06a3a' }) });
 
     // 3. Friends join from the invite

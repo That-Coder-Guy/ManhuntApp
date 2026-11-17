@@ -4,13 +4,19 @@ import LobbyFound from '../components/LobbyFound';
 import LobbyLoading from '../components/LobbyLoading';
 import LobbyError from '../components/LobbyError';
 import PlayerError from '../components/PlayerError';
+import PermissionsGate from '../components/PermissionsGate';
 import useLobbySocket, { JOIN_STATE } from '../hooks/useLobbySocket';
 import { loadSession, updateSession, clearSession } from '../utils/session';
+import { currentSubscription } from '../utils/push';
+import { isInstalled, useInstallOffer } from '../utils/install';
 
 function LobbySession({ lobbyId })
 {
     // Read once per lobby (the route keys this component by lobby ID)
     const [credentials] = useState(() => loadSession(lobbyId));
+    // The browser asks on the way in; the installed app asked when it first opened
+    const [permissionsDone, setPermissionsDone] = useState(isInstalled);
+    const installOffer = useInstallOffer();
 
     const saveSession = useCallback((joined) => updateSession(lobbyId, { playerToken: joined.player_token }), [lobbyId]);
     const forgetSession = useCallback(() =>
@@ -19,7 +25,7 @@ function LobbySession({ lobbyId })
     }, [lobbyId]);
 
     const lobby = useLobbySocket(lobbyId, credentials, saveSession);
-    const { joinState } = lobby;
+    const { joinState, pushKey, registerPush } = lobby;
 
     useEffect(() =>
     {
@@ -36,7 +42,16 @@ function LobbySession({ lobbyId })
 
         case JOIN_STATE.JOINED:
             return (
-                <LobbyFound lobbyId={lobbyId} lobby={lobby} onLeft={forgetSession} />
+                <>
+                    <LobbyFound lobbyId={lobbyId} lobby={lobby} onLeft={forgetSession} />
+                    <PermissionsGate
+                        // After the first-visit install offer, never on top of it
+                        isOpen={!permissionsDone && installOffer.status === 'done'}
+                        onComplete={() => setPermissionsDone(true)}
+                        // Allowed just now: subscribe and tell the server straight away
+                        onNotificationsOn={() => currentSubscription(pushKey).then((sub) => sub && registerPush(sub))}
+                    />
+                </>
             );
 
         case JOIN_STATE.PLAYER_TIMED_OUT:
