@@ -6,23 +6,24 @@ import {
 // Said only when the switch can't say it: plain on and off need no words
 const STATUS_LABELS = {
     requesting: 'Asking…',
-    denied: 'Blocked · allow it in phone settings',
+    denied: 'Blocked',
     unsupported: 'Not available on this device',
     install: 'Only in the Home Screen app',
 };
 
-// iPhones forget a compass refusal when the app or page starts again
-const COMPASS_DENIED = 'Blocked · reopen Manhunt to be asked again';
-
-function PermissionRow({ id, title, requirement, description, status, statusText, onToggle, checked = status === 'granted', disabled })
+function PermissionRow({ id, title, requirement, description, status, onToggle, checked = status === 'granted', disabled })
 {
-    const note = statusText ?? STATUS_LABELS[status];
+    const note = STATUS_LABELS[status];
     return (
         <IonItem>
             <IonLabel>
                 <h3>{title} <IonNote className="permission-requirement">{requirement}</IonNote></h3>
                 <p>{description}</p>
-                {note && <IonNote className="permission-status" data-testid={`${id}-status`}>{note}</IonNote>}
+                {note && (
+                    <IonNote className={`permission-status${status === 'denied' ? ' permission-status--blocked' : ''}`} data-testid={`${id}-status`}>
+                        {note}
+                    </IonNote>
+                )}
             </IonLabel>
             <IonToggle
                 slot="end"
@@ -82,7 +83,6 @@ function PermissionsList({ location, compass, onNotificationsOn, onNotifications
                     requirement="Required"
                     description="Points the arrow the right way"
                     status={compassStatus}
-                    statusText={compassStatus === 'denied' ? COMPASS_DENIED : undefined}
                     onToggle={requestCompass}
                 />
             )}

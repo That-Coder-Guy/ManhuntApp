@@ -1468,6 +1468,11 @@ ion-list.permission-list ion-label p {
   color: var(--text-3);
 }
 
+/* "Blocked" is the one status in red; "Asking…" and the rest stay grey */
+.permission-status.permission-status--blocked {
+  color: var(--negative);
+}
+
 ion-list.permission-list ion-toggle {
   --track-background-checked: var(--accent);
 }
