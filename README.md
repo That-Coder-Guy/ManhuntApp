@@ -392,7 +392,8 @@ name, a small profile picture and a role; the host sets the rules and starts.
   notifications and keeping the screen on are optional). The
   installed app asks for the same once, in a popup when it first opens, and
   not in lobbies, plus an optional **Camera** switch: allowing it only means
-  scanning a join code doesn't ask first. Both have the same switches on
+  scanning a join code doesn't ask first (it turns off and on like the other
+  optional ones). Both have the same switches on
   **Settings** (the gear on the home page). Optional ones turn off again there: *Keep screen on*, and
   notifications (the phone's subscription is dropped and the server told;
   turning them back on doesn't ask again). The screen is kept on only during

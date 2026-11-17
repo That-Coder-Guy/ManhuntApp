@@ -15,42 +15,89 @@ const SETUP_DONE_KEY = 'manhunt.setupDone';
 const read = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
 const write = (key, value) => { try { localStorage.setItem(key, value); } catch { /* not remembered */ } };
 
-// ---- Location ----
+// ---- What the browser has said, remembered ----
+//
+// The browser answers "is this allowed?" a moment after the page opens, so
+// a switch drawn before then shows the wrong state and visibly jumps. The
+// last answer is kept, so switches open in the right state (and are checked
+// again straight away, in case it changed in the phone's settings).
 
-const hasGeolocation = () => typeof navigator !== 'undefined' && 'geolocation' in navigator;
+const ANSWERS_KEY = 'manhunt.permissionAnswers';
+
+function rememberedAnswer(name)
+{
+    try { return JSON.parse(localStorage.getItem(ANSWERS_KEY) || '{}')[name] ?? null; } catch { return null; }
+}
+
+function rememberAnswer(name, state)
+{
+    try {
+        const answers = JSON.parse(localStorage.getItem(ANSWERS_KEY) || '{}');
+        answers[name] = state;
+        localStorage.setItem(ANSWERS_KEY, JSON.stringify(answers));
+    } catch { /* not remembered */ }
+}
 
 /**
- * Location permission as 'prompt' | 'requesting' | 'granted' | 'denied' |
- * 'unsupported', following changes made in the phone's settings.
- * `request()` asks (the browser's own prompt).
+ * [state, setState, known] for one browser permission ('geolocation',
+ * 'camera'): 'prompt' | 'requesting' | 'granted' | 'denied' | 'unsupported'.
+ * `known` is false only while a first-ever answer is on its way.
  */
-export function useLocationPermission()
+function useBrowserPermission(name, available)
 {
-    const [status, setStatus] = useState(() => (hasGeolocation() ? 'prompt' : 'unsupported'));
+    const canQuery = available && typeof navigator !== 'undefined' && !!navigator.permissions?.query;
+    const [state, setRawState] = useState(() => (!available ? 'unsupported' : rememberedAnswer(name) ?? 'prompt'));
+    const [known, setKnown] = useState(() => !canQuery || rememberedAnswer(name) !== null);
+
+    const setState = (next) =>
+    {
+        if (['granted', 'denied', 'prompt'].includes(next)) rememberAnswer(name, next);
+        setRawState(next);
+    };
 
     useEffect(() =>
     {
-        if (!hasGeolocation() || !navigator.permissions?.query) return undefined;
-
+        if (!canQuery) return undefined;
         let permission;
         let cancelled = false;
-        const apply = (state) => { if (!cancelled) setStatus(state === 'granted' || state === 'denied' ? state : 'prompt'); };
-
-        navigator.permissions.query({ name: 'geolocation' })
+        const apply = (answer) =>
+        {
+            if (cancelled) return;
+            const next = answer === 'granted' || answer === 'denied' ? answer : 'prompt';
+            rememberAnswer(name, next);
+            setRawState(next);
+            setKnown(true);
+        };
+        navigator.permissions.query({ name })
             .then((result) =>
             {
                 permission = result;
                 apply(result.state);
                 result.onchange = () => apply(result.state);
             })
-            .catch(() => { /* older browsers: 'prompt' until asked */ });
-
+            .catch(() => { if (!cancelled) setKnown(true); }); // this browser can't say: 'prompt' until asked
         return () =>
         {
             cancelled = true;
             if (permission) permission.onchange = null;
         };
-    }, []);
+    }, [name, canQuery]);
+
+    return [state, setState, known];
+}
+
+// ---- Location ----
+
+const hasGeolocation = () => typeof navigator !== 'undefined' && 'geolocation' in navigator;
+
+/**
+ * Location permission as [status, request, known]: 'prompt' | 'requesting'
+ * | 'granted' | 'denied' | 'unsupported', following changes made in the
+ * phone's settings. `request()` asks (the browser's own prompt).
+ */
+export function useLocationPermission()
+{
+    const [status, setStatus, known] = useBrowserPermission('geolocation', hasGeolocation());
 
     const request = () =>
     {
@@ -63,7 +110,7 @@ export function useLocationPermission()
         );
     };
 
-    return [status, request];
+    return [status, request, known];
 }
 
 // ---- Notifications ----
@@ -163,52 +210,46 @@ export function useRequiredPermissions()
 // ---- Camera (only for scanning join codes) ----
 
 const hasCamera = () => typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
+const CAMERA_OFF_KEY = 'manhunt.cameraOff';
+const cameraWanted = () => read(CAMERA_OFF_KEY) !== '1';
 
 /**
- * Camera permission as 'prompt' | 'requesting' | 'granted' | 'denied' |
- * 'unsupported'. Allowing it ahead of time is all this does: the QR scanner
- * then opens without the browser asking first.
+ * Camera as [status, toggle, known]: 'prompt' | 'requesting' | 'granted'
+ * (on) | 'off' | 'denied' | 'unsupported'. Allowing it ahead of time is all
+ * this does: the QR scanner then opens without the browser asking first. A
+ * page can't give the camera back, so off is the app's own setting, and
+ * turning it on again doesn't ask.
  */
 export function useCameraPermission()
 {
-    const [status, setStatus] = useState(() => (hasCamera() ? 'prompt' : 'unsupported'));
+    const [permission, setPermission, known] = useBrowserPermission('camera', hasCamera());
+    const [wanted, setWanted] = useState(cameraWanted);
+    const status = permission === 'granted' && !wanted ? 'off' : permission;
 
-    useEffect(() =>
+    const toggle = async () =>
     {
-        if (!hasCamera() || !navigator.permissions?.query) return undefined;
-        let permission;
-        let cancelled = false;
-        const apply = (state) => { if (!cancelled) setStatus(state === 'granted' || state === 'denied' ? state : 'prompt'); };
-        navigator.permissions.query({ name: 'camera' })
-            .then((result) =>
-            {
-                permission = result;
-                apply(result.state);
-                result.onchange = () => apply(result.state);
-            })
-            .catch(() => { /* not every browser can say: 'prompt' until asked */ });
-        return () =>
+        if (status === 'granted' || status === 'off')
         {
-            cancelled = true;
-            if (permission) permission.onchange = null;
-        };
-    }, []);
-
-    const request = async () =>
-    {
+            const on = status === 'off';
+            write(CAMERA_OFF_KEY, on ? '0' : '1');
+            setWanted(on);
+            return;
+        }
         if (status !== 'prompt') return;
-        setStatus('requesting');
+        setPermission('requesting');
         try {
             // Asking means opening it: close it again straight away
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
             stream.getTracks().forEach((track) => track.stop());
-            setStatus('granted');
+            write(CAMERA_OFF_KEY, '0');
+            setWanted(true);
+            setPermission('granted');
         } catch (error) {
-            setStatus(error?.name === 'NotAllowedError' ? 'denied' : error?.name === 'NotFoundError' ? 'unsupported' : 'prompt');
+            setPermission(error?.name === 'NotAllowedError' ? 'denied' : error?.name === 'NotFoundError' ? 'unsupported' : 'prompt');
         }
     };
 
-    return [status, request];
+    return [status, toggle, known];
 }
 
 // ---- Keep the screen on (no permission: a preference, on unless turned off) ----

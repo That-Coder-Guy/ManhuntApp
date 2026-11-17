@@ -51,7 +51,7 @@ function PermissionsList({ location, compass, onNotificationsOn, onNotifications
 {
     const ownLocation = useLocationPermission();
     const ownCompass = useCompassPermission();
-    const [locationStatus, requestLocation] = location ?? ownLocation;
+    const [locationStatus, requestLocation, locationKnown] = location ?? ownLocation;
     const [compassStatus, requestCompass] = compass ?? ownCompass;
     const [notifyStatus, toggleNotificationsState] = useNotificationPermission();
     const toggleNotifications = async () =>
@@ -60,12 +60,15 @@ function PermissionsList({ location, compass, onNotificationsOn, onNotifications
         if (next === 'granted') onNotificationsOn?.();
         if (next === 'off') onNotificationsOff?.();
     };
-    const [cameraStatus, requestCamera] = useCameraPermission();
+    const [cameraStatus, toggleCamera, cameraKnown] = useCameraPermission();
+    // Until the browser's first-ever answer arrives (a few milliseconds), the
+    // switches stay hidden rather than show a state they'd jump away from
+    const settled = locationKnown !== false && (!showCamera || cameraKnown !== false);
     const [keepScreenOn, setKeepScreenOn] = useKeepScreenOn();
     const canKeepOn = wakeLockSupported();
 
     return (
-        <IonList inset className="permission-list">
+        <IonList inset className="permission-list" style={settled ? undefined : { visibility: 'hidden' }}>
             <PermissionRow
                 id="location"
                 title="Location"
@@ -106,9 +109,9 @@ function PermissionsList({ location, compass, onNotificationsOn, onNotifications
                     requirement="Optional"
                     description="For scanning join codes"
                     status={cameraStatus}
-                    // Only a head start for the scanner: a page can't give the camera back
-                    disabled={cameraStatus !== 'prompt'}
-                    onToggle={requestCamera}
+                    // Optional, so it turns off again (and back on without asking)
+                    disabled={!['prompt', 'granted', 'off'].includes(cameraStatus)}
+                    onToggle={toggleCamera}
                 />
             )}
             <PermissionRow
