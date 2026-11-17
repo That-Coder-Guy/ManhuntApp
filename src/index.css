@@ -232,9 +232,23 @@ ion-toolbar ion-buttons ion-button ion-icon {
 }
 
 /* Sheets follow the iOS pattern: centred title between the bar's buttons */
-ion-modal ion-toolbar ion-title {
+ion-modal ion-toolbar ion-title,
+ion-toolbar.toolbar--back ion-title {
   text-align: center;
   padding-inline: 6rem;
+}
+
+/* A page's "‹ Home" */
+ion-toolbar.toolbar--back ion-buttons ion-button {
+  --color: var(--text-1);
+  --padding-start: var(--space-1);
+  --padding-end: var(--space-3);
+  width: auto;
+  font-weight: 500;
+}
+
+ion-toolbar.toolbar--back ion-buttons ion-button ion-icon {
+  margin-inline-end: var(--space-1);
 }
 
 /* Text buttons in sheet toolbars ("Close") */
@@ -1375,12 +1389,29 @@ ion-modal ion-list.list-inset.list-inset {
   overflow: hidden;
 }
 
-ion-modal.permissions-dialog ion-item {
+ion-modal.permissions-dialog .permissions-dialog-intro {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-4);
+  font-size: var(--fs-body);
+  line-height: 1.375rem;
+  color: var(--text-2);
+}
+
+/* The permission switches: in the first-open popup and on the Settings page */
+ion-list.permission-list.list-inset.list-inset {
+  --ion-item-background: transparent;
+  margin-inline: 0;
+  background: var(--ink-3);
+  border: var(--hairline);
+  border-radius: var(--radius-track);
+  overflow: hidden;
+}
+
+ion-list.permission-list ion-item {
   --padding-start: var(--space-4);
   --inner-padding-end: var(--space-4);
 }
 
-ion-modal.permissions-dialog ion-label h3 {
+ion-list.permission-list ion-label h3 {
   margin: var(--space-3) 0 var(--space-1);
   font-size: var(--fs-body);
   line-height: 1.375rem;
@@ -1388,7 +1419,7 @@ ion-modal.permissions-dialog ion-label h3 {
   color: var(--text-1);
 }
 
-ion-modal.permissions-dialog ion-label p {
+ion-list.permission-list ion-label p {
   margin: 0;
   font-size: var(--fs-caption);
   line-height: 1.25rem;
@@ -1411,7 +1442,7 @@ ion-modal.permissions-dialog ion-label p {
   color: var(--text-3);
 }
 
-ion-modal.permissions-dialog ion-toggle {
+ion-list.permission-list ion-toggle {
   --track-background-checked: var(--accent);
 }
 
@@ -1983,6 +2014,17 @@ ion-footer.phase-footer-bar {
 
 .settings-content .settings-section:first-of-type {
   margin-top: var(--space-2);
+}
+
+/* The Settings page (from the home page) */
+ion-content.settings-page {
+  --padding-start: var(--space-4);
+  --padding-end: var(--space-4);
+  --padding-bottom: var(--space-6);
+}
+
+ion-content.settings-page .settings-section:first-child {
+  margin-top: var(--space-4);
 }
 
 ion-modal ion-list.settings-list ion-item {

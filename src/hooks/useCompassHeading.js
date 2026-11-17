@@ -8,16 +8,16 @@ export const COMPASS_STATUS = {
     UNSUPPORTED: 'unsupported'  // no usable orientation source on this device
 };
 
-const PERMISSION_STORAGE_KEY = 'manhunt_compass_permission';
+export const PERMISSION_STORAGE_KEY = 'manhunt_compass_permission';
 
 // Remembered iOS grant, so later visits can re-request silently; storage
 // can be unavailable, which just means "ask"
-function readSavedPermission()
+export function readSavedPermission()
 {
     try { return localStorage.getItem(PERMISSION_STORAGE_KEY); } catch { return null; }
 }
 
-function savePermission(value)
+export function savePermission(value)
 {
     try { localStorage.setItem(PERMISSION_STORAGE_KEY, value); } catch { /* not remembered */ }
 }
@@ -52,7 +52,7 @@ function getScreenAngle()
 }
 
 // iOS 13+ is the only platform with a permission gate for orientation events
-function permissionRequestRequired()
+export function permissionRequestRequired()
 {
     return typeof DeviceOrientationEvent !== 'undefined' &&
         typeof DeviceOrientationEvent.requestPermission === 'function';

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
     IonModal, IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonContent,
     IonList, IonItem, IonLabel, IonToggle, IonSelect, IonSelectOption, IonToast
@@ -28,7 +28,7 @@ const SEEKER_INFO_NOTES = {
  * Game settings. The host edits a draft and saves it; everyone else sees the
  * same sheet read-only. The server validates again regardless.
  */
-function SettingsSheet({ isOpen, onClose, settings, isHost, canEdit, currentLocation, updateSettings })
+function SettingsSheet({ isOpen, onClose, settings, isHost, canEdit, currentLocation, onRequestLocation, updateSettings })
 {
     const [draft, setDraft] = useState(settings);
     const [isSaving, setIsSaving] = useState(false);
@@ -43,6 +43,23 @@ function SettingsSheet({ isOpen, onClose, settings, isHost, canEdit, currentLoca
     const fenceOn = fence !== null;
     const points = fence?.points ?? [];
     const hasFix = currentLocation?.latitude != null;
+
+    // "Centre on me" before this phone has a position asks for one, then
+    // centres when it arrives
+    const [centreWhenFixed, setCentreWhenFixed] = useState(false);
+    useEffect(() =>
+    {
+        if (!centreWhenFixed || !hasFix) return;
+        mapRef.current?.centreOn(currentLocation);
+        setCentreWhenFixed(false);
+    }, [centreWhenFixed, hasFix, currentLocation]);
+
+    function centreOnMe()
+    {
+        if (hasFix) return mapRef.current?.centreOn(currentLocation);
+        setCentreWhenFixed(true);
+        onRequestLocation?.();
+    }
     const problem = fenceOn ? polygonProblem(points) : null;
     const seekerInfo = draft?.seeker_info ?? SEEKER_INFO_DEFAULT;
 
@@ -153,7 +170,7 @@ function SettingsSheet({ isOpen, onClose, settings, isHost, canEdit, currentLoca
                                     <IonButton size="small" className="button-secondary" data-testid="fence-clear" disabled={!points.length} onClick={() => setPoints([])}>Clear</IonButton>
                                 </>
                             )}
-                            <IonButton size="small" className="button-secondary" data-testid="fence-me" disabled={!hasFix} onClick={() => mapRef.current?.centreOn(currentLocation)}>
+                            <IonButton size="small" className="button-secondary" data-testid="fence-me" disabled={!hasFix && !onRequestLocation} onClick={centreOnMe}>
                                 Centre on me
                             </IonButton>
                         </div>

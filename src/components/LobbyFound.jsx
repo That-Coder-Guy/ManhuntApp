@@ -18,6 +18,10 @@ import { PlayerListCard } from './PlayerList';
 import { SettingsRow, GameStatusCard, GameOverCard, PhaseFooter, FoundFooter } from './GamePanels';
 import { PHASE } from '../hooks/useLobbySocket';
 import useGeolocation from '../hooks/useGeolocation';
+import useWakeLock from '../hooks/useWakeLock';
+import { useLocationPermission, useKeepScreenOn, notifyOffered, markNotifyOffered } from '../hooks/usePermissions';
+import { pushStatus, enablePush } from '../utils/push';
+import { isInstalled } from '../utils/install';
 import { withDummyPlayers } from '../utils/dummyPlayers';
 import { playerName } from '../utils/players';
 import { useUpdateReady, applyAppUpdate } from '../utils/appUpdate';
@@ -30,16 +34,43 @@ const LOBBY_LIST_IDS = { card: 'lobby-players-card', title: 'lobby-players-title
  *   playing — the hunt: status card plus the seeker or hider view
  *   ended   — result; the host takes everyone back to the lobby
  */
-function LobbyFound({ lobbyId, lobby, onLeft, permissionsGranted = false })
+function LobbyFound({ lobbyId, lobby, onLeft })
 {
     const navigate = useNavigate();
     const {
         lobbyName, selfPlayer, players, phase, hostId, isHost, settings, game, seekerInfo, avatars,
         clockOffset, connectionState, lastSyncTime, updateLocation, updatePlayer, setAvatar,
-        declareFound, foundNotice, hostActions, leaveLobby
+        declareFound, foundNotice, pushKey, registerPush, hostActions, leaveLobby
     } = lobby;
 
-    const { location: currentLocation, gpsError } = useGeolocation(permissionsGranted, updateLocation);
+    // Location is followed once it's allowed; otherwise it's asked for when
+    // the game starts (or when the host wants the map centred on them)
+    const [locationStatus] = useLocationPermission();
+    const [locationAsked, setLocationAsked] = useState(false);
+    const wantLocation = phase === PHASE.PLAYING || locationStatus === 'granted' || locationAsked;
+    const { location: currentLocation, gpsError, gpsDenied } = useGeolocation(wantLocation, updateLocation);
+
+    // The screen stays on during a game, unless turned off in Settings
+    const [keepScreenOn] = useKeepScreenOn();
+    useWakeLock(phase === PHASE.PLAYING && keepScreenOn);
+
+    // In the browser, notifications are offered as a game starts (once; the
+    // installed app asked when it first opened). Turning them on needs a tap
+    const [notifyAnswered, setNotifyAnswered] = useState(false);
+    const offerNotifications = phase === PHASE.PLAYING && !!pushKey && !notifyAnswered
+        && !isInstalled() && pushStatus() === 'prompt' && !notifyOffered();
+
+    async function turnOnNotifications()
+    {
+        markNotifyOffered();
+        try {
+            // Asked first, in the tap itself
+            const permission = await Notification.requestPermission();
+            if (permission === 'granted') await registerPush(await enablePush(pushKey));
+        } catch (err) {
+            console.warn('[Notifications] Could not turn them on:', err);
+        }
+    }
 
     const [isPlayersOpen, setIsPlayersOpen] = useState(false);
     const [isShareOpen, setIsShareOpen] = useState(false);
@@ -96,11 +127,7 @@ function LobbyFound({ lobbyId, lobby, onLeft, permissionsGranted = false })
     }
 
     return (
-        <IonPage
-            className={!permissionsGranted ? 'permissions-dialog-background' : undefined}
-            data-testid="lobby-page"
-            data-phase={phase}
-        >
+        <IonPage data-testid="lobby-page" data-phase={phase}>
             <IonHeader>
                 <IonToolbar className={showEnd ? 'toolbar--four' : undefined}>
                     <IonTitle data-testid="lobby-title">{lobbyName}</IonTitle>
@@ -122,7 +149,7 @@ function LobbyFound({ lobbyId, lobby, onLeft, permissionsGranted = false })
                     </IonButtons>
                 </IonToolbar>
                 {/* Banners live in the fixed header, so they can never overlap content */}
-                <ConnectionBanner connectionState={connectionState} lastSyncTime={lastSyncTime} gpsError={gpsError} />
+                <ConnectionBanner connectionState={connectionState} lastSyncTime={lastSyncTime} gpsError={gpsError} gpsDenied={gpsDenied} />
                 {updateReady && phase !== PHASE.PLAYING && (
                     <div className="connection-banner update-banner" role="status" data-testid="update-banner">
                         <span>A new version of the app is ready ·</span>
@@ -253,7 +280,24 @@ function LobbyFound({ lobbyId, lobby, onLeft, permissionsGranted = false })
                 isHost={isHost}
                 canEdit={phase === PHASE.LOBBY}
                 currentLocation={currentLocation}
+                onRequestLocation={() => setLocationAsked(true)}
                 updateSettings={hostActions.updateSettings}
+            />
+
+            <IonToast
+                isOpen={offerNotifications}
+                position="top"
+                cssClass="notify-offer-toast"
+                message="Get a notification when players are found, even with your phone locked?"
+                buttons={[
+                    { text: 'Not now', role: 'cancel' },
+                    { text: 'Turn on', handler: () => { turnOnNotifications(); } }
+                ]}
+                onDidDismiss={() =>
+                {
+                    markNotifyOffered();
+                    setNotifyAnswered(true);
+                }}
             />
 
             <ShareModal lobbyId={lobbyId} isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} />

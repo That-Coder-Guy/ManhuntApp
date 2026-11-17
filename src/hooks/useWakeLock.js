@@ -1,76 +1,49 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect } from 'react';
 
 /**
- * Keeps the screen on once the player asks for it (`requestWakeLock`, called
- * from a tap), for as long as `enabled` is true. Browsers drop the lock
- * whenever the page is hidden, so it is taken back when the page returns.
- * Failures reject the request; the caller decides how to show them.
+ * Keeps the screen on while `active` (during a game, if the player hasn't
+ * turned it off in Settings). Wake locks need no permission. Browsers drop
+ * the lock whenever the page is hidden, and some only grant it after a tap,
+ * so it is taken again when the page returns and on the next tap.
  */
-function useWakeLock(enabled = true)
+function useWakeLock(active)
 {
-    const isSupported = typeof navigator !== 'undefined' && 'wakeLock' in navigator;
-    const [isActive, setIsActive] = useState(false);
-
-    const lockRef = useRef(null);
-    const pendingRef = useRef(null); // in-flight request, so taps can't stack locks
-    const wantedRef = useRef(false); // the player turned it on
-
-    const acquire = useCallback(() =>
-    {
-        if (lockRef.current) return Promise.resolve(lockRef.current);
-        if (pendingRef.current) return pendingRef.current;
-
-        pendingRef.current = navigator.wakeLock.request('screen')
-            .then((lock) =>
-            {
-                lockRef.current = lock;
-                setIsActive(true);
-                lock.addEventListener('release', () =>
-                {
-                    if (lockRef.current !== lock) return;
-                    lockRef.current = null;
-                    setIsActive(false);
-                });
-                return lock;
-            })
-            .finally(() => { pendingRef.current = null; });
-
-        return pendingRef.current;
-    }, []);
-
-    const requestWakeLock = useCallback(() =>
-    {
-        if (!isSupported) return Promise.reject(new Error('Screen Wake Lock is not supported on this device'));
-        if (!enabled) return Promise.reject(new Error('Wake lock is not available right now'));
-        wantedRef.current = true;
-        return acquire();
-    }, [isSupported, enabled, acquire]);
-
     useEffect(() =>
     {
-        if (!enabled || !isSupported) return undefined;
+        if (!active || typeof navigator === 'undefined' || !('wakeLock' in navigator)) return undefined;
 
-        const handleVisibility = () =>
+        let lock = null;
+        let pending = false;
+        let stopped = false;
+
+        const acquire = () =>
         {
-            if (document.visibilityState === 'visible' && wantedRef.current)
-            {
-                acquire().catch((error) => console.warn('[WakeLock] Could not re-acquire:', error));
-            }
+            if (lock || pending || stopped || document.visibilityState !== 'visible') return;
+            pending = true;
+            navigator.wakeLock.request('screen')
+                .then((newLock) =>
+                {
+                    if (stopped) return newLock.release();
+                    lock = newLock;
+                    newLock.addEventListener('release', () => { if (lock === newLock) lock = null; });
+                })
+                .catch(() => { /* not now (no tap yet, low battery): the next tap or return tries again */ })
+                .finally(() => { pending = false; });
         };
-        document.addEventListener('visibilitychange', handleVisibility);
+
+        acquire();
+        document.addEventListener('visibilitychange', acquire);
+        document.addEventListener('pointerdown', acquire);
 
         return () =>
         {
-            document.removeEventListener('visibilitychange', handleVisibility);
-            wantedRef.current = false;
-            const lock = lockRef.current;
-            lockRef.current = null;
-            setIsActive(false);
+            stopped = true;
+            document.removeEventListener('visibilitychange', acquire);
+            document.removeEventListener('pointerdown', acquire);
             lock?.release().catch(() => { /* already released */ });
+            lock = null;
         };
-    }, [enabled, isSupported, acquire]);
-
-    return { isSupported, isActive, requestWakeLock };
+    }, [active]);
 }
 
 export default useWakeLock;

@@ -4,29 +4,22 @@ import LobbyFound from '../components/LobbyFound';
 import LobbyLoading from '../components/LobbyLoading';
 import LobbyError from '../components/LobbyError';
 import PlayerError from '../components/PlayerError';
-import PermissionsGate from '../components/PermissionsGate';
-import useWakeLock from '../hooks/useWakeLock';
 import useLobbySocket, { JOIN_STATE } from '../hooks/useLobbySocket';
 import { loadSession, updateSession, clearSession } from '../utils/session';
-import { useInstallOffer } from '../utils/install';
 
 function LobbySession({ lobbyId })
 {
     // Read once per lobby (the route keys this component by lobby ID)
     const [credentials] = useState(() => loadSession(lobbyId));
-    const [permissionsGranted, setPermissionsGranted] = useState(false);
 
     const saveSession = useCallback((joined) => updateSession(lobbyId, { playerToken: joined.player_token }), [lobbyId]);
     const forgetSession = useCallback(() =>
     {
         clearSession(lobbyId, { everything: true });
-        setPermissionsGranted(false);
     }, [lobbyId]);
 
     const lobby = useLobbySocket(lobbyId, credentials, saveSession);
     const { joinState } = lobby;
-    const wakeLock = useWakeLock(joinState === JOIN_STATE.JOINED);
-    const installOffer = useInstallOffer();
 
     useEffect(() =>
     {
@@ -34,7 +27,6 @@ function LobbySession({ lobbyId })
         // fresh (a creator keeps their host key)
         if (joinState === JOIN_STATE.PLAYER_TIMED_OUT) clearSession(lobbyId);
         if (joinState === JOIN_STATE.KICKED) clearSession(lobbyId, { everything: true });
-        if (joinState !== JOIN_STATE.JOINED) setPermissionsGranted(false);
     }, [joinState, lobbyId]);
 
     switch (joinState)
@@ -44,24 +36,7 @@ function LobbySession({ lobbyId })
 
         case JOIN_STATE.JOINED:
             return (
-                <>
-                    <LobbyFound
-                        lobbyId={lobbyId}
-                        lobby={lobby}
-                        onLeft={forgetSession}
-                        permissionsGranted={permissionsGranted}
-                    />
-                    <PermissionsGate
-                        // After the first-visit install offer, never on top of it
-                        isOpen={!permissionsGranted && installOffer.status === 'done'}
-                        onComplete={() => setPermissionsGranted(true)}
-                        requestWakeLock={wakeLock.requestWakeLock}
-                        isWakeLockSupported={wakeLock.isSupported}
-                        isWakeLockActive={wakeLock.isActive}
-                        pushKey={lobby.pushKey}
-                        onPushEnabled={lobby.registerPush}
-                    />
-                </>
+                <LobbyFound lobbyId={lobbyId} lobby={lobby} onLeft={forgetSession} />
             );
 
         case JOIN_STATE.PLAYER_TIMED_OUT:

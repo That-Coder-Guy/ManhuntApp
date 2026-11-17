@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    IonPage, IonHeader, IonToolbar, IonTitle, IonContent,
+    IonPage, IonHeader, IonToolbar, IonTitle, IonContent, IonButtons,
     IonCard, IonCardHeader, IonCardTitle, IonCardContent,
     IonInput, IonButton, IonIcon, IonToast
 } from '@ionic/react';
-import { qrCodeOutline } from 'ionicons/icons';
+import { qrCodeOutline, settingsOutline } from 'ionicons/icons';
 import BrandMark from '../components/BrandMark.jsx';
 import { createLobby, fetchServerVersion } from '../utils/api.js';
 import { APP_VERSION, formatVersion, isDifferentVersion } from '../utils/version.js';
@@ -91,6 +91,11 @@ function Home()
                             Manhunt
                         </span>
                     </IonTitle>
+                    <IonButtons slot="end">
+                        <IonButton data-testid="open-settings" aria-label="Settings" onClick={() => navigate('/settings')}>
+                            <IonIcon slot="icon-only" icon={settingsOutline} />
+                        </IonButton>
+                    </IonButtons>
                 </IonToolbar>
             </IonHeader>
             <IonContent className="ion-padding home-content">

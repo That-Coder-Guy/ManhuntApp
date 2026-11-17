@@ -7,7 +7,7 @@ import FixDot from './FixDot';
  * Slim status strips inside the page's fixed IonHeader while the socket is
  * reconnecting or GPS is lost. Renders nothing when healthy.
  */
-function ConnectionBanner({ connectionState, lastSyncTime, gpsError })
+function ConnectionBanner({ connectionState, lastSyncTime, gpsError, gpsDenied = false })
 {
     const reconnecting = connectionState !== CONNECTION_STATE.CONNECTED;
     // Only tick while the "positions from Xs ago" line is on screen
@@ -27,7 +27,9 @@ function ConnectionBanner({ connectionState, lastSyncTime, gpsError })
             {gpsError && (
                 <div className="connection-banner connection-banner-gps" role="status" data-testid="gps-banner">
                     <FixDot fresh={false} />
-                    <span>GPS signal lost · your position isn't updating</span>
+                    <span>{gpsDenied
+                        ? 'Location is blocked · allow it in your phone’s settings to play'
+                        : 'GPS signal lost · your position isn’t updating'}</span>
                 </div>
             )}
         </>
