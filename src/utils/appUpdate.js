@@ -29,6 +29,14 @@ export function initAppUpdates()
 {
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
 
+    // A new version asks whether this page applies updates itself (see
+    // public/sw-handover.js); answering keeps it from reloading us mid-game
+    navigator.serviceWorker.addEventListener('message', (event) =>
+    {
+        if (event.data?.type === 'MANHUNT_CAN_APPLY_UPDATES') event.ports[0]?.postMessage(true);
+    });
+    navigator.serviceWorker.startMessages?.();
+
     apply = registerSW({
         immediate: true,
         onNeedRefresh: setReady,
