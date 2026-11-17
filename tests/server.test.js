@@ -38,7 +38,7 @@ const sockets = [];
 
 before(async () => {
     if (skip) return;
-    game = createGameServer({ distDir: null, broadcastIntervalMs: 20, maxPlayersPerLobby: 3, cleanupIntervalMs: 60_000, push: fakePush });
+    game = createGameServer({ distDir: null, broadcastIntervalMs: 20, maxPlayersPerLobby: 3, cleanupIntervalMs: 60_000, push: fakePush, testPushDelayMs: 50 });
     await new Promise((resolve) => game.server.listen(0, '127.0.0.1', resolve));
     base = `http://127.0.0.1:${game.server.address().port}`;
 });
@@ -648,4 +648,20 @@ test('a subscription the push service says is gone is forgotten', { skip }, asyn
     await ack(near.socket, 'found', NEAR);
     await new Promise((r) => setTimeout(r, 50));
     assert.equal(game.lobbies.get(lobbyId).players.get(far.data.player_token).push_subscription, null);
+});
+
+// TEMPORARY, with server/testPush.js
+test('the landing page can ask for a test notification, sent after a delay', { skip }, async () => {
+    const key = await (await fetch(`${base}/manhunt-api/test-push/key`)).json();
+    assert.equal(key.public_key, 'test-public-key');
+    const post = (body) => fetch(`${base}/manhunt-api/test-push`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+    assert.equal((await post({ subscription: { endpoint: 'https://192.168.1.1/x', keys: { p256dh: 'a', auth: 'b' } } })).status, 400, 'only real push services');
+    pushed.length = 0;
+    const res = await post({ subscription: subscription('tester') });
+    assert.equal(res.status, 200);
+    assert.equal(pushed.length, 0, 'not straight away');
+    await new Promise((r) => setTimeout(r, 120));
+    assert.equal(pushed.length, 1);
+    assert.deepEqual(pushed[0].payload, { title: 'Test notification', body: 'Notifications work on this phone.', url: '/', tag: 'manhunt-test' });
 });

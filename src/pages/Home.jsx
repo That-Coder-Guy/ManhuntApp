@@ -13,6 +13,7 @@ import { useUpdateReady, applyAppUpdate } from '../utils/appUpdate.js';
 import QrScanModal from '../components/QrScanModal.jsx';
 import { parseLobbyId, lobbyPath } from '../utils/lobbyLink.js';
 import { updateSession } from '../utils/session.js';
+import TestNotificationButton from '../components/TestNotificationButton.jsx'; // TEMPORARY
 
 function Home()
 {
@@ -167,6 +168,8 @@ function Home()
                         </IonButton>
                     </IonCardContent>
                 </IonCard>
+                {/* TEMPORARY: until notifications are confirmed on phones */}
+                <TestNotificationButton />
                 </div>
 
                 {/* Which update this is, so you can tell one has gone through */}
