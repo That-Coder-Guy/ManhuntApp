@@ -197,7 +197,8 @@ function useLobbySocket(lobbyId, credentials, onJoined)
             reportVisibility();
             currentSubscription(data.push_public_key).then((subscription) =>
             {
-                if (subscription && !stopped) emitWithAck(socket, 'push-subscribe', { subscription }).catch(() => {});
+                // None (turned off, or never on) clears any the server kept from before
+                if (!stopped) emitWithAck(socket, 'push-subscribe', { subscription }).catch(() => {});
             });
         });
 

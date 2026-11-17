@@ -5,6 +5,7 @@ import {
 
 const STATUS_LABELS = {
     prompt: 'Off',
+    off: 'Off',
     requesting: 'Asking…',
     granted: 'On',
     denied: 'Blocked · allow it in phone settings',
@@ -42,18 +43,21 @@ function PermissionRow({ id, title, requirement, description, status, statusText
  * it: "Before you play" in the browser, the installed app's first-open
  * popup, and the Settings page. `location` and `compass` let the caller
  * share its own state for those (the required ones: useRequiredPermissions);
- * `onNotificationsOn` runs once notifications are allowed.
+ * `onNotificationsOn` / `onNotificationsOff` run when notifications are
+ * turned on or off.
  */
-function PermissionsList({ location, compass, onNotificationsOn })
+function PermissionsList({ location, compass, onNotificationsOn, onNotificationsOff })
 {
     const ownLocation = useLocationPermission();
     const ownCompass = useCompassPermission();
     const [locationStatus, requestLocation] = location ?? ownLocation;
     const [compassStatus, requestCompass] = compass ?? ownCompass;
-    const [notifyStatus, askNotifications] = useNotificationPermission();
-    const requestNotifications = async () =>
+    const [notifyStatus, toggleNotificationsState] = useNotificationPermission();
+    const toggleNotifications = async () =>
     {
-        if (await askNotifications() === 'granted') onNotificationsOn?.();
+        const next = await toggleNotificationsState();
+        if (next === 'granted') onNotificationsOn?.();
+        if (next === 'off') onNotificationsOff?.();
     };
     const [keepScreenOn, setKeepScreenOn] = useKeepScreenOn();
     const canKeepOn = wakeLockSupported();
@@ -77,8 +81,9 @@ function PermissionsList({ location, compass, onNotificationsOn })
                     requirement="Optional"
                     description="When players are found"
                     status={notifyStatus}
-                    disabled={notifyStatus !== 'prompt'}
-                    onToggle={requestNotifications}
+                    // Optional, so it turns off again (and back on without asking)
+                    disabled={!['prompt', 'granted', 'off'].includes(notifyStatus)}
+                    onToggle={toggleNotifications}
                 />
             )}
             {compassStatus !== 'unsupported' && (

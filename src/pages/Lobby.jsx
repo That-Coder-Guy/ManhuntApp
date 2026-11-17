@@ -50,6 +50,8 @@ function LobbySession({ lobbyId })
                         onComplete={() => setPermissionsDone(true)}
                         // Allowed just now: subscribe and tell the server straight away
                         onNotificationsOn={() => currentSubscription(pushKey).then((sub) => sub && registerPush(sub))}
+                        // Turned off: the server forgets this phone's subscription
+                        onNotificationsOff={() => registerPush(null).catch(() => {})}
                     />
                 </>
             );

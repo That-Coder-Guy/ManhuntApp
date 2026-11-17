@@ -8,7 +8,7 @@ import { useRequiredPermissions } from '../hooks/usePermissions';
  * the rest is optional. (The installed app asks once when it first opens
  * instead: PermissionsSetup.)
  */
-function PermissionsGate({ isOpen, onComplete, onNotificationsOn })
+function PermissionsGate({ isOpen, onComplete, onNotificationsOn, onNotificationsOff })
 {
     const { location, compass, ready } = useRequiredPermissions();
 
@@ -18,7 +18,7 @@ function PermissionsGate({ isOpen, onComplete, onNotificationsOn })
                 <h2>Before you play</h2>
                 {/* Only the switches scroll: the title and button stay in view */}
                 <div className="permissions-dialog-scroll">
-                    <PermissionsList location={location} compass={compass} onNotificationsOn={onNotificationsOn} />
+                    <PermissionsList location={location} compass={compass} onNotificationsOn={onNotificationsOn} onNotificationsOff={onNotificationsOff} />
                 </div>
                 <IonButton data-testid="gate-continue" expand="block" disabled={!ready} onClick={onComplete}>
                     {ready ? 'Continue' : 'Allow what’s needed'}

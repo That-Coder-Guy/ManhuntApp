@@ -4,6 +4,33 @@
 
 import { isIOS, isInstalled } from './install';
 
+// Turning notifications off: the browser's permission can't be taken back
+// by a page, so the app remembers the choice and drops its subscription
+const TURNED_OFF_KEY = 'manhunt.notificationsOff';
+
+/** False once the player turned notifications off in the app */
+export function notificationsWanted()
+{
+    try { return localStorage.getItem(TURNED_OFF_KEY) !== '1'; } catch { return true; }
+}
+
+export function setNotificationsWanted(on)
+{
+    try {
+        if (on) localStorage.removeItem(TURNED_OFF_KEY);
+        else localStorage.setItem(TURNED_OFF_KEY, '1');
+    } catch { /* not remembered */ }
+}
+
+/** Drop this phone's subscription, so nothing more can be pushed to it */
+export async function disablePush()
+{
+    try {
+        const registration = await navigator.serviceWorker.ready;
+        await (await registration.pushManager.getSubscription())?.unsubscribe();
+    } catch { /* nothing to drop */ }
+}
+
 /**
  * 'granted' | 'prompt' | 'denied' | 'unsupported', or 'install' on an iPhone
  * or iPad where Safari only allows notifications for the Home Screen app
@@ -54,7 +81,7 @@ export async function enablePush(publicKey)
  */
 export async function currentSubscription(publicKey)
 {
-    if (!publicKey || pushStatus() !== 'granted') return null;
+    if (!publicKey || pushStatus() !== 'granted' || !notificationsWanted()) return null;
     try {
         const registration = await navigator.serviceWorker.ready;
         const subscription = await registration.pushManager.getSubscription();

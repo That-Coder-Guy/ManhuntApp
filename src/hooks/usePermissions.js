@@ -5,7 +5,7 @@
 // first time it opens (PermissionsSetup) instead. Both have them on the
 // Settings page.
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { pushStatus } from '../utils/push';
+import { pushStatus, notificationsWanted, setNotificationsWanted, disablePush } from '../utils/push';
 import { isInstalled } from '../utils/install';
 import { permissionRequestRequired, readSavedPermission, savePermission } from './useCompassHeading';
 
@@ -69,31 +69,52 @@ export function useLocationPermission()
 // ---- Notifications ----
 
 /**
- * Notification permission as 'prompt' | 'requesting' | 'granted' | 'denied'
- * | 'unsupported' | 'install' (iPhone, outside the Home Screen app).
- * `request()` must be called from a tap. Subscribing happens when a lobby
- * is joined (the server's key comes with it).
+ * Notifications as 'prompt' | 'requesting' | 'granted' (on) | 'off' (allowed,
+ * but turned off in the app) | 'denied' | 'unsupported' | 'install' (iPhone,
+ * outside the Home Screen app). `toggle()` must be called from a tap: it asks
+ * the first time, and after that turns them off and on again. Subscribing
+ * happens when a lobby is joined (the server's key comes with it).
  */
+const notificationStatus = () =>
+{
+    const status = pushStatus();
+    return status === 'granted' && !notificationsWanted() ? 'off' : status;
+};
+
 export function useNotificationPermission()
 {
-    const [status, setStatus] = useState(pushStatus);
+    const [status, setStatus] = useState(notificationStatus);
 
-    const request = async () =>
+    const toggle = async () =>
     {
+        if (status === 'granted')
+        {
+            setNotificationsWanted(false);
+            setStatus('off');
+            await disablePush();
+            return 'off';
+        }
+        if (status === 'off')
+        {
+            setNotificationsWanted(true);
+            setStatus('granted');
+            return 'granted';
+        }
         if (status !== 'prompt') return status;
         setStatus('requesting');
         try {
             const permission = await Notification.requestPermission();
             const next = permission === 'granted' ? 'granted' : permission === 'denied' ? 'denied' : 'prompt';
+            if (next === 'granted') setNotificationsWanted(true);
             setStatus(next);
             return next;
         } catch {
-            setStatus(pushStatus());
-            return pushStatus();
+            setStatus(notificationStatus());
+            return notificationStatus();
         }
     };
 
-    return [status, request];
+    return [status, toggle];
 }
 
 // ---- Compass (motion and orientation: iPhone and iPad only ask) ----
