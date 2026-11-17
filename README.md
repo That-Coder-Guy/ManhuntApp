@@ -125,6 +125,8 @@ OpenStreetMap streets. To refresh the images after a UI change, run
 - Repo root — React + Vite frontend (this used to be the whole repo)
 - `server/` — Express + Socket.IO backend (merged in from the old ManhuntApi repo)
 - `shared/` — code both sides use (play-area geometry)
+- `tests/` — unit and server tests; `tests/e2e/` holds the browser tests
+- `docs/vault/` — project notes as an Obsidian vault (open the folder as a vault; start at `Manhunt.md`)
 
 ## Development
 
