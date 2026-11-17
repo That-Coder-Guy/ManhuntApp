@@ -386,7 +386,11 @@ name, a small profile picture and a role; the host sets the rules and starts.
   the phone locked. Players looking at the app already see it on screen, so
   they aren't sent one. Tapping it opens the lobby. On an iPhone they need iOS
   16.4 or later and the app added to the Home Screen (Share → Add to Home
-  Screen); in Safari itself the switch says so.
+  Screen).
+- **Add to Home Screen**: on a phone's first visit, a popup offers to install
+  the app: Chrome's own Install button where the browser has one, otherwise
+  the steps (Share → Add to Home Screen on an iPhone, the browser menu on
+  Android). It's shown once, and never in the installed app.
 - The host can move players between roles, hand over the host role, remove
   players, end the game and start another round. The server enforces all of
   this, not just the UI.

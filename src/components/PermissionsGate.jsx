@@ -14,7 +14,7 @@ const LOCATION_DENIED_HELP = 'Blocked · allow location for this site in your br
 
 const NOTIFICATION_HELP = {
     denied: 'Blocked · allow notifications for this site in your settings',
-    install: 'On iPhone, add Manhunt to your Home Screen first (Share → Add to Home Screen)',
+    install: 'Only in the Home Screen app',
 };
 
 /**

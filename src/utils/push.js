@@ -2,9 +2,7 @@
 // on, and the subscription to hand the server. The server sends them; the
 // service worker shows them (public/sw-push.js).
 
-const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent)
-    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-const isInstalled = () => window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
+import { isIOS, isInstalled } from './install';
 
 /**
  * 'granted' | 'prompt' | 'denied' | 'unsupported', or 'install' on an iPhone

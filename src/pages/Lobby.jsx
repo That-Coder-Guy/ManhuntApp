@@ -8,6 +8,7 @@ import PermissionsGate from '../components/PermissionsGate';
 import useWakeLock from '../hooks/useWakeLock';
 import useLobbySocket, { JOIN_STATE } from '../hooks/useLobbySocket';
 import { loadSession, updateSession, clearSession } from '../utils/session';
+import { useInstallOffer } from '../utils/install';
 
 function LobbySession({ lobbyId })
 {
@@ -25,6 +26,7 @@ function LobbySession({ lobbyId })
     const lobby = useLobbySocket(lobbyId, credentials, saveSession);
     const { joinState } = lobby;
     const wakeLock = useWakeLock(joinState === JOIN_STATE.JOINED);
+    const installOffer = useInstallOffer();
 
     useEffect(() =>
     {
@@ -50,7 +52,8 @@ function LobbySession({ lobbyId })
                         permissionsGranted={permissionsGranted}
                     />
                     <PermissionsGate
-                        isOpen={!permissionsGranted}
+                        // After the first-visit install offer, never on top of it
+                        isOpen={!permissionsGranted && installOffer.status === 'done'}
                         onComplete={() => setPermissionsGranted(true)}
                         requestWakeLock={wakeLock.requestWakeLock}
                         isWakeLockSupported={wakeLock.isSupported}
