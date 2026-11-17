@@ -1505,7 +1505,18 @@ ion-list.permission-list ion-item {
   --inner-padding-end: var(--space-4);
 }
 
+/* Title, then its tag; the title column is as wide as the longest title,
+   so the tags line up (PermissionsList measures it). Too narrow for both,
+   the tag moves under the title */
+ion-list.permission-list .permission-title {
+  min-width: var(--permission-title-width, auto);
+}
+
 ion-list.permission-list ion-label h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--space-2);
   margin: var(--space-3) 0 var(--space-1);
   font-size: var(--fs-body);
   line-height: 1.375rem;
@@ -1526,7 +1537,6 @@ ion-list.permission-list ion-label p {
 }
 
 .permission-requirement {
-  margin-inline-start: var(--space-2);
   font-size: var(--fs-meta);
   font-weight: 400;
   color: var(--text-3);

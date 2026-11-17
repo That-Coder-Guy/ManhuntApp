@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react';
 import { IonList, IonItem, IonLabel, IonToggle, IonNote } from '@ionic/react';
 import {
     useLocationPermission, useNotificationPermission, useCompassPermission, useCameraPermission, useKeepScreenOn, wakeLockSupported
@@ -17,7 +18,10 @@ function PermissionRow({ id, title, requirement, description, status, onToggle, 
     return (
         <IonItem>
             <IonLabel>
-                <h3>{title} <IonNote className="permission-requirement">{requirement}</IonNote></h3>
+                <h3>
+                    <span className="permission-title">{title}</span>
+                    <IonNote className="permission-requirement">{requirement}</IonNote>
+                </h3>
                 <p>{description}</p>
                 {note && (
                     <IonNote className={`permission-status${status === 'denied' ? ' permission-status--blocked' : ''}`} data-testid={`${id}-status`}>
@@ -67,8 +71,45 @@ function PermissionsList({ location, compass, onNotificationsOn, onNotifications
     const [keepScreenOn, setKeepScreenOn] = useKeepScreenOn();
     const canKeepOn = wakeLockSupported();
 
+    // "Required" and "Optional" start on one line down the list: every title
+    // gets the width of the longest one, measured once the font has loaded
+    const listRef = useRef(null);
+    const measureTitles = useRef(() => {});
+    measureTitles.current = () =>
+    {
+        const list = listRef.current;
+        if (!list) return;
+        const range = document.createRange();
+        let widest = 0;
+        for (const title of list.querySelectorAll('.permission-title'))
+        {
+            range.selectNodeContents(title); // the text itself, whatever width it's been given
+            widest = Math.max(widest, range.getBoundingClientRect().width);
+        }
+        // Nothing measurable yet (a popup still opening): the resize brings it back
+        if (widest) list.style.setProperty('--permission-title-width', `${Math.ceil(widest)}px`);
+    };
+    // Again once laid out (popups open after their first render) and once
+    // the font has loaded, and after any render (rows come and go)
+    useLayoutEffect(() =>
+    {
+        const list = listRef.current;
+        if (!list) return undefined;
+        let cancelled = false;
+        const measure = () => { if (!cancelled) measureTitles.current(); };
+        const watcher = new ResizeObserver(measure);
+        watcher.observe(list);
+        document.fonts?.ready.then(measure);
+        return () =>
+        {
+            cancelled = true;
+            watcher.disconnect();
+        };
+    }, []);
+    useLayoutEffect(() => measureTitles.current());
+
     return (
-        <IonList inset className="permission-list" style={settled ? undefined : { visibility: 'hidden' }}>
+        <IonList ref={listRef} inset className="permission-list" style={settled ? undefined : { visibility: 'hidden' }}>
             <PermissionRow
                 id="location"
                 title="Location"
