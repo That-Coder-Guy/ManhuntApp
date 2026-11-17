@@ -1359,14 +1359,35 @@ ion-modal.permissions-dialog {
 
 ion-modal.permissions-dialog::part(content) {
   height: auto;
-  max-height: 88vh;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
   border: var(--hairline);
 }
 
+/* Never taller than the screen (inside the safe area): the title and the
+   button always show, and only the switches between them scroll */
 ion-modal.permissions-dialog .permissions-dialog-body {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 2 * var(--space-4));
+  max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 2 * var(--space-4));
   padding: 0 var(--space-4) var(--space-4);
+}
+
+ion-modal.permissions-dialog .permissions-dialog-body > h2,
+ion-modal.permissions-dialog .permissions-dialog-body > p,
+ion-modal.permissions-dialog .permissions-dialog-body > ion-button {
+  flex-shrink: 0;
+}
+
+ion-modal.permissions-dialog .permissions-dialog-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+ion-modal.permissions-dialog .permissions-dialog-scroll > ion-list {
+  margin-block: 0;
 }
 
 ion-modal.permissions-dialog .permissions-dialog-body > h2 {

@@ -126,6 +126,19 @@ export function useCompassPermission()
     return [status, request];
 }
 
+/**
+ * The permissions needed to play: location, and on iPhones (the only phones
+ * that ask) the compass. { location, compass, ready } for PermissionsList and
+ * the button it gates.
+ */
+export function useRequiredPermissions()
+{
+    const location = useLocationPermission();
+    const compass = useCompassPermission();
+    const ready = location[0] === 'granted' && ['granted', 'unsupported'].includes(compass[0]);
+    return { location, compass, ready };
+}
+
 // ---- Keep the screen on (no permission: a preference, on unless turned off) ----
 
 const screenListeners = new Set();

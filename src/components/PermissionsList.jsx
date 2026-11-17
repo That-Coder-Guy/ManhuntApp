@@ -7,19 +7,22 @@ const STATUS_LABELS = {
     prompt: 'Off',
     requesting: 'Asking…',
     granted: 'On',
-    denied: 'Blocked · allow it in your phone’s settings for Manhunt',
+    denied: 'Blocked · allow it in phone settings',
     unsupported: 'Not available on this device',
     install: 'Only in the Home Screen app',
 };
 
-function PermissionRow({ id, title, requirement, description, status, onToggle, checked = status === 'granted', disabled })
+// iPhones forget a compass refusal when the app or page starts again
+const COMPASS_DENIED = 'Blocked · reopen Manhunt to be asked again';
+
+function PermissionRow({ id, title, requirement, description, status, statusText, onToggle, checked = status === 'granted', disabled })
 {
     return (
         <IonItem>
             <IonLabel>
                 <h3>{title} <IonNote className="permission-requirement">{requirement}</IonNote></h3>
                 <p>{description}</p>
-                <IonNote className="permission-status" data-testid={`${id}-status`}>{STATUS_LABELS[status] ?? status}</IonNote>
+                <IonNote className="permission-status" data-testid={`${id}-status`}>{statusText ?? STATUS_LABELS[status] ?? status}</IonNote>
             </IonLabel>
             <IonToggle
                 slot="end"
@@ -37,19 +40,21 @@ function PermissionRow({ id, title, requirement, description, status, onToggle, 
 /**
  * Everything Manhunt may use on this phone, each with a switch that asks for
  * it: "Before you play" in the browser, the installed app's first-open
- * popup, and the Settings page. `location` lets the caller share its own
- * location state; `onNotificationsOn` runs once notifications are allowed.
+ * popup, and the Settings page. `location` and `compass` let the caller
+ * share its own state for those (the required ones: useRequiredPermissions);
+ * `onNotificationsOn` runs once notifications are allowed.
  */
-function PermissionsList({ location, onNotificationsOn })
+function PermissionsList({ location, compass, onNotificationsOn })
 {
     const ownLocation = useLocationPermission();
+    const ownCompass = useCompassPermission();
     const [locationStatus, requestLocation] = location ?? ownLocation;
+    const [compassStatus, requestCompass] = compass ?? ownCompass;
     const [notifyStatus, askNotifications] = useNotificationPermission();
     const requestNotifications = async () =>
     {
         if (await askNotifications() === 'granted') onNotificationsOn?.();
     };
-    const [compassStatus, requestCompass] = useCompassPermission();
     const [keepScreenOn, setKeepScreenOn] = useKeepScreenOn();
     const canKeepOn = wakeLockSupported();
 
@@ -58,8 +63,8 @@ function PermissionsList({ location, onNotificationsOn })
             <PermissionRow
                 id="location"
                 title="Location"
-                requirement="Needed to play"
-                description="Shows distances and directions to other players"
+                requirement="Required"
+                description="How far away players are"
                 status={locationStatus}
                 // A refusal can't be asked again from here; the phone's settings can
                 disabled={locationStatus !== 'prompt'}
@@ -70,7 +75,7 @@ function PermissionsList({ location, onNotificationsOn })
                     id="notify"
                     title="Notifications"
                     requirement="Optional"
-                    description="Tells you when players are found, even with your phone locked"
+                    description="When players are found"
                     status={notifyStatus}
                     disabled={notifyStatus !== 'prompt'}
                     onToggle={requestNotifications}
@@ -80,9 +85,10 @@ function PermissionsList({ location, onNotificationsOn })
                 <PermissionRow
                     id="compass"
                     title="Compass"
-                    requirement="Optional"
-                    description="Turns the arrow with your phone, so it points the way to go"
+                    requirement="Required"
+                    description="Points the arrow the right way"
                     status={compassStatus}
+                    statusText={compassStatus === 'denied' ? COMPASS_DENIED : undefined}
                     onToggle={requestCompass}
                 />
             )}
@@ -90,7 +96,7 @@ function PermissionsList({ location, onNotificationsOn })
                 id="wake"
                 title="Keep screen on"
                 requirement="Optional"
-                description="Stops your screen sleeping during a game"
+                description="During a game"
                 status={!canKeepOn ? 'unsupported' : keepScreenOn ? 'granted' : 'prompt'}
                 checked={canKeepOn && keepScreenOn}
                 disabled={!canKeepOn}

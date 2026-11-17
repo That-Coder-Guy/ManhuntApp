@@ -29,7 +29,7 @@ real app, captured at phone size (390 × 844) from a scripted game.
   </tr>
   <tr>
     <td valign="top"><b>Create or join.</b> Name the lobby and tap <i>Create lobby</i>. Friends join with the lobby ID, a pasted invite link, or the QR button, which scans an invite with the camera.</td>
-    <td valign="top"><b>Before you play.</b> In the browser, entering a lobby asks for what the game uses: location is needed to continue; notifications, the compass (iPhone) and keeping the screen on are optional. The installed app asks the same once, when it first opens, instead. Both keep the switches on the Settings page (the gear on the home page).</td>
+    <td valign="top"><b>Before you play.</b> In the browser, entering a lobby asks for what the game uses: location and, on an iPhone, the compass are required; notifications and keeping the screen on are optional. The installed app asks the same once, when it first opens, instead. Both keep the switches on the Settings page (the gear on the home page).</td>
     <td valign="top"><b>Invite.</b> The QR button in the top bar shows a code anyone can scan with their phone camera to land straight in the lobby.</td>
   </tr>
 </table>
@@ -388,8 +388,8 @@ name, a small profile picture and a role; the host sets the rules and starts.
   follows straight away, so walking out of a building shows at once. Only
   the jitter averages out; a building can still shift the whole scatter.
 - **Permissions**: in the browser, **Before you play** asks for them on
-  entering a lobby (location is needed to continue; notifications, the
-  compass on an iPhone, and keeping the screen on are optional). The
+  entering a lobby (location and, on an iPhone, the compass are required;
+  notifications and keeping the screen on are optional). The
   installed app asks for the same once, in a popup when it first opens, and
   not in lobbies. Both have the same switches on **Settings** (the gear on
   the home page), where *Keep screen on* can also be turned off; the screen
