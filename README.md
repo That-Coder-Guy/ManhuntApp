@@ -139,6 +139,28 @@ npm test                     # unit tests + socket-level server tests (needs the
 npm run lint
 ```
 
+### Browser tests
+
+`tests/e2e/` plays the real app in headless Chromium against a real game
+server, one browser "phone" per player:
+
+```bash
+npm i -D playwright && npx playwright install chromium   # once
+
+npm run test:e2e                    # every suite, pass/fail (about 6 minutes)
+npm run test:e2e -- found camera    # just those (names from tests/e2e/suites/)
+npm run audit:ui                    # layout, legibility and text-position audits
+```
+
+The runner builds the app (pass `--no-build` to reuse `dist/`) and starts the
+game server itself, with notifications recorded to a file instead of sent and
+map tiles stubbed, so it needs no internet. Screenshots land in
+`tests/e2e/output/`. The audits report notes to read rather than pass or fail;
+a few are known and harmless (the selected segment's text measured against the
+wrong layer, back buttons' text sitting beside their chevron, the invite's
+cut-off lobby ID). Things the suites can't check, because a desktop browser
+can't do them: real push delivery, iPhone shake-to-undo, and a real compass.
+
 ## How the protocol works
 
 - `POST /manhunt-api/create-lobby` — the only REST endpoint; returns a `lobby_id`.

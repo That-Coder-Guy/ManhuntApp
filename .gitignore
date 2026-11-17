@@ -27,3 +27,6 @@ build
 
 # Web Push signing keys, made on first start (a secret)
 server/.vapid-keys.json
+
+# Browser test screenshots and recorded pushes (tests/e2e/run.mjs)
+tests/e2e/output/

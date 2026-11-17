@@ -20,7 +20,7 @@ export default defineConfig([
   },
   {
     // Node scripts that also drive a browser (page.evaluate callbacks)
-    files: ['scripts/**/*.mjs'],
+    files: ['scripts/**/*.mjs', 'tests/e2e/**/*.mjs'],
     extends: [js.configs.recommended],
     languageOptions: {
       ecmaVersion: 2022,
