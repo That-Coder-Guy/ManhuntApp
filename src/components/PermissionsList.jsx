@@ -74,6 +74,18 @@ function PermissionsList({ location, compass, onNotificationsOn, onNotifications
                 disabled={locationStatus !== 'prompt'}
                 onToggle={requestLocation}
             />
+            {compassStatus !== 'unsupported' && (
+                <PermissionRow
+                    id="compass"
+                    title="Compass"
+                    requirement="Required"
+                    description="Points the arrow the right way"
+                    status={compassStatus}
+                    statusText={compassStatus === 'denied' ? COMPASS_DENIED : undefined}
+                    onToggle={requestCompass}
+                />
+            )}
+            {/* Required ones first, then the optional ones */}
             {notifyStatus !== 'unsupported' && (
                 <PermissionRow
                     id="notify"
@@ -84,17 +96,6 @@ function PermissionsList({ location, compass, onNotificationsOn, onNotifications
                     // Optional, so it turns off again (and back on without asking)
                     disabled={!['prompt', 'granted', 'off'].includes(notifyStatus)}
                     onToggle={toggleNotifications}
-                />
-            )}
-            {compassStatus !== 'unsupported' && (
-                <PermissionRow
-                    id="compass"
-                    title="Compass"
-                    requirement="Required"
-                    description="Points the arrow the right way"
-                    status={compassStatus}
-                    statusText={compassStatus === 'denied' ? COMPASS_DENIED : undefined}
-                    onToggle={requestCompass}
                 />
             )}
             <PermissionRow
