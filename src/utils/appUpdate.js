@@ -34,6 +34,15 @@ export function initAppUpdates()
     navigator.serviceWorker.addEventListener('message', (event) =>
     {
         if (event.data?.type === 'MANHUNT_CAN_APPLY_UPDATES') event.ports[0]?.postMessage(true);
+        // A tapped notification (public/sw-push.js): go to its lobby
+        if (event.data?.type === 'MANHUNT_OPEN' && typeof event.data.url === 'string')
+        {
+            const target = new URL(event.data.url, window.location.origin);
+            if (target.origin === window.location.origin && target.pathname !== window.location.pathname)
+            {
+                window.location.assign(target.pathname);
+            }
+        }
     });
     navigator.serviceWorker.startMessages?.();
 

@@ -52,7 +52,7 @@ export default defineConfig({
         // still wait for the app's go-ahead), so an update can always apply
         clientsClaim: true,
         // Hands over from apps too old to apply updates themselves (see the file)
-        importScripts: ['sw-handover.js'],
+        importScripts: ['sw-handover.js', 'sw-push.js'],
         // Precache the bundled typefaces with the shell so text renders in
         // IBM Plex even when the app is opened with no connection
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],

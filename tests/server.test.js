@@ -18,11 +18,27 @@ const skip = loadError ? `server deps missing — run \`npm --prefix server inst
 
 let game;
 let base;
+
+// Stands in for the push services: records what would be sent. An endpoint
+// containing "gone" answers like a subscription the browser dropped
+const pushed = [];
+const fakePush = {
+    publicKey: 'test-public-key',
+    async send(subscription, payload)
+    {
+        pushed.push({ endpoint: subscription.endpoint, payload });
+        return subscription.endpoint.includes('gone') ? { gone: true } : { ok: true };
+    }
+};
+const subscription = (name) => ({
+    endpoint: `https://web.push.apple.com/${name}`,
+    keys: { p256dh: 'BOr6Kb1oSpY4QpvxMk2cX0Va', auth: 'k7JmY2hLx3Q' }
+});
 const sockets = [];
 
 before(async () => {
     if (skip) return;
-    game = createGameServer({ distDir: null, broadcastIntervalMs: 20, maxPlayersPerLobby: 3, cleanupIntervalMs: 60_000 });
+    game = createGameServer({ distDir: null, broadcastIntervalMs: 20, maxPlayersPerLobby: 3, cleanupIntervalMs: 60_000, push: fakePush });
     await new Promise((resolve) => game.server.listen(0, '127.0.0.1', resolve));
     base = `http://127.0.0.1:${game.server.address().port}`;
 });
@@ -481,4 +497,54 @@ test('the health check reports which update the server runs', { skip }, async ()
     assert.equal(health.status, 'success');
     assert.match(health.version.commit, /^[0-9a-f]{7,}$/);
     assert.ok(Number.isInteger(health.version.build) && health.version.build > 0);
+});
+
+test('players can subscribe to push, but only through real push services', { skip }, async () => {
+    const { host } = await hostedLobby();
+    assert.equal(host.data.push_public_key, 'test-public-key', 'join hands out the key to subscribe with');
+    for (const endpoint of ['http://192.168.1.1/push', 'https://evil.example.com/x', 'https://push.apple.com.evil.com/x', 'not a url']) {
+        const bad = await ack(host.socket, 'push-subscribe', { subscription: { ...subscription('x'), endpoint } });
+        assert.equal(bad.status, 'validation_error', endpoint);
+    }
+    assert.equal((await ack(host.socket, 'push-subscribe', { subscription: { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: {} } })).status, 'validation_error', 'needs keys');
+    assert.equal((await ack(host.socket, 'push-subscribe', { subscription: subscription('ok') })).status, 'success');
+    assert.equal((await ack(host.socket, 'push-subscribe', { subscription: null })).status, 'success', 'and can stop');
+});
+
+test('a find is pushed to the other players who are not looking at the app', { skip }, async () => {
+    const { lobbyId, host, near, far } = await foundGame();
+    await ack(host.socket, 'push-subscribe', { subscription: subscription('host') });
+    await ack(near.socket, 'push-subscribe', { subscription: subscription('near') });
+    await ack(far.socket, 'push-subscribe', { subscription: subscription('far') });
+    await ack(far.socket, 'set-visibility', { visible: false });   // Priya's phone is locked
+    await ack(host.socket, 'start-game');
+
+    pushed.length = 0;
+    await ack(near.socket, 'found', NEAR);
+    await new Promise((r) => setTimeout(r, 50));
+    const name = game.lobbies.get(lobbyId).players.get(near.data.player_token).name;
+    assert.deepEqual(pushed.map((p) => p.endpoint), ['https://web.push.apple.com/far'],
+        'only the locked phone: not the one found, not the host who is looking at the app');
+    assert.deepEqual(pushed[0].payload, {
+        title: `${name} was found`, body: '1 hider left · Hosted', url: `/lobby/${lobbyId}`, tag: `manhunt-${lobbyId}`
+    });
+
+    // The host locks their phone too; the last find says everyone is found
+    await ack(host.socket, 'set-visibility', { visible: false });
+    pushed.length = 0;
+    await ack(far.socket, 'found', NEAR);
+    await new Promise((r) => setTimeout(r, 50));
+    assert.deepEqual(pushed.map((p) => p.endpoint), ['https://web.push.apple.com/host']);
+    assert.equal(pushed[0].payload.title, 'Everyone was found');
+    assert.match(pushed[0].payload.body, /was the last\. The seekers win\./);
+});
+
+test('a subscription the push service says is gone is forgotten', { skip }, async () => {
+    const { lobbyId, host, near, far } = await foundGame();
+    await ack(far.socket, 'push-subscribe', { subscription: subscription('gone') });
+    await ack(far.socket, 'set-visibility', { visible: false });
+    await ack(host.socket, 'start-game');
+    await ack(near.socket, 'found', NEAR);
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(game.lobbies.get(lobbyId).players.get(far.data.player_token).push_subscription, null);
 });

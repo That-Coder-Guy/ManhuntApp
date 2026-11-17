@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { API_ORIGIN, SOCKET_PATH } from '../utils/api.js';
+import { currentSubscription } from '../utils/push.js';
 
 // High-level join state of the lobby connection
 export const JOIN_STATE = {
@@ -96,6 +97,8 @@ function useLobbySocket(lobbyId, credentials, onJoined)
     const [avatars, setAvatars] = useState({});
     // The latest "someone was found" notice: { player_id, name, hiders_left, at }
     const [foundNotice, setFoundNotice] = useState(null);
+    // The server's key for push notifications (null when it sends none)
+    const [pushKey, setPushKey] = useState(null);
     // Server clock minus ours, so countdowns agree across phones
     const [clockOffset, setClockOffset] = useState(0);
     const [connectionState, setConnectionState] = useState(CONNECTION_STATE.RECONNECTING);
@@ -178,6 +181,7 @@ function useLobbySocket(lobbyId, credentials, onJoined)
 
             setLobbyName(data.lobby_name);
             setSelfId(data.player_id);
+            setPushKey(data.push_public_key ?? null);
             applyState(data.state);
             setJoinState(JOIN_STATE.JOINED);
             onJoinedRef.current?.(data);
@@ -185,6 +189,14 @@ function useLobbySocket(lobbyId, credentials, onJoined)
             // A stationary phone may not report a new GPS fix for a long time;
             // re-send the last one so the server isn't left with a stale position
             sendLatestLocation();
+
+            // Notifications: whether the app is on screen, and (if this phone
+            // turned them on) where to send them. Each lobby is a new player
+            reportVisibility();
+            currentSubscription(data.push_public_key).then((subscription) =>
+            {
+                if (subscription && !stopped) emitWithAck(socket, 'push-subscribe', { subscription }).catch(() => {});
+            });
         });
 
         socket.on('lobby-state', applyState);
@@ -202,12 +214,21 @@ function useLobbySocket(lobbyId, credentials, onJoined)
             socket.disconnect();
         });
 
+        // Players looking at the app get the in-app notice, not a push
+        function reportVisibility()
+        {
+            if (!socket.connected) return;
+            emitWithAck(socket, 'set-visibility', { visible: document.visibilityState === 'visible' }).catch(() => {});
+        }
+        document.addEventListener('visibilitychange', reportVisibility);
+
         // Reconnect as soon as the browser is back online, not after the backoff
         const handleOnline = () => { if (!socket.connected && !stopped) socket.connect(); };
         window.addEventListener('online', handleOnline);
 
         return () =>
         {
+            document.removeEventListener('visibilitychange', reportVisibility);
             window.removeEventListener('online', handleOnline);
             clearTimeout(sendTimerRef.current);
             sendTimerRef.current = null;
@@ -234,6 +255,8 @@ function useLobbySocket(lobbyId, credentials, onJoined)
 
     const updatePlayer = useCallback((updates) => send('update-player', updates), [send]);
     const setAvatar = useCallback((avatar) => send('set-avatar', { avatar }), [send]);
+    // Hand the server this phone's push subscription (see utils/push.js)
+    const registerPush = useCallback((subscription) => send('push-subscribe', { subscription }), [send]);
     // A hider a seeker reached: sends the phone's current position with it,
     // and the server decides (it rejects with status 'too_far', 'head_start', …)
     const declareFound = useCallback((location) => send('found', location
@@ -286,6 +309,8 @@ function useLobbySocket(lobbyId, credentials, onJoined)
         setAvatar,
         declareFound,
         foundNotice,
+        pushKey,
+        registerPush,
         hostActions,
         leaveLobby
     };

@@ -148,6 +148,9 @@ npm run lint
     preserved). This is what makes dead zones survivable: reconnecting after
     a dropout restores the same identity.
   - Client → server: `update-location`, `update-player`, `leave-lobby` (all acked).
+    `push-subscribe` hands the server the phone's Web Push subscription (or
+    `null`), and `set-visibility` says whether the app is on screen; the
+    server pushes "found" notices only to players who aren't looking.
   - Server → clients: `lobby-state` pushed to the lobby room on any change,
     throttled to 1/second per lobby. Includes each player's
     `location_last_updated` and `connected` flag so clients can show staleness.
@@ -346,6 +349,11 @@ the app. Server settings, as environment variables:
 - `PORT` — server port (default `3001`).
 - `ALLOWED_ORIGINS` — extra comma-separated origins to allow (split hosting).
 - `TRUST_ALL_ORIGINS=1` — allow any origin (disables the CORS allowlist).
+- `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` — the key pair that signs push
+  notifications. Without them the server makes one on first start and keeps
+  it in `server/.vapid-keys.json` (not committed; keep it, since phones'
+  subscriptions belong to that key). `VAPID_SUBJECT` sets the contact URL sent
+  with pushes (defaults to this repository).
 
 ## Hosting a game
 
@@ -364,6 +372,12 @@ name, a small profile picture and a role; the host sets the rules and starts.
   the distance itself, against seekers' positions from the last two minutes,
   and not during the head start. When the last hider is found the seekers win
   and the game ends for everyone.
+- **Notifications**: anyone who turns them on in **Before you play** gets one
+  when another player is found ("Maya was found · 1 hider left"), even with
+  the phone locked. Players looking at the app already see it on screen, so
+  they aren't sent one. Tapping it opens the lobby. On an iPhone they need iOS
+  16.4 or later and the app added to the Home Screen (Share → Add to Home
+  Screen); in Safari itself the switch says so.
 - The host can move players between roles, hand over the host role, remove
   players, end the game and start another round. The server enforces all of
   this, not just the UI.

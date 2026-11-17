@@ -55,6 +55,8 @@ function LobbySession({ lobbyId })
                         requestWakeLock={wakeLock.requestWakeLock}
                         isWakeLockSupported={wakeLock.isSupported}
                         isWakeLockActive={wakeLock.isActive}
+                        pushKey={lobby.pushKey}
+                        onPushEnabled={lobby.registerPush}
                     />
                 </>
             );

@@ -9,6 +9,7 @@ const { v4: uuidv4 } = require('uuid');
 
 const { isAllowedOrigin } = require('./origins');
 const { PHASE, DEFAULT_SETTINGS, applySettings, isOutOfBounds, isValidAvatar, nearestSeeker } = require('./game');
+const { cleanSubscription, createPushSender } = require('./push');
 
 const API_PREFIX = '/manhunt-api';
 // Which update this server is running: read from git once, at start-up
@@ -54,6 +55,9 @@ function reply(ack, payload)
 function createGameServer(options = {})
 {
     const config = { ...DEFAULTS, ...options };
+    // Push notifications: { publicKey, send(subscription, payload) }. Tests
+    // pass a stand-in; null turns pushes off
+    const push = options.push === undefined ? createPushSender() : options.push;
 
     const app = express();
     app.use(cors({
@@ -173,6 +177,33 @@ function createGameServer(options = {})
         if (lobby.host_token === token) chooseNewHost(lobby);
         endIfNoHiders(lobbyId, lobby, { reason: 'no_hiders', winner: null });
         scheduleBroadcast(lobbyId);
+    }
+
+    /**
+     * Push "Maya was found" to everyone else in the lobby who asked for
+     * notifications and isn't looking at the app right now (they get the
+     * in-app notice instead). A subscription the browser dropped is forgotten.
+     */
+    function notifyFound(lobbyId, lobby, found, hidersLeft)
+    {
+        if (!push) return;
+        const name = found.name || 'A hider';
+        const payload = hidersLeft === 0
+            ? { title: 'Everyone was found', body: `${name} was the last. The seekers win.` }
+            : { title: `${name} was found`, body: `${hidersLeft} ${hidersLeft === 1 ? 'hider' : 'hiders'} left · ${lobby.lobby_name}` };
+        payload.url = `/lobby/${lobbyId}`;
+        payload.tag = `manhunt-${lobbyId}`; // a newer notice replaces an older one
+
+        for (const p of lobby.players.values())
+        {
+            if (p === found || !p.push_subscription) continue;
+            if (p.connected && p.visible !== false) continue;
+            const subscription = p.push_subscription;
+            push.send(subscription, payload).then((result) =>
+            {
+                if (result?.gone && p.push_subscription === subscription) p.push_subscription = null;
+            });
+        }
     }
 
     // A running game ends once nobody is left hiding
@@ -346,6 +377,8 @@ function createGameServer(options = {})
             player_token: token,
             player_id: player.player_id,
             state: snapshot(lobby),
+            // What a phone needs to subscribe to this server's notifications
+            push_public_key: push ? push.publicKey : null,
         });
         // Pictures travel separately from the per-second state, once each
         const avatars = {};
@@ -431,6 +464,27 @@ function createGameServer(options = {})
             reply(ack, { status: 'success' });
         });
 
+        // This phone's push subscription (or null to stop), for notifications
+        on('push-subscribe', ({ subscription } = {}, ack, currentLobby, p) =>
+        {
+            if (subscription === null) p.push_subscription = null;
+            else
+            {
+                const clean = cleanSubscription(subscription);
+                if (!clean) return reply(ack, { status: 'validation_error', description: 'Not a push subscription this server accepts.' });
+                p.push_subscription = clean;
+            }
+            reply(ack, { status: 'success' });
+        });
+
+        // Whether the app is on screen: notifications skip players looking at it
+        on('set-visibility', ({ visible } = {}, ack, currentLobby, p) =>
+        {
+            if (typeof visible !== 'boolean') return reply(ack, { status: 'validation_error' });
+            p.visible = visible;
+            reply(ack, { status: 'success' });
+        });
+
         // A hider a seeker has caught: within the lobby's found range of a
         // seeker with a recent fix, they declare it and join the seekers
         on('found', ({ latitude, longitude } = {}, ack, currentLobby, p) =>
@@ -459,6 +513,7 @@ function createGameServer(options = {})
             game.found = [...(game.found || []), { player_id: p.player_id, at: now }];
             const hidersLeft = [...currentLobby.players.values()].filter((q) => !q.is_seeker).length;
             io.to(lobbyId).emit('player-found', { player_id: p.player_id, name: p.name, hiders_left: hidersLeft });
+            notifyFound(lobbyId, currentLobby, p, hidersLeft);
             endIfNoHiders(lobbyId, currentLobby, { reason: 'all_found', winner: 'seekers' });
             scheduleBroadcast(lobbyId);
             reply(ack, { status: 'success' });
