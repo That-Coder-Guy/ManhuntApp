@@ -2258,16 +2258,3 @@ ion-action-sheet {
     transition: none;
   }
 }
-
-/* TEMPORARY: the landing page's test notification button */
-.test-notification {
-  margin-top: var(--space-4);
-}
-
-.test-notification-note {
-  margin: var(--space-2) var(--space-1) 0;
-  font-size: var(--fs-caption);
-  line-height: 1.25rem;
-  color: var(--text-2);
-  text-align: center;
-}

@@ -371,9 +371,6 @@ function createGameServer(options = {})
     // The version lets the landing page spot an app and server out of step
     app.get(`${API_PREFIX}/health`, (req, res) => res.json({ status: 'success', version: VERSION }));
 
-    // TEMPORARY: the landing page's test notification (server/testPush.js)
-    const closeTestPush = require('./testPush').addTestPushRoutes(app, API_PREFIX, push, { delayMs: options.testPushDelayMs });
-
     // Malformed JSON and the like: answer in the API's own shape, not HTML
     app.use(API_PREFIX, (err, req, res, next) =>
     {
@@ -701,7 +698,6 @@ function createGameServer(options = {})
     function close()
     {
         clearInterval(cleanupTimer);
-        closeTestPush(); // TEMPORARY (server/testPush.js)
         for (const lobbyId of [...lobbies.keys()]) deleteLobby(lobbyId);
         return new Promise((resolve) => io.close(() => resolve()));
     }
