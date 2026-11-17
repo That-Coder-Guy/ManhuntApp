@@ -160,6 +160,57 @@ export function useRequiredPermissions()
     return { location, compass, ready };
 }
 
+// ---- Camera (only for scanning join codes) ----
+
+const hasCamera = () => typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
+
+/**
+ * Camera permission as 'prompt' | 'requesting' | 'granted' | 'denied' |
+ * 'unsupported'. Allowing it ahead of time is all this does: the QR scanner
+ * then opens without the browser asking first.
+ */
+export function useCameraPermission()
+{
+    const [status, setStatus] = useState(() => (hasCamera() ? 'prompt' : 'unsupported'));
+
+    useEffect(() =>
+    {
+        if (!hasCamera() || !navigator.permissions?.query) return undefined;
+        let permission;
+        let cancelled = false;
+        const apply = (state) => { if (!cancelled) setStatus(state === 'granted' || state === 'denied' ? state : 'prompt'); };
+        navigator.permissions.query({ name: 'camera' })
+            .then((result) =>
+            {
+                permission = result;
+                apply(result.state);
+                result.onchange = () => apply(result.state);
+            })
+            .catch(() => { /* not every browser can say: 'prompt' until asked */ });
+        return () =>
+        {
+            cancelled = true;
+            if (permission) permission.onchange = null;
+        };
+    }, []);
+
+    const request = async () =>
+    {
+        if (status !== 'prompt') return;
+        setStatus('requesting');
+        try {
+            // Asking means opening it: close it again straight away
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            stream.getTracks().forEach((track) => track.stop());
+            setStatus('granted');
+        } catch (error) {
+            setStatus(error?.name === 'NotAllowedError' ? 'denied' : error?.name === 'NotFoundError' ? 'unsupported' : 'prompt');
+        }
+    };
+
+    return [status, request];
+}
+
 // ---- Keep the screen on (no permission: a preference, on unless turned off) ----
 
 const screenListeners = new Set();

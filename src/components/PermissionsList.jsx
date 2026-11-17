@@ -1,6 +1,6 @@
 import { IonList, IonItem, IonLabel, IonToggle, IonNote } from '@ionic/react';
 import {
-    useLocationPermission, useNotificationPermission, useCompassPermission, useKeepScreenOn, wakeLockSupported
+    useLocationPermission, useNotificationPermission, useCompassPermission, useCameraPermission, useKeepScreenOn, wakeLockSupported
 } from '../hooks/usePermissions';
 
 const STATUS_LABELS = {
@@ -44,9 +44,10 @@ function PermissionRow({ id, title, requirement, description, status, statusText
  * popup, and the Settings page. `location` and `compass` let the caller
  * share its own state for those (the required ones: useRequiredPermissions);
  * `onNotificationsOn` / `onNotificationsOff` run when notifications are
- * turned on or off.
+ * turned on or off. `showCamera` adds the camera (for scanning join codes),
+ * which matters outside a lobby: the installed app's popup and Settings.
  */
-function PermissionsList({ location, compass, onNotificationsOn, onNotificationsOff })
+function PermissionsList({ location, compass, onNotificationsOn, onNotificationsOff, showCamera = false })
 {
     const ownLocation = useLocationPermission();
     const ownCompass = useCompassPermission();
@@ -59,6 +60,7 @@ function PermissionsList({ location, compass, onNotificationsOn, onNotifications
         if (next === 'granted') onNotificationsOn?.();
         if (next === 'off') onNotificationsOff?.();
     };
+    const [cameraStatus, requestCamera] = useCameraPermission();
     const [keepScreenOn, setKeepScreenOn] = useKeepScreenOn();
     const canKeepOn = wakeLockSupported();
 
@@ -96,6 +98,18 @@ function PermissionsList({ location, compass, onNotificationsOn, onNotifications
                     // Optional, so it turns off again (and back on without asking)
                     disabled={!['prompt', 'granted', 'off'].includes(notifyStatus)}
                     onToggle={toggleNotifications}
+                />
+            )}
+            {showCamera && cameraStatus !== 'unsupported' && (
+                <PermissionRow
+                    id="camera"
+                    title="Camera"
+                    requirement="Optional"
+                    description="For scanning join codes"
+                    status={cameraStatus}
+                    // Only a head start for the scanner: a page can't give the camera back
+                    disabled={cameraStatus !== 'prompt'}
+                    onToggle={requestCamera}
                 />
             )}
             <PermissionRow

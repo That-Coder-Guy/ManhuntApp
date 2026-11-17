@@ -23,7 +23,7 @@ function Settings()
             </IonHeader>
             <IonContent className="settings-page">
                 <h3 className="settings-section">Permissions</h3>
-                <PermissionsList />
+                <PermissionsList showCamera />
                 <p className="settings-note">
                     Once something is allowed, or blocked, only your phone’s own settings for Manhunt can change it.
                 </p>

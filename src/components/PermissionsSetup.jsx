@@ -19,7 +19,7 @@ function PermissionsSetup()
                 <p className="permissions-dialog-intro">You can change these later in Settings.</p>
                 {/* Only the switches scroll: the title and button stay in view */}
                 <div className="permissions-dialog-scroll">
-                    <PermissionsList location={location} compass={compass} />
+                    <PermissionsList location={location} compass={compass} showCamera />
                 </div>
                 <IonButton data-testid="setup-done" expand="block" disabled={!ready} onClick={finishSetup}>
                     {ready ? 'Done' : 'Allow what’s needed'}
