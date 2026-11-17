@@ -15,7 +15,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // A new version waits until the app applies it (src/utils/appUpdate.js),
+      // so an update never reloads a phone in the middle of a game
+      registerType: 'prompt',
       includeAssets: ['favicon.svg', 'favicon-32.png', 'apple-touch-icon.png'],
       manifest: {
         name: 'Manhunt',
@@ -46,6 +48,9 @@ export default defineConfig({
         ]
       },
       workbox: {
+        // The first install takes over the open page at once (later versions
+        // still wait for the app's go-ahead), so an update can always apply
+        clientsClaim: true,
         // Precache the bundled typefaces with the shell so text renders in
         // IBM Plex even when the app is opened with no connection
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],

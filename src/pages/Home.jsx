@@ -9,6 +9,7 @@ import { qrCodeOutline } from 'ionicons/icons';
 import BrandMark from '../components/BrandMark.jsx';
 import { createLobby, fetchServerVersion } from '../utils/api.js';
 import { APP_VERSION, formatVersion, isDifferentVersion } from '../utils/version.js';
+import { useUpdateReady, applyAppUpdate } from '../utils/appUpdate.js';
 import QrScanModal from '../components/QrScanModal.jsx';
 import { parseLobbyId, lobbyPath } from '../utils/lobbyLink.js';
 import { updateSession } from '../utils/session.js';
@@ -32,6 +33,15 @@ function Home()
         return () => { active = false; };
     }, []);
     const outOfStep = isDifferentVersion(APP_VERSION, serverVersion);
+
+    // A downloaded update applies itself here, unless that would throw away
+    // something being typed; then the version line offers it instead
+    const updateReady = useUpdateReady();
+    const busy = !!newLobbyName.trim() || !!joinLobbyId.trim() || isCreating || isScannerOpen;
+    useEffect(() =>
+    {
+        if (updateReady && !busy) applyAppUpdate();
+    }, [updateReady, busy]);
 
     async function createLobbyClick()
     {
@@ -157,7 +167,12 @@ function Home()
                 {/* Which update this is, so you can tell one has gone through */}
                 <footer className="home-version" data-testid="app-version">
                     <p>{formatVersion(APP_VERSION)}</p>
-                    {outOfStep && (
+                    {updateReady ? (
+                        <p className="home-version-update" data-testid="update-ready">
+                            A new version is ready ·{' '}
+                            <button type="button" className="link-button" onClick={applyAppUpdate}>Reload now</button>
+                        </p>
+                    ) : outOfStep && (
                         <p className="home-version-warning" data-testid="version-mismatch">
                             Server is on version {serverVersion.build ?? '?'} ({serverVersion.commit}). Reload to update.
                         </p>

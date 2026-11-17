@@ -293,6 +293,15 @@ at the end, or with `git log -1`. If the server is on a different update
 from the copy of the app your phone has, the landing page says so in red;
 reloading the page picks up the new app.
 
+Phones pick updates up by themselves, including the app installed to the
+Home Screen: it looks for a new version when it opens, whenever you switch
+back to it, and every half hour. A new version never interrupts a game:
+
+- On the landing page it applies straight away (unless you're typing; then
+  the version line offers **Reload now**).
+- In a lobby or on the results screen, a strip offers **Reload**.
+- During a game it waits until the game is over.
+
 Re-running keeps the port, allowed origins and tunnel from last time,
 rebuilds, and restarts the app. The tunnel is only restarted if its settings
 changed, so a quick tunnel keeps its address. Restarting the app ends live

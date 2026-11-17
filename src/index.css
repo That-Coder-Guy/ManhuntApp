@@ -385,6 +385,25 @@ ion-note {
   margin-inline: auto;
 }
 
+/* An inline text button, in the accent */
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.home-version p.home-version-update {
+  margin-top: var(--space-1);
+  font-family: var(--font-sans);
+  font-size: var(--fs-caption);
+  line-height: 1.25rem;
+  color: var(--text-2);
+}
+
 /* The version, quietly at the foot of the landing page */
 .home-version {
   align-self: end;

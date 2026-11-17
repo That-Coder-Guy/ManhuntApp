@@ -20,6 +20,7 @@ import { PHASE } from '../hooks/useLobbySocket';
 import useGeolocation from '../hooks/useGeolocation';
 import { withDummyPlayers } from '../utils/dummyPlayers';
 import { playerName } from '../utils/players';
+import { useUpdateReady, applyAppUpdate } from '../utils/appUpdate';
 
 const LOBBY_LIST_IDS = { card: 'lobby-players-card', title: 'lobby-players-title', list: 'lobby-players-list', empty: 'no-players' };
 
@@ -47,6 +48,9 @@ function LobbyFound({ lobbyId, lobby, onLeft, permissionsGranted = false })
     const [isEndConfirmOpen, setIsEndConfirmOpen] = useState(false);
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
+
+    // A new app version waits out a game; between rounds it can be applied
+    const updateReady = useUpdateReady();
 
     const isSeeker = !!selfPlayer?.is_seeker;
     const everyone = selfPlayer ? [selfPlayer, ...players] : players;
@@ -119,6 +123,12 @@ function LobbyFound({ lobbyId, lobby, onLeft, permissionsGranted = false })
                 </IonToolbar>
                 {/* Banners live in the fixed header, so they can never overlap content */}
                 <ConnectionBanner connectionState={connectionState} lastSyncTime={lastSyncTime} gpsError={gpsError} />
+                {updateReady && phase !== PHASE.PLAYING && (
+                    <div className="connection-banner update-banner" role="status" data-testid="update-banner">
+                        <span>A new version of the app is ready ·</span>
+                        <button type="button" className="link-button" onClick={applyAppUpdate}>Reload</button>
+                    </div>
+                )}
             </IonHeader>
 
             <IonContent className="ion-padding lobby-content" data-testid="lobby-content">
