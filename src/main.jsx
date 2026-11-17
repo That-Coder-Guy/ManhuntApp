@@ -26,11 +26,14 @@ import './index.css'
 import App from './App.jsx'
 import { initAppUpdates } from './utils/appUpdate.js'
 import { initInstallOffer } from './utils/install.js'
+import { initNoShakeUndo } from './utils/noShakeUndo.js'
 
 // Offline support, and looking for new versions of the app
 initAppUpdates()
 // On a first visit, offer to add the app to the Home Screen
 initInstallOffer()
+// No "Undo Typing" popup when a phone is shaken after typing
+initNoShakeUndo()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
