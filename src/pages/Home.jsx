@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     IonPage, IonHeader, IonToolbar, IonTitle, IonContent,
@@ -7,7 +7,8 @@ import {
 } from '@ionic/react';
 import { qrCodeOutline } from 'ionicons/icons';
 import BrandMark from '../components/BrandMark.jsx';
-import { createLobby } from '../utils/api.js';
+import { createLobby, fetchServerVersion } from '../utils/api.js';
+import { APP_VERSION, formatVersion, isDifferentVersion } from '../utils/version.js';
 import QrScanModal from '../components/QrScanModal.jsx';
 import { parseLobbyId, lobbyPath } from '../utils/lobbyLink.js';
 import { updateSession } from '../utils/session.js';
@@ -19,7 +20,18 @@ function Home()
     const [isCreating, setIsCreating] = useState(false);
     const [isScannerOpen, setIsScannerOpen] = useState(false);
     const [toast, setToast] = useState('');
+    const [serverVersion, setServerVersion] = useState(null);
     const navigate = useNavigate();
+
+    // The server's version: if it differs, this phone is showing an older
+    // (or newer) copy of the app than the server runs
+    useEffect(() =>
+    {
+        let active = true;
+        fetchServerVersion().then((version) => { if (active) setServerVersion(version); });
+        return () => { active = false; };
+    }, []);
+    const outOfStep = isDifferentVersion(APP_VERSION, serverVersion);
 
     async function createLobbyClick()
     {
@@ -141,6 +153,16 @@ function Home()
                     </IonCardContent>
                 </IonCard>
                 </div>
+
+                {/* Which update this is, so you can tell one has gone through */}
+                <footer className="home-version" data-testid="app-version">
+                    <p>{formatVersion(APP_VERSION)}</p>
+                    {outOfStep && (
+                        <p className="home-version-warning" data-testid="version-mismatch">
+                            Server is on version {serverVersion.build ?? '?'} ({serverVersion.commit}). Reload to update.
+                        </p>
+                    )}
+                </footer>
                 </div>
 
                 <QrScanModal

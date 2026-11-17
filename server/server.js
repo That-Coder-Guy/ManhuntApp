@@ -11,6 +11,8 @@ const { isAllowedOrigin } = require('./origins');
 const { PHASE, DEFAULT_SETTINGS, applySettings, isOutOfBounds, isValidAvatar, nearestSeeker } = require('./game');
 
 const API_PREFIX = '/manhunt-api';
+// Which update this server is running: read from git once, at start-up
+const VERSION = require('../shared/version.js').readVersion(path.join(__dirname, '..'));
 const SOCKET_PATH = `${API_PREFIX}/socket.io`;
 
 const DEFAULTS = {
@@ -274,7 +276,8 @@ function createGameServer(options = {})
         res.json({ status: 'success', lobby_id: lobbyId, host_key: hostKey });
     });
 
-    app.get(`${API_PREFIX}/health`, (req, res) => res.json({ status: 'success' }));
+    // The version lets the landing page spot an app and server out of step
+    app.get(`${API_PREFIX}/health`, (req, res) => res.json({ status: 'success', version: VERSION }));
 
     // Malformed JSON and the like: answer in the API's own shape, not HTML
     app.use(API_PREFIX, (err, req, res, next) =>

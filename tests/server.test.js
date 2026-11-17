@@ -475,3 +475,10 @@ test('a game with no hiders left ends: moved by the host, or gone', { skip }, as
     assert.equal(game.lobbies.get(lobbyId).phase, 'ended');
     assert.deepEqual(game.lobbies.get(lobbyId).game.result, { reason: 'no_hiders', winner: null });
 });
+
+test('the health check reports which update the server runs', { skip }, async () => {
+    const health = await (await fetch(`${base}/manhunt-api/health`)).json();
+    assert.equal(health.status, 'success');
+    assert.match(health.version.commit, /^[0-9a-f]{7,}$/);
+    assert.ok(Number.isInteger(health.version.build) && health.version.build > 0);
+});

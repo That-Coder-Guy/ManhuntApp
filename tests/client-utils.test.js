@@ -147,3 +147,15 @@ test('foundStatus judges the found range the way the server does', () => {
     assert.equal(status([seeker(39.192)], { settings: { found_range_m: 250 } }).state, 'in_range', "the host's range applies");
     assert.equal(status([seeker(39.1903)], { settings: {} }).range, 50, 'defaults to 50 m');
 });
+
+test('version line and mismatch check', async () => {
+    const { formatVersion, isDifferentVersion } = await import('../src/utils/version.js');
+    const v = { build: 60, commit: 'cb64839', date: '2026-11-17T10:00:00-06:00' };
+    assert.equal(formatVersion(v), 'Version 60 · cb64839 · Nov 17, 2026');
+    assert.equal(formatVersion(v, { withDate: false }), 'Version 60 · cb64839');
+    assert.equal(formatVersion({ build: null, commit: 'unknown', date: null }), 'Version · unknown');
+    assert.equal(isDifferentVersion(v, { ...v }), false);
+    assert.equal(isDifferentVersion(v, { ...v, build: 61, commit: 'd4e5f6a' }), true);
+    assert.equal(isDifferentVersion(v, null), false, 'an unreachable server is not a mismatch');
+    assert.equal(isDifferentVersion(v, { commit: 'unknown' }), false, 'nor is one outside git');
+});

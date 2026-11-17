@@ -385,6 +385,30 @@ ion-note {
   margin-inline: auto;
 }
 
+/* The version, quietly at the foot of the landing page */
+.home-version {
+  align-self: end;
+  padding: var(--space-4) var(--space-1);
+  text-align: center;
+}
+
+.home-version p {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  line-height: 1rem;
+  color: var(--text-3);
+}
+
+.home-version p.home-version-warning {
+  margin-top: var(--space-1);
+  font-family: var(--font-sans);
+  font-size: var(--fs-caption);
+  line-height: 1.25rem;
+  text-wrap: balance;
+  color: var(--negative);
+}
+
 .home-cards {
   display: flex;
   flex-direction: column;

@@ -76,3 +76,18 @@ export async function createLobby(lobbyName)
     }
     return data;
 }
+
+/**
+ * The server's version, from its health check, or null if it can't be
+ * reached. Never rejects: it's only used to show a version mismatch.
+ */
+export async function fetchServerVersion()
+{
+    try {
+        const response = await fetch(`${API_BASE}/health`, { cache: 'no-store', signal: AbortSignal.timeout(5000) });
+        const data = response.ok ? await response.json() : null;
+        return data?.version ?? null;
+    } catch {
+        return null;
+    }
+}

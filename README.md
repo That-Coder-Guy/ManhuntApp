@@ -287,6 +287,12 @@ by re-running with `--quick` or `--hostname`.
 cd ~/ManhuntApp && git pull && scripts/setup-server.sh
 ```
 
+To confirm an update went through, compare the version at the foot of the
+landing page (build number · commit · date) with the one the script prints
+at the end, or with `git log -1`. If the server is on a different update
+from the copy of the app your phone has, the landing page says so in red;
+reloading the page picks up the new app.
+
 Re-running keeps the port, allowed origins and tunnel from last time,
 rebuilds, and restarts the app. The tunnel is only restarted if its settings
 changed, so a quick tunnel keeps its address. Restarting the app ends live

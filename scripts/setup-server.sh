@@ -499,6 +499,7 @@ if [[ "$MODE" == quick ]]; then
     note "See the current one any time with: scripts/setup-server.sh --url"
     note "Open it on your phone and use the in-app Invite button: the QR code follows the address."
 fi
+note "Version:  $(git -C "$REPO_DIR" rev-list --count HEAD 2>/dev/null || echo '?') · $(git -C "$REPO_DIR" rev-parse --short=7 HEAD 2>/dev/null || echo unknown)   (the landing page shows the same)"
 note "Local:    http://127.0.0.1:$PORT"
 TUNNEL_LOGS=""
 [[ -f "$TUNNEL_UNIT" || "$MODE" != none ]] && TUNNEL_LOGS="   ·   journalctl -u $TUNNEL_SERVICE_NAME -f"
