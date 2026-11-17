@@ -3,11 +3,9 @@ import {
     useLocationPermission, useNotificationPermission, useCompassPermission, useCameraPermission, useKeepScreenOn, wakeLockSupported
 } from '../hooks/usePermissions';
 
+// Said only when the switch can't say it: plain on and off need no words
 const STATUS_LABELS = {
-    prompt: 'Off',
-    off: 'Off',
     requesting: 'Asking…',
-    granted: 'On',
     denied: 'Blocked · allow it in phone settings',
     unsupported: 'Not available on this device',
     install: 'Only in the Home Screen app',
@@ -18,12 +16,13 @@ const COMPASS_DENIED = 'Blocked · reopen Manhunt to be asked again';
 
 function PermissionRow({ id, title, requirement, description, status, statusText, onToggle, checked = status === 'granted', disabled })
 {
+    const note = statusText ?? STATUS_LABELS[status];
     return (
         <IonItem>
             <IonLabel>
                 <h3>{title} <IonNote className="permission-requirement">{requirement}</IonNote></h3>
                 <p>{description}</p>
-                <IonNote className="permission-status" data-testid={`${id}-status`}>{statusText ?? STATUS_LABELS[status] ?? status}</IonNote>
+                {note && <IonNote className="permission-status" data-testid={`${id}-status`}>{note}</IonNote>}
             </IonLabel>
             <IonToggle
                 slot="end"

@@ -1440,6 +1440,11 @@ ion-list.permission-list ion-label h3 {
   color: var(--text-1);
 }
 
+/* Without a status line under it, the description closes the row */
+ion-list.permission-list ion-label p:last-child {
+  margin-bottom: var(--space-3);
+}
+
 ion-list.permission-list ion-label p {
   margin: 0;
   font-size: var(--fs-caption);
