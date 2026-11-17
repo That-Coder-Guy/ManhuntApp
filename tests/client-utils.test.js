@@ -167,3 +167,54 @@ test('version line and mismatch check', async () => {
     assert.equal(isDifferentVersion(v, null), false, 'an unreachable server is not a mismatch');
     assert.equal(isDifferentVersion(v, { commit: 'unknown' }), false, 'nor is one outside git');
 });
+
+test('the position filter steadies indoor GPS and still follows a walk outdoors', async () => {
+    const { createPositionFilter } = await import('../src/utils/positionFilter.js');
+    const { calculateDistance } = await import('../src/utils/geo.js');
+    const SPOT = { latitude: 39.19, longitude: -96.58 };
+    const M_PER_DEG_LAT = 111_320;
+    const mPerDegLon = M_PER_DEG_LAT * Math.cos((SPOT.latitude * Math.PI) / 180);
+    // A repeatable scatter: normal noise from a seeded generator
+    let seed = 7;
+    const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const normal = () => Math.sqrt(-2 * Math.log(random())) * Math.cos(2 * Math.PI * random());
+    const fix = (at, sd, t, accuracy = sd) => ({
+        latitude: at.latitude + (normal() * sd) / M_PER_DEG_LAT,
+        longitude: at.longitude + (normal() * sd) / mPerDegLon,
+        accuracy, timestamp: t * 1000
+    });
+    const off = (p) => calculateDistance(SPOT.latitude, SPOT.longitude, p.latitude, p.longitude);
+
+    // Sitting indoors: fixes scattered ~40 m, once a second
+    const filter = createPositionFilter();
+    let raw = 0;
+    let steady = 0;
+    let out;
+    for (let t = 0; t < 120; t++) {
+        const f = fix(SPOT, 40, t);
+        out = filter.update(f);
+        if (t >= 60) { raw += off(f); steady += off(out); }
+    }
+    raw /= 60; steady /= 60;
+    assert.ok(raw > 35, `raw fixes are ~40 m off (${raw.toFixed(1)})`);
+    assert.ok(steady < 12, `steadied ones are much closer (${steady.toFixed(1)} m)`);
+
+    // Walking out of the building: good fixes 60 m away are followed quickly
+    const outside = { latitude: SPOT.latitude + 60 / M_PER_DEG_LAT, longitude: SPOT.longitude };
+    for (let t = 120; t < 126; t++) out = filter.update(fix(outside, 3, t, 5));
+    assert.ok(calculateDistance(outside.latitude, outside.longitude, out.latitude, out.longitude) < 10, 'outside, it catches up within a few seconds');
+
+    // Walking outdoors at 1.4 m/s: it stays close behind
+    const walk = createPositionFilter();
+    let worst = 0;
+    for (let t = 0; t < 60; t++) {
+        const at = { latitude: SPOT.latitude + (1.4 * t) / M_PER_DEG_LAT, longitude: SPOT.longitude };
+        out = walk.update(fix(at, 3, t, 5));
+        if (t > 10) worst = Math.max(worst, calculateDistance(at.latitude, at.longitude, out.latitude, out.longitude));
+    }
+    assert.ok(worst < 9, `a walking hider is shown within a few metres (${worst.toFixed(1)} m)`);
+
+    // No accuracy given: treated as moderate, still a number out
+    const plain = createPositionFilter().update({ latitude: 1, longitude: 2 });
+    assert.deepEqual(plain, { latitude: 1, longitude: 2, accuracy: 30 });
+});

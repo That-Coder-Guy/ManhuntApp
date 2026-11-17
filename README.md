@@ -381,6 +381,12 @@ name, a small profile picture and a role; the host sets the rules and starts.
   100 m by default), or nothing. The server enforces it: during a game a
   hider's phone is never sent anyone else's position, only what this setting
   allows, worked out on the server.
+- **Steady hider positions**: GPS indoors scatters tens of metres. A
+  hider's phone weighs each fix by the accuracy it reports
+  (`src/utils/positionFilter.js`): with poor fixes it averages over many (a
+  ~40 m scatter shows as ~10 m, and stops jumping around), with good ones it
+  follows straight away, so walking out of a building shows at once. Only
+  the jitter averages out; a building can still shift the whole scatter.
 - **Permissions**: in the browser, **Before you play** asks for them on
   entering a lobby (location is needed to continue; notifications, the
   compass on an iPhone, and keeping the screen on are optional). The

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPositionFilter } from '../utils/positionFilter';
 
 const NO_FIX = { latitude: null, longitude: null };
 
@@ -9,8 +10,12 @@ const NO_FIX = { latitude: null, longitude: null };
  * `gpsError` is true while the browser reports no usable position; the
  * watch keeps running and clears it on the next fix. `gpsDenied` says the
  * reason is that location isn't allowed.
+ *
+ * With `smooth` (hiders), fixes are steadied by their accuracy first
+ * (utils/positionFilter.js), so a hider indoors doesn't jump around; the
+ * steadied position is what's shown and sent.
  */
-function useGeolocation(enabled, onFix)
+function useGeolocation(enabled, onFix, { smooth = false } = {})
 {
     const [location, setLocation] = useState(NO_FIX);
     const [gpsError, setGpsError] = useState(false);
@@ -19,6 +24,9 @@ function useGeolocation(enabled, onFix)
     // The latest callback, without restarting the watch when it changes
     const onFixRef = useRef(onFix);
     onFixRef.current = onFix;
+    const smoothRef = useRef(smooth);
+    smoothRef.current = smooth;
+    const filterRef = useRef(null);
 
     useEffect(() =>
     {
@@ -30,8 +38,19 @@ function useGeolocation(enabled, onFix)
         }
 
         const watchId = navigator.geolocation.watchPosition(
-            ({ coords: { latitude, longitude } }) =>
+            ({ coords: { latitude: rawLatitude, longitude: rawLongitude, accuracy }, timestamp }) =>
             {
+                let latitude = rawLatitude;
+                let longitude = rawLongitude;
+                if (smoothRef.current)
+                {
+                    filterRef.current ??= createPositionFilter();
+                    ({ latitude, longitude } = filterRef.current.update({ latitude, longitude, accuracy, timestamp }));
+                }
+                else
+                {
+                    filterRef.current = null; // a seeker again: start afresh next time
+                }
                 setGpsError(false);
                 setGpsDenied(false);
                 setLocation({ latitude, longitude });

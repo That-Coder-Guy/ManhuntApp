@@ -47,7 +47,8 @@ function LobbyFound({ lobbyId, lobby, onLeft })
     const [locationStatus] = useLocationPermission();
     const [locationAsked, setLocationAsked] = useState(false);
     const wantLocation = phase === PHASE.PLAYING || locationStatus === 'granted' || locationAsked;
-    const { location: currentLocation, gpsError, gpsDenied } = useGeolocation(wantLocation, updateLocation);
+    // Hiders' fixes are steadied, for indoors (utils/positionFilter.js)
+    const { location: currentLocation, gpsError, gpsDenied } = useGeolocation(wantLocation, updateLocation, { smooth: !selfPlayer?.is_seeker });
 
     // The screen stays on during a game, unless turned off in Settings
     const [keepScreenOn] = useKeepScreenOn();
