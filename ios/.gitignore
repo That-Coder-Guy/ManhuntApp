@@ -1,0 +1,8 @@
+# SwiftPM and xtool build output
+/.build
+/xtool
+/Packages
+.swiftpm/
+
+# Written by build.sh --server
+/Sources/Manhunt/Resources/default-server.txt

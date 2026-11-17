@@ -1,0 +1,5 @@
+version: 1
+# xtool adds its own prefix when signing with a free Apple ID
+bundleID: com.manhunt.ios
+infoPath: Info.plist
+iconPath: Resources/AppIcon.png
