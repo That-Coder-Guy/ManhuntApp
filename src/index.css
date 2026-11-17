@@ -1062,15 +1062,88 @@ ion-segment.track-mode ion-segment-button {
 }
 
 .track-map-wrap {
+  --map-rotation: 0deg;
   position: relative;
   flex: 1 1 auto;
   /* Short phones keep the distance on screen below the map */
   min-height: min(16rem, 30vh);
   width: 100%;
+  overflow: hidden;
+  border: var(--hairline);
+  border-radius: var(--radius-track);
+  background: var(--ink-0);
 }
 
+/* The map turns with the phone: it's drawn on a square as wide as the
+   view's diagonal, centred on the view, so no corner ever shows (TrackMap
+   sets the sizes). The wrap clips it and carries the frame */
 .play-area-map.track-map {
-  height: 100%;
+  position: absolute;
+  left: calc(-1 * var(--inset-x, 0px));
+  top: calc(-1 * var(--inset-y, 0px));
+  width: var(--map-side, 100%);
+  height: var(--map-side, 100%);
+  border: 0;
+  border-radius: 0;
+  transform: rotate(var(--map-rotation));
+  transform-origin: 50% 50%;
+}
+
+/* Leaflet's zoom buttons and credit: back on the visible view, upright */
+.track-map .leaflet-control-container {
+  position: absolute;
+  z-index: 1000;
+  left: var(--inset-x, 0px);
+  top: var(--inset-y, 0px);
+  width: var(--view-width, 100%);
+  height: var(--view-height, 100%);
+  transform: rotate(calc(-1 * var(--map-rotation)));
+  pointer-events: none;
+}
+
+/* Pins and names stay upright as the map turns */
+.track-map .track-pin > div {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  transform: rotate(calc(-1 * var(--map-rotation)));
+}
+
+/* Under Fit: which way north is. Tap to keep north up, again to turn with you */
+.track-map-north {
+  position: absolute;
+  z-index: 1000;
+  top: calc(var(--space-3) + 2.25rem + var(--space-2));
+  right: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: var(--hairline);
+  border-radius: var(--radius-control);
+  background: var(--ink-2);
+  cursor: pointer;
+}
+
+.track-map-north-needle {
+  width: 1.25rem;
+  height: 1.25rem;
+  transform: rotate(var(--map-rotation));
+}
+
+.track-map-north-tip {
+  fill: var(--accent);
+}
+
+.track-map-north-tail {
+  fill: var(--text-3);
+}
+
+/* North kept up: the needle stays still, and the button says it's on */
+.track-map-north--locked {
+  border-color: var(--text-2);
 }
 
 /* Over the map, top right: frame you and the hider again */

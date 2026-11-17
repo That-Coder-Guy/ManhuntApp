@@ -1,93 +1,28 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import useCompassHeading, { COMPASS_STATUS } from '../hooks/useCompassHeading';
 import { calculateBearing } from '../utils/geo';
-import { bearingToCardinal, smoothDamp } from '../utils/orientation';
+import { bearingToCardinal } from '../utils/orientation';
+import useSmoothAngle from '../hooks/useSmoothAngle';
 import TargetReadout from './TargetReadout';
 
-// How long the dial takes to settle on a new heading, in seconds: long
-// enough to feel like a needle swinging, short enough to keep up while turning
-const SETTLE_TIME_S = 0.3;
-
-function prefersReducedMotion()
-{
-    return typeof window !== 'undefined'
-        && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
-}
-
 /**
- * Rotate an SVG group smoothly toward `angle` (0–360, wrapping). Each frame a
- * critically damped spring eases the drawn angle toward the latest reading,
- * the short way around (350° → 10° turns +20°), and stops once settled. It
- * writes the transform directly, so React doesn't re-render every frame.
- * Returns a ref callback for the group.
+ * Rotate an SVG group smoothly toward `angle` (useSmoothAngle), writing the
+ * transform directly. Returns a ref callback for the group.
  */
 function useSmoothRotation(angle)
 {
     const nodeRef = useRef(null);
-    // target and current are continuous (unwrapped) angles
-    const motion = useRef({ target: null, current: null, velocity: 0, lastRaw: null, lastTime: 0, frame: 0 });
-
-    const paint = useCallback(() =>
+    const repaint = useSmoothAngle(angle, (current) =>
     {
-        const m = motion.current;
-        if (nodeRef.current && m.current !== null) {
-            nodeRef.current.style.transform = `rotate(${m.current}deg)`;
-        }
-    }, []);
-
-    const step = useCallback((time) =>
-    {
-        const m = motion.current;
-        const dt = Math.min((time - m.lastTime) / 1000, 0.1); // a stalled tab mustn't jump
-        m.lastTime = time;
-        [m.current, m.velocity] = smoothDamp(m.current, m.target, m.velocity, SETTLE_TIME_S, dt);
-        if (Math.abs(m.target - m.current) < 0.05 && Math.abs(m.velocity) < 0.05) {
-            m.current = m.target;
-            m.velocity = 0;
-            m.frame = 0;
-        } else {
-            m.frame = requestAnimationFrame(step);
-        }
-        paint();
-    }, [paint]);
-
-    useEffect(() =>
-    {
-        if (angle === null || angle === undefined) return;
-        const m = motion.current;
-        const raw = ((angle % 360) + 360) % 360;
-
-        if (m.target === null) {
-            // First reading: start there rather than spinning in from 0
-            m.target = m.current = m.lastRaw = raw;
-            paint();
-            return;
-        }
-
-        let diff = raw - m.lastRaw;
-        if (diff > 180) diff -= 360;
-        else if (diff < -180) diff += 360;
-        m.lastRaw = raw;
-        m.target += diff;
-
-        if (prefersReducedMotion()) {
-            m.current = m.target;
-            m.velocity = 0;
-            paint();
-        } else if (!m.frame) {
-            m.lastTime = performance.now();
-            m.frame = requestAnimationFrame(step);
-        }
-    }, [angle, paint, step]);
-
-    useEffect(() => () => cancelAnimationFrame(motion.current.frame), []);
+        if (nodeRef.current) nodeRef.current.style.transform = `rotate(${current}deg)`;
+    });
 
     // The needle mounts later than the rose; draw it in place straight away
     return useCallback((node) =>
     {
         nodeRef.current = node;
-        paint();
-    }, [paint]);
+        repaint();
+    }, [repaint]);
 }
 
 // Bezel ticks every 5°, longer every 30°; computed once

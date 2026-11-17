@@ -13,9 +13,9 @@ export const toLatLng = (p) => [p.latitude, p.longitude];
 export const hasPosition = (p) => p?.latitude != null && p?.longitude != null;
 
 /** A Leaflet map in `container` with the street tiles, at a world view */
-export function createMap(container)
+export function createMap(container, options = {})
 {
-    const map = L.map(container, { zoomControl: true, attributionControl: true });
+    const map = L.map(container, { zoomControl: true, attributionControl: true, ...options });
     L.tileLayer(TILE_URL, { maxZoom: 19, attribution: ATTRIBUTION }).addTo(map);
     map.attributionControl.setPrefix(false);
     // Leaflet needs some view before anything else; the real one follows
@@ -36,7 +36,7 @@ export function showView(map, container, pending, view)
         return;
     }
     pending.current = null;
-    if (view.bounds) map.fitBounds(view.bounds, { padding: [32, 32], maxZoom: STREET_ZOOM });
+    if (view.bounds) map.fitBounds(view.bounds, { padding: view.padding ?? [32, 32], maxZoom: STREET_ZOOM });
     else map.setView(view.center, view.zoom);
 }
 
@@ -50,4 +50,46 @@ export function watchSize(map, container, pending)
     });
     resize.observe(container);
     return () => resize.disconnect();
+}
+
+/**
+ * Make dragging follow the finger on a map turned by CSS (TrackMap rotates
+ * its whole map so the way you face is up). Leaflet measures a drag in
+ * screen pixels and moves the map by that much in its own, unturned frame,
+ * so on a turned map the content slid off at an angle; here each move is
+ * turned back by the map's angle first. `getAngle()` is the CSS rotation in
+ * degrees. Leaflet's own scale guess is also wrong for a turned container
+ * (its bounding box grows), and the map is never scaled, so it's 1.
+ */
+export function dragFollowsRotation(map, getAngle)
+{
+    const draggable = map.dragging?._draggable;
+    if (!draggable) return;
+    const onMove = draggable._onMove;
+    draggable._onMove = function (event)
+    {
+        const angle = (getAngle() * Math.PI) / 180;
+        const first = event.touches && event.touches.length === 1 ? event.touches[0] : event;
+        if (!angle || !this._startPoint || (event.touches && event.touches.length > 1) || first.clientX === undefined)
+        {
+            return onMove.call(this, event);
+        }
+        this._parentScale = { x: 1, y: 1 };
+        const dx = first.clientX - this._startPoint.x;
+        const dy = first.clientY - this._startPoint.y;
+        const cos = Math.cos(-angle);
+        const sin = Math.sin(-angle);
+        const point = { clientX: this._startPoint.x + dx * cos - dy * sin, clientY: this._startPoint.y + dx * sin + dy * cos };
+        // The real event, with the pointer turned (methods still act on it)
+        const turned = new Proxy(event, {
+            get(target, key)
+            {
+                if (key === 'clientX' || key === 'clientY') return point[key];
+                if (key === 'touches' && target.touches) return [point];
+                const value = Reflect.get(target, key);
+                return typeof value === 'function' ? value.bind(target) : value;
+            }
+        });
+        return onMove.call(this, turned);
+    };
 }
