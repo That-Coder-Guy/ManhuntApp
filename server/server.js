@@ -8,7 +8,7 @@ const { Server } = require('socket.io');
 const { v4: uuidv4 } = require('uuid');
 
 const { isAllowedOrigin } = require('./origins');
-const { PHASE, DEFAULT_SETTINGS, applySettings, isOutOfBounds, isValidAvatar, nearestSeeker } = require('./game');
+const { PHASE, DEFAULT_SETTINGS, applySettings, isOutOfBounds, isValidAvatar, nearestSeeker, seekerInfoFor } = require('./game');
 const { cleanSubscription, createPushSender } = require('./push');
 
 const API_PREFIX = '/manhunt-api';
@@ -115,6 +115,34 @@ function createGameServer(options = {})
         };
     }
 
+    /**
+     * The snapshot as one player may see it. During a game a hider gets no
+     * one's position but their own, and instead whatever the lobby's
+     * seeker_info setting allows (distance, a nearby alert, or nothing), so
+     * a hider's phone never holds what the host chose to keep from it.
+     */
+    function viewFor(lobby, token, full)
+    {
+        const me = lobby.players.get(token);
+        if (lobby.phase !== PHASE.PLAYING || me?.is_seeker) return full;
+        const players = full.players.map((p) => (p.player_id === me?.player_id ? p : { ...p, latitude: null, longitude: null }));
+        // (no player: a socket the lobby no longer has gets no positions at all)
+        if (!me) return { ...full, players };
+        return { ...full, players, seeker_info: seekerInfoFor(lobby.settings, me, [...lobby.players.values()], full.server_time) };
+    }
+
+    // Everyone in the lobby's room gets the state, each their own view of it
+    function emitState(lobbyId, lobby)
+    {
+        const full = snapshot(lobby);
+        if (lobby.phase !== PHASE.PLAYING) return io.to(lobbyId).emit('lobby-state', full);
+        for (const socketId of io.sockets.adapter.rooms.get(lobbyId) ?? [])
+        {
+            const socket = io.sockets.sockets.get(socketId);
+            if (socket) socket.emit('lobby-state', viewFor(lobby, socket.data.token, full));
+        }
+    }
+
     // Push the lobby now, or — if a push went out within the interval — once
     // more when the interval ends, so bursts collapse into one update
     function scheduleBroadcast(lobbyId)
@@ -128,7 +156,7 @@ function createGameServer(options = {})
             return;
         }
 
-        io.to(lobbyId).emit('lobby-state', snapshot(lobby));
+        emitState(lobbyId, lobby);
         lobby.broadcastTimer = setTimeout(() =>
         {
             lobby.broadcastTimer = null;
@@ -370,13 +398,14 @@ function createGameServer(options = {})
         player.connected = true;
         player.disconnected_at = null;
         player.socket_id = socket.id;
+        socket.data.token = token;
         socket.join(lobbyId);
 
         socket.emit('joined', {
             lobby_name: lobby.lobby_name,
             player_token: token,
             player_id: player.player_id,
-            state: snapshot(lobby),
+            state: viewFor(lobby, token, snapshot(lobby)),
             // What a phone needs to subscribe to this server's notifications
             push_public_key: push ? push.publicKey : null,
         });

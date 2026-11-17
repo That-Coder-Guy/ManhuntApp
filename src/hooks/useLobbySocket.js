@@ -74,7 +74,7 @@ async function emitWithAck(socket, event, payload, timeoutMs = ACK_TIMEOUT_MS)
     return response;
 }
 
-const EMPTY_LOBBY = { phase: PHASE.LOBBY, hostId: null, settings: null, game: null, players: [] };
+const EMPTY_LOBBY = { phase: PHASE.LOBBY, hostId: null, settings: null, game: null, players: [], seekerInfo: null };
 
 /**
  * The Socket.IO connection for one lobby: join or resume with a player token
@@ -140,7 +140,9 @@ function useLobbySocket(lobbyId, credentials, onJoined)
                 hostId: state.host_id,
                 settings: state.settings,
                 game: state.game,
-                players: Array.isArray(state.players) ? state.players : []
+                players: Array.isArray(state.players) ? state.players : [],
+                // A hider's view of the seekers during a game (server/game.js seekerInfoFor)
+                seekerInfo: state.seeker_info ?? null
             });
             if (Number.isFinite(state.server_time)) setClockOffset(state.server_time - Date.now());
             setLastSyncTime(Date.now());
@@ -300,6 +302,7 @@ function useLobbySocket(lobbyId, credentials, onJoined)
         isHost: selfId !== null && lobby.hostId === selfId,
         settings: lobby.settings,
         game: lobby.game,
+        seekerInfo: lobby.seekerInfo,
         avatars,
         clockOffset,
         connectionState,

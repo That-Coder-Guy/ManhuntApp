@@ -93,7 +93,7 @@ const square = [
 
 test('settings summary', () => {
     assert.deepEqual(describeSettings({ geofence: null, time_limit_s: 0, head_start_s: 60 }),
-        { playArea: 'Anywhere', timeLimit: 'No limit', headStart: '1 min', foundRange: '50\u202Fm' });
+        { playArea: 'Anywhere', timeLimit: 'No limit', headStart: '1 min', foundRange: '50\u202Fm', seekerInfo: 'Distance to nearest seeker' });
     assert.equal(describeSettings({ found_range_m: 100 }).foundRange, '100\u202Fm');
     assert.equal(describeSettings({ geofence: { points: square } }).playArea, '38,300\u202Fm²');
     assert.equal(formatArea(1_234_567), '1.2\u202Fkm²');
@@ -129,23 +129,31 @@ test('initials for placeholder avatars', () => {
     assert.equal(initials(''), '?');
 });
 
-test('foundStatus judges the found range the way the server does', () => {
+test('foundStatus works from the seeker info the server sends', () => {
     const now = 1_000_000;
     const me = { latitude: 39.19, longitude: -96.58 };
-    const seeker = (latitude, age = 0) => ({ is_seeker: true, latitude, longitude: -96.58, location_last_updated: now - age });
     const game = { head_start_ends_at: now - 1 };
-    const status = (players, extra = {}) => foundStatus({ game, settings: { found_range_m: 50 }, location: me, players, serverNow: now, ...extra });
+    const away = (distance_m) => ({ mode: 'distance', distance_m });
+    const status = (seekerInfo, extra = {}) => foundStatus({ game, settings: { found_range_m: 50 }, location: me, seekerInfo, serverNow: now, ...extra });
 
-    assert.equal(status([seeker(39.1903)]).state, 'in_range', '~33 m');
-    assert.equal(Math.round(status([seeker(39.1903)]).distance), 33);
-    assert.equal(status([seeker(39.192)]).state, 'out_of_range', '~220 m');
-    assert.equal(status([seeker(39.192), seeker(39.1903)]).state, 'in_range', 'the nearest seeker counts');
-    assert.equal(status([seeker(39.1903, 3 * 60 * 1000)]).state, 'no_seeker', 'a stale fix does not count');
-    assert.equal(status([{ ...seeker(39.1903), is_seeker: false }]).state, 'no_seeker', 'hiders do not count');
-    assert.equal(status([seeker(39.1903)], { location: null }).state, 'no_fix');
-    assert.equal(status([seeker(39.1903)], { game: { head_start_ends_at: now + 5000 } }).state, 'head_start');
-    assert.equal(status([seeker(39.192)], { settings: { found_range_m: 250 } }).state, 'in_range', "the host's range applies");
-    assert.equal(status([seeker(39.1903)], { settings: {} }).range, 50, 'defaults to 50 m');
+    assert.deepEqual(status(away(33)), { state: 'in_range', range: 50, distance: 33 });
+    assert.equal(status(away(50)).state, 'in_range', 'the range is inclusive, as on the server');
+    assert.equal(status(away(220)).state, 'out_of_range');
+    assert.equal(status(away(null)).state, 'no_seeker');
+    assert.equal(status(null).state, 'no_seeker', 'nothing from the server yet');
+    assert.equal(status(away(33), { location: null }).state, 'no_fix');
+    assert.equal(status(away(33), { game: { head_start_ends_at: now + 5000 } }).state, 'head_start');
+    assert.equal(status(away(220), { settings: { found_range_m: 250 } }).state, 'in_range', "the host's range applies");
+    assert.equal(status(away(33), { settings: {} }).range, 50, 'defaults to 50 m');
+    // The button mustn't reveal what the host hides: always available, the server checks
+    assert.equal(status({ mode: 'nearby', alert_m: 100, nearby: false }).state, 'unknown');
+    assert.equal(status({ mode: 'none' }).state, 'unknown');
+});
+
+test('settings summary describes what hiders see', () => {
+    assert.equal(describeSettings({}).seekerInfo, 'Distance to nearest seeker');
+    assert.equal(describeSettings({ seeker_info: 'nearby', seeker_alert_m: 150 }).seekerInfo, 'Alert within 150\u202Fm');
+    assert.equal(describeSettings({ seeker_info: 'none' }).seekerInfo, 'Seekers hidden');
 });
 
 test('version line and mismatch check', async () => {

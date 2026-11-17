@@ -250,7 +250,7 @@ test('host settings are validated and only change before the game', { skip }, as
         settings: { geofence: { points: square.map((p) => ({ ...p, junk: 'dropped' })) }, time_limit_s: 1800, head_start_s: 60 }
     });
     assert.equal(ok.status, 'success');
-    assert.deepEqual(ok.settings, { geofence: { points: square }, time_limit_s: 1800, head_start_s: 60, found_range_m: 50 }, 'only coordinates are kept');
+    assert.deepEqual(ok.settings, { geofence: { points: square }, time_limit_s: 1800, head_start_s: 60, found_range_m: 50, seeker_info: 'distance', seeker_alert_m: 100 }, 'only coordinates are kept');
 
     const bowtie = [square[0], square[2], square[1], square[3]];
     for (const bad of [{ geofence: { points: square.slice(0, 2) } }, { geofence: { points: bowtie } },
@@ -258,14 +258,15 @@ test('host settings are validated and only change before the game', { skip }, as
         { geofence: { points: Array.from({ length: 31 }, (_, i) => ({ latitude: 39 + Math.cos(i) / 100, longitude: -96 + Math.sin(i) / 100 })) } },
         { geofence: { points: [square[0], square[1], { latitude: 40.5, longitude: -96.58 }] } },
         { time_limit_s: -1 }, { time_limit_s: 1.5 }, { head_start_s: 9999 }, { geofence: 'x' }, { geofence: { points: 'x' } },
-        { found_range_m: 9 }, { found_range_m: 501 }, { found_range_m: 50.5 }, { found_range_m: '50' }]) {
+        { found_range_m: 9 }, { found_range_m: 501 }, { found_range_m: 50.5 }, { found_range_m: '50' },
+        { seeker_info: 'exact' }, { seeker_info: null }, { seeker_alert_m: 9 }, { seeker_alert_m: 1001 }, { seeker_alert_m: 99.5 }]) {
         assert.equal((await ack(host.socket, 'update-settings', { settings: bad })).status, 'validation_error', JSON.stringify(bad));
     }
     assert.equal(game.lobbies.get(lobbyId).settings.time_limit_s, 1800, 'bad updates change nothing');
 
     // Partial update keeps the rest
-    await ack(host.socket, 'update-settings', { settings: { geofence: null, found_range_m: 100 } });
-    assert.deepEqual(game.lobbies.get(lobbyId).settings, { geofence: null, time_limit_s: 1800, head_start_s: 60, found_range_m: 100 });
+    await ack(host.socket, 'update-settings', { settings: { geofence: null, found_range_m: 100, seeker_info: 'nearby', seeker_alert_m: 250 } });
+    assert.deepEqual(game.lobbies.get(lobbyId).settings, { geofence: null, time_limit_s: 1800, head_start_s: 60, found_range_m: 100, seeker_info: 'nearby', seeker_alert_m: 250 });
 });
 
 test('starting needs both roles, then locks self role changes', { skip }, async () => {
@@ -304,7 +305,7 @@ test('positions are hidden before the game and hiders stay hidden during the hea
     const hiderDuring = during.players.find((p) => p.player_id === hider.data.player_id);
     const seekerDuring = during.players.find((p) => p.player_id === host.data.player_id);
     assert.equal(hiderDuring.latitude, null, 'hider hidden during head start');
-    assert.equal(seekerDuring.latitude, 39.2, 'seekers are visible to hiders');
+    assert.equal(seekerDuring.latitude, 39.2, 'seekers see each other');
 
     const after = await nextState(host.socket, (s) => s.players.find((p) => p.player_id === hider.data.player_id).latitude !== null, 3000);
     assert.equal(after.players.find((p) => p.player_id === hider.data.player_id).latitude, 39.19, 'revealed after head start');
@@ -415,6 +416,59 @@ async function foundGame() {
     await ack(far.socket, 'update-location', FAR);
     return { lobbyId, host, near, far };
 }
+
+// The next state a hider gets once the game is on
+const hiderState = (socket) => nextState(socket, (s) => s.phase === 'playing' && s.seeker_info);
+
+test('hiders never receive other players\' positions during a game, only the seeker info the host allows', { skip }, async () => {
+    const { lobbyId, host, near, far } = await foundGame();
+    const nearState = hiderState(near.socket);
+    const hostState = nextState(host.socket, (s) => s.phase === 'playing');
+    await ack(host.socket, 'start-game');
+
+    const seen = await nearState;
+    const others = seen.players.filter((p) => p.player_id !== near.data.player_id);
+    assert.ok(others.every((p) => p.latitude === null && p.longitude === null), 'no one else\'s position reaches a hider');
+    assert.equal(seen.players.find((p) => p.player_id === near.data.player_id).latitude, NEAR.latitude, 'their own is still there');
+    assert.deepEqual(seen.seeker_info, { mode: 'distance', distance_m: 33 }, 'the default: metres to the nearest seeker');
+
+    const seekerSees = await hostState;
+    assert.equal(seekerSees.seeker_info, undefined, 'seekers get no seeker info');
+    assert.equal(seekerSees.players.find((p) => p.player_id === far.data.player_id).latitude, FAR.latitude, 'seekers still see the hiders');
+
+    // A rejoining hider's first state is filtered too
+    near.socket.disconnect();
+    const back = await join({ lobby_id: lobbyId, player_token: near.data.player_token });
+    assert.ok(back.data.state.players.filter((p) => p.player_id !== near.data.player_id).every((p) => p.latitude === null));
+    assert.equal(back.data.state.seeker_info.mode, 'distance');
+});
+
+test('the nearby alert says only whether a seeker is within the alert distance', { skip }, async () => {
+    const { host, near, far } = await foundGame();
+    await ack(host.socket, 'update-settings', { settings: { seeker_info: 'nearby', seeker_alert_m: 100 } });
+    const nearState = hiderState(near.socket);
+    const farState = hiderState(far.socket);
+    await ack(host.socket, 'start-game');
+    assert.deepEqual((await nearState).seeker_info, { mode: 'nearby', alert_m: 100, nearby: true }, '33 m away');
+    assert.deepEqual((await farState).seeker_info, { mode: 'nearby', alert_m: 100, nearby: false }, '222 m away');
+
+    // The seeker closes in: the far hider is alerted
+    const alerted = nextState(far.socket, (s) => s.seeker_info?.nearby === true);
+    await ack(host.socket, 'update-location', { latitude: 39.1915, longitude: -96.58 });
+    assert.ok(await alerted);
+});
+
+test('with seeker info off, hiders learn nothing about the seekers', { skip }, async () => {
+    const { host, near } = await foundGame();
+    await ack(host.socket, 'update-settings', { settings: { seeker_info: 'none' } });
+    const nearState = hiderState(near.socket);
+    await ack(host.socket, 'start-game');
+    const seen = await nearState;
+    assert.deepEqual(seen.seeker_info, { mode: 'none' });
+    assert.ok(seen.players.filter((p) => p.player_id !== near.data.player_id).every((p) => p.latitude === null));
+    // Finding still works: the server checks the distance itself
+    assert.equal((await ack(near.socket, 'found', NEAR)).status, 'success');
+});
 
 test('a hider within the found range of a seeker can declare themselves found', { skip }, async () => {
     const { lobbyId, host, near, far } = await foundGame();

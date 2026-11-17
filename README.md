@@ -61,6 +61,8 @@ real app, captured at phone size (390 × 844) from a scripted game.
       <br><br>
       <b>Found range.</b> How close a seeker must get before a hider can declare themselves found (50 m by default).
       <br><br>
+      <b>What hiders see.</b> The distance to the nearest seeker (the default), only an alert when a seeker comes within a set distance, or nothing at all.
+      <br><br>
       Everyone else can open the same sheet to see the rules and the area, but can't change them.
     </td>
   </tr>
@@ -89,12 +91,12 @@ real app, captured at phone size (390 × 844) from a scripted game.
 
 <table>
   <tr>
-    <td width="33%" valign="top"><img src="docs/walkthrough/11-hider.png" alt="Hider's list of seekers; Theo is flagged at 30 m with a warning icon and a red proximity bar, and the I've been found button is unlocked: Theo is 30 m away" width="100%"></td>
+    <td width="33%" valign="top"><img src="docs/walkthrough/11-hider.png" alt="Hider's view: nearest seeker 30 m, in red with a full proximity bar, and the I've been found button unlocked: A seeker is 30 m away" width="100%"></td>
     <td width="33%" valign="top"><img src="docs/walkthrough/12-outside.png" alt="Hider outside the play area: Outside, 251 m back, head N" width="100%"></td>
     <td width="33%" valign="top"><img src="docs/walkthrough/13-area-map.png" alt="Map of the play area with the player's position outside it" width="100%"></td>
   </tr>
   <tr>
-    <td valign="top"><b>Watch them close in.</b> Seekers sorted by distance, with a bar that fills as each one gets closer. Under 100 m it turns red with a warning icon. Once a seeker is within the found range (50 m unless the host changes it), <b>I’ve been found</b> unlocks: tap it and you join the seekers.</td>
+    <td valign="top"><b>Watch them close in.</b> By default hiders see how far away the nearest seeker is (not who, or which way), with a bar that fills as they get closer and turns red under 100 m. Once a seeker is within the found range (50 m unless the host changes it), <b>I’ve been found</b> unlocks: tap it and you join the seekers. If the host chose the nearby alert, hiders only see <i>Seeker nearby</i> or <i>All clear</i>; with seeker info off, nothing. In those games the button is always there, and the server checks the distance.</td>
     <td valign="top"><b>Stay in bounds.</b> Step outside the area and the status card says how far back it is and which way to go.</td>
     <td valign="top"><b>See the area.</b> Tap the status card to open the map, framed to show both the area and you.</td>
   </tr>
@@ -152,7 +154,9 @@ npm run lint
     `null`), and `set-visibility` says whether the app is on screen; the
     server pushes "found" notices only to players who aren't looking.
   - Server → clients: `lobby-state` pushed to the lobby room on any change,
-    throttled to 1/second per lobby. Includes each player's
+    throttled to 1/second per lobby. During a game each player gets their own
+    copy: a hider's has no one else's position, and instead a `seeker_info`
+    (`distance`, `nearby` or `none`, as the host set it). Includes each player's
     `location_last_updated` and `connected` flag so clients can show staleness.
 - A player who disconnects is marked offline (not deleted) and kept for
   **5 minutes** before removal. After that, their token is rejected and the
@@ -372,6 +376,11 @@ name, a small profile picture and a role; the host sets the rules and starts.
   the distance itself, against seekers' positions from the last two minutes,
   and not during the head start. When the last hider is found the seekers win
   and the game ends for everyone.
+- **What hiders see** about the seekers: the distance to the nearest one (the
+  default), only an alert when one comes within a chosen distance (25–500 m,
+  100 m by default), or nothing. The server enforces it: during a game a
+  hider's phone is never sent anyone else's position, only what this setting
+  allows, worked out on the server.
 - **Notifications**: anyone who turns them on in **Before you play** gets one
   when another player is found ("Maya was found · 1 hider left"), even with
   the phone locked. Players looking at the app already see it on screen, so

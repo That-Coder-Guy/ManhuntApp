@@ -34,7 +34,7 @@ function LobbyFound({ lobbyId, lobby, onLeft, permissionsGranted = false })
 {
     const navigate = useNavigate();
     const {
-        lobbyName, selfPlayer, players, phase, hostId, isHost, settings, game, avatars,
+        lobbyName, selfPlayer, players, phase, hostId, isHost, settings, game, seekerInfo, avatars,
         clockOffset, connectionState, lastSyncTime, updateLocation, updatePlayer, setAvatar,
         declareFound, foundNotice, hostActions, leaveLobby
     } = lobby;
@@ -174,7 +174,7 @@ function LobbyFound({ lobbyId, lobby, onLeft, permissionsGranted = false })
                                         playArea={settings?.geofence?.points ?? null}
                                     />
                                 ) : (
-                                    <HiderView players={withDummyPlayers(players)} avatars={avatars} currentLocation={currentLocation} />
+                                    <HiderView seekerInfo={seekerInfo} />
                                 )}
                             </div>
                         </>
@@ -194,7 +194,7 @@ function LobbyFound({ lobbyId, lobby, onLeft, permissionsGranted = false })
                         game={game}
                         settings={settings}
                         location={currentLocation}
-                        players={players}
+                        seekerInfo={seekerInfo}
                         clockOffset={clockOffset}
                         declareFound={declareFound}
                     />

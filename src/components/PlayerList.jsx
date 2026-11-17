@@ -1,8 +1,7 @@
 import {
     IonCard, IonCardHeader, IonCardTitle, IonCardContent,
-    IonItem, IonLabel, IonNote, IonIcon
+    IonItem, IonLabel, IonNote
 } from '@ionic/react';
-import { warningOutline } from 'ionicons/icons';
 import Avatar from './Avatar';
 import { formatDistance } from '../utils/geo';
 import { playerFreshness, playerName } from '../utils/players';
@@ -31,10 +30,10 @@ export function PlayerListCard({ title, count, emptyText, testIds, children })
 }
 
 /**
- * One player: picture with fix dot, name, freshness line and distance. Optionally a
- * "close" flag and a proximity bar (hider view), or a tap target (seeker view).
+ * One player: picture with fix dot, name, freshness line and distance;
+ * optionally a tap target (the seeker's list of hiders).
  */
-export function PlayerRow({ player, avatar, distance, now, danger = false, proximity = null, onClick, testIds })
+export function PlayerRow({ player, avatar, distance, now, onClick, testIds })
 {
     const { fresh, offline, label } = playerFreshness(player, now);
 
@@ -44,7 +43,7 @@ export function PlayerRow({ player, avatar, distance, now, danger = false, proxi
             detail={!!onClick}
             lines="none"
             data-testid={testIds.row}
-            className={`targets-item${fresh ? '' : ' player-stale'}${danger ? ' targets-item--danger' : ''}`}
+            className={`targets-item${fresh ? '' : ' player-stale'}`}
             onClick={onClick}
         >
             <Avatar name={playerName(player)} src={avatar} dot={{ fresh, offline }} className="row-avatar" />
@@ -58,21 +57,9 @@ export function PlayerRow({ player, avatar, distance, now, danger = false, proxi
                     {player.out_of_bounds ? label.replace('updated ', '') : label}
                 </p>
             </IonLabel>
-            <span
-                slot="end"
-                className={`target-distance${danger ? ' target-distance--danger' : ''}`}
-                data-testid={testIds.distance}
-            >
-                {danger && (
-                    <IonIcon icon={warningOutline} className="proximity-flag-icon" role="img" aria-label="Seeker is close" />
-                )}
+            <span slot="end" className="target-distance" data-testid={testIds.distance}>
                 {formatDistance(distance)}
             </span>
-            {proximity !== null && (
-                <span className="proximity-bar" aria-hidden="true">
-                    <span className="proximity-bar-fill" style={{ transform: `scaleX(${proximity})` }} />
-                </span>
-            )}
         </IonItem>
     );
 }

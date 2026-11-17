@@ -7,8 +7,8 @@
    • Character Alert, nocturnal, field-ready.
    • World     Dusk in a park: orienteering compasses, trail blazes,
                headlamps. Ink neutrals, one blaze-orange accent.
-   • Moments   The compass dial (the one bright element) and the hider
-               list's proximity bars.
+   • Moments   The compass dial (the one bright element) and the hider's
+               nearest-seeker readout.
    • Signature The GPS fix dot: solid when a position is fresh, a hollow
                ring when it is stale or offline.
 
@@ -906,27 +906,7 @@ ion-item p.player-freshness,
   white-space: nowrap;
 }
 
-.target-distance--danger {
-  color: var(--negative);
-}
-
-.proximity-flag-icon {
-  font-size: var(--icon-size);
-}
-
-/* Proximity bar along the bottom of each hider-view row */
-.proximity-bar {
-  position: absolute;
-  left: var(--space-3);
-  right: var(--space-3);
-  bottom: 0;
-  height: 2px;
-  background: var(--hairline-color);
-  border-radius: 1px;
-  overflow: hidden;
-  pointer-events: none;
-}
-
+/* The fill of the hider's nearest-seeker bar */
 .proximity-bar-fill {
   display: block;
   height: 100%;
@@ -935,7 +915,65 @@ ion-item p.player-freshness,
   transition: transform var(--dur-enter) var(--ease);
 }
 
-.targets-item--danger .proximity-bar-fill {
+/* ===== HIDER VIEW: what the host lets hiders know about the seekers ===== */
+ion-card.seeker-info-card ion-card-content.seeker-info-content {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5) var(--space-6);
+  text-align: center;
+}
+
+.seeker-info-label {
+  font-size: var(--fs-caption);
+  line-height: 1.25rem;
+  color: var(--text-2);
+}
+
+/* Fixed line heights, so nothing shifts as the value changes */
+.seeker-info-figure {
+  height: 3.5rem;
+  font-family: var(--font-mono);
+  font-size: var(--fs-figure);
+  line-height: 3.5rem;
+  font-weight: 500;
+  color: var(--text-1);
+}
+
+.seeker-info-status {
+  height: 3.5rem;
+  font-size: var(--fs-page);
+  line-height: 3.5rem;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.seeker-info--danger {
+  color: var(--negative);
+}
+
+ion-card.seeker-info-card ion-card-content p.seeker-info-caption {
+  min-height: 2.75rem;
+  max-width: 18rem;
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: 1.375rem;
+  color: var(--text-2);
+}
+
+.seeker-info-bar {
+  display: block;
+  width: min(100%, 16rem);
+  height: 4px;
+  border-radius: 2px;
+  background: var(--hairline-color);
+  overflow: hidden;
+}
+
+.seeker-info-bar.seeker-info--danger .proximity-bar-fill {
   background: var(--negative);
 }
 

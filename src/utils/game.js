@@ -1,4 +1,4 @@
-import { calculateBearing, calculateDistance } from './geo.js';
+import { calculateBearing } from './geo.js';
 import { bearingToCardinal } from './orientation.js';
 import { pointInPolygon, nearestBoundaryPoint, polygonArea } from '../../shared/geofence.js';
 
@@ -33,10 +33,11 @@ export function formatArea(squareMetres)
     return `${(squareMetres / 1_000_000).toFixed(1)}\u202Fkm²`;
 }
 
-// Mirrors the server (server/game.js): the default found range, and how old a
-// seeker's fix may be and still count toward a find
+// Mirrors the server (server/game.js): the defaults for the found range and
+// for what hiders learn about the seekers
 export const FOUND_RANGE_DEFAULT_M = 50;
-const FOUND_FIX_MAX_AGE_MS = 2 * 60 * 1000;
+export const SEEKER_INFO_DEFAULT = 'distance';
+export const SEEKER_ALERT_DEFAULT_M = 100;
 
 /** One-line descriptions of each setting, for the summary card */
 export function describeSettings(settings)
@@ -46,34 +47,38 @@ export function describeSettings(settings)
         playArea: fence ? formatArea(polygonArea(fence.points)) : 'Anywhere',
         timeLimit: formatDuration(settings?.time_limit_s, 'No limit'),
         headStart: formatDuration(settings?.head_start_s),
-        foundRange: `${settings?.found_range_m ?? FOUND_RANGE_DEFAULT_M}\u202Fm`
+        foundRange: `${settings?.found_range_m ?? FOUND_RANGE_DEFAULT_M}\u202Fm`,
+        seekerInfo: {
+            distance: 'Distance to nearest seeker',
+            nearby: `Alert within ${settings?.seeker_alert_m ?? SEEKER_ALERT_DEFAULT_M}\u202Fm`,
+            none: 'Seekers hidden'
+        }[settings?.seeker_info ?? SEEKER_INFO_DEFAULT]
     };
 }
 
 /**
- * Whether this hider can declare themselves found right now, judged the way
- * the server will (which decides in the end):
+ * Whether this hider can declare themselves found right now. The server
+ * decides in the end; this only says what the phone can tell beforehand:
  *   { state: 'head_start' }                     seekers are still waiting
  *   { state: 'no_fix', range }                  no position for this phone yet
  *   { state: 'no_seeker', range }               no seeker has a recent position
- *   { state: 'in_range' | 'out_of_range', range, seeker, distance }
- * `serverNow` is the server's clock (Date.now() + clockOffset).
+ *   { state: 'in_range' | 'out_of_range', range, distance }
+ *   { state: 'unknown', range }                 the host keeps seekers' distance
+ *                                               from hiders: tap when caught
+ * `seekerInfo` is the hider's view the server sends; `serverNow` is the
+ * server's clock (Date.now() + clockOffset).
  */
-export function foundStatus({ game, settings, location, players, serverNow })
+export function foundStatus({ game, settings, location, seekerInfo, serverNow })
 {
     const range = settings?.found_range_m ?? FOUND_RANGE_DEFAULT_M;
     if (game && serverNow < game.head_start_ends_at) return { state: 'head_start', range };
     if (location?.latitude == null || location?.longitude == null) return { state: 'no_fix', range };
-
-    let nearest = null;
-    for (const p of players)
-    {
-        if (!p.is_seeker || !(serverNow - p.location_last_updated <= FOUND_FIX_MAX_AGE_MS)) continue;
-        const distance = calculateDistance(location.latitude, location.longitude, p.latitude, p.longitude);
-        if (distance !== null && (!nearest || distance < nearest.distance)) nearest = { seeker: p, distance };
-    }
-    if (!nearest) return { state: 'no_seeker', range };
-    return { state: nearest.distance <= range ? 'in_range' : 'out_of_range', range, ...nearest };
+    // Only the distance mode tells a hider how close the seekers are; the
+    // button mustn't give away what the host chose to hide
+    if ((seekerInfo?.mode ?? SEEKER_INFO_DEFAULT) !== 'distance') return { state: 'unknown', range };
+    const distance = seekerInfo?.distance_m ?? null;
+    if (distance === null) return { state: 'no_seeker', range };
+    return { state: distance <= range ? 'in_range' : 'out_of_range', range, distance };
 }
 
 /**

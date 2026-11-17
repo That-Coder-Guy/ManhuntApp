@@ -4,12 +4,25 @@ import {
     IonList, IonItem, IonLabel, IonToggle, IonSelect, IonSelectOption, IonToast
 } from '@ionic/react';
 import PlayAreaMap from './PlayAreaMap';
-import { formatDuration, formatArea, FOUND_RANGE_DEFAULT_M } from '../utils/game';
+import { formatDuration, formatArea, FOUND_RANGE_DEFAULT_M, SEEKER_INFO_DEFAULT, SEEKER_ALERT_DEFAULT_M } from '../utils/game';
 import { polygonArea, polygonProblem, POLYGON_LIMITS } from '../../shared/geofence.js';
 
 const TIME_LIMITS_MIN = [0, 10, 15, 20, 30, 45, 60, 90, 120];
 const HEAD_STARTS_S = [0, 30, 60, 120, 180, 300];
 const FOUND_RANGES_M = [10, 25, 50, 75, 100, 150, 200, 300];
+const ALERT_DISTANCES_M = [25, 50, 75, 100, 150, 200, 300, 500];
+
+// What hiders learn about the seekers during a game
+const SEEKER_INFO_OPTIONS = [
+    { value: 'distance', label: 'Distance' },
+    { value: 'nearby', label: 'Nearby alert' },
+    { value: 'none', label: 'Nothing' },
+];
+const SEEKER_INFO_NOTES = {
+    distance: 'Hiders see how far away the nearest seeker is, but not which way.',
+    nearby: 'Hiders are only told when a seeker is within the alert distance, not how close or which way.',
+    none: 'Hiders get no information about the seekers.',
+};
 
 /**
  * Game settings. The host edits a draft and saves it; everyone else sees the
@@ -31,6 +44,7 @@ function SettingsSheet({ isOpen, onClose, settings, isHost, canEdit, currentLoca
     const points = fence?.points ?? [];
     const hasFix = currentLocation?.latitude != null;
     const problem = fenceOn ? polygonProblem(points) : null;
+    const seekerInfo = draft?.seeker_info ?? SEEKER_INFO_DEFAULT;
 
     // Start each opening from what the lobby currently has
     const handleWillPresent = () =>
@@ -206,6 +220,41 @@ function SettingsSheet({ isOpen, onClose, settings, isHost, canEdit, currentLoca
                     A hider can tap “I’ve been found” once a seeker is this close, and joins the
                     seekers. When everyone is found, the seekers win.
                 </p>
+
+                <h3 className="settings-section">Hiders see</h3>
+                <IonList inset className="settings-list">
+                    <IonItem>
+                        <IonSelect
+                            label="Seeker info"
+                            data-testid="seeker-info-mode"
+                            interface="action-sheet"
+                            value={seekerInfo}
+                            disabled={!editable}
+                            onIonChange={(e) => setDraft((d) => ({ ...d, seeker_info: e.detail.value }))}
+                        >
+                            {SEEKER_INFO_OPTIONS.map(({ value, label }) => (
+                                <IonSelectOption key={value} value={value}>{label}</IonSelectOption>
+                            ))}
+                        </IonSelect>
+                    </IonItem>
+                    {seekerInfo === 'nearby' && (
+                        <IonItem>
+                            <IonSelect
+                                label="Alert within"
+                                data-testid="seeker-alert"
+                                interface="action-sheet"
+                                value={draft?.seeker_alert_m ?? SEEKER_ALERT_DEFAULT_M}
+                                disabled={!editable}
+                                onIonChange={(e) => setDraft((d) => ({ ...d, seeker_alert_m: e.detail.value }))}
+                            >
+                                {ALERT_DISTANCES_M.map((m) => (
+                                    <IonSelectOption key={m} value={m}>{`${m}\u202Fm`}</IonSelectOption>
+                                ))}
+                            </IonSelect>
+                        </IonItem>
+                    )}
+                </IonList>
+                <p className="settings-note" data-testid="seeker-info-note">{SEEKER_INFO_NOTES[seekerInfo]}</p>
 
                 <IonToast isOpen={!!error} message={error} duration={4000} onDidDismiss={() => setError('')} />
             </IonContent>

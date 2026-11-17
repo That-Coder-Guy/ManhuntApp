@@ -3,15 +3,16 @@ import { IonItem, IonLabel, IonCard, IonCardHeader, IonCardTitle, IonCardContent
 import { warningOutline } from 'ionicons/icons';
 import useNow from '../hooks/useNow';
 import { formatDistance } from '../utils/geo';
-import { formatClock, describeSettings, playAreaStatus, gameClock, foundStatus, FOUND_RANGE_DEFAULT_M } from '../utils/game';
+import { formatClock, describeSettings, playAreaStatus, gameClock, foundStatus, FOUND_RANGE_DEFAULT_M, SEEKER_INFO_DEFAULT } from '../utils/game';
 import { playerName } from '../utils/players';
 
 /** One fixed-height row summarising the rules; opens the settings sheet */
 export function SettingsRow({ settings, isHost, onOpen })
 {
-    const { playArea, timeLimit, headStart, foundRange } = describeSettings(settings);
-    // The found range only shows when the host changed it, to keep the line short
+    const { playArea, timeLimit, headStart, foundRange, seekerInfo } = describeSettings(settings);
+    // The found range and seeker info only show when the host changed them, to keep the line short
     const customRange = (settings?.found_range_m ?? FOUND_RANGE_DEFAULT_M) !== FOUND_RANGE_DEFAULT_M;
+    const customInfo = (settings?.seeker_info ?? SEEKER_INFO_DEFAULT) !== SEEKER_INFO_DEFAULT;
     return (
         <IonItem
             button
@@ -24,7 +25,7 @@ export function SettingsRow({ settings, isHost, onOpen })
             <IonLabel>
                 <h2>Game settings</h2>
                 <p className="player-freshness" data-testid="settings-summary">
-                    {[playArea, timeLimit, headStart !== 'None' && `${headStart} head start`, customRange && `found ≤ ${foundRange}`]
+                    {[playArea, timeLimit, headStart !== 'None' && `${headStart} head start`, customRange && `found ≤ ${foundRange}`, customInfo && seekerInfo]
                         .filter(Boolean).join(' · ')}
                 </p>
             </IonLabel>
@@ -137,10 +138,10 @@ export function GameOverCard({ game, players = [] })
  * seeker is within the lobby's found range. Asks first, then the server
  * checks the distance again and moves the hider to the seekers.
  */
-export function FoundFooter({ game, settings, location, players, clockOffset, declareFound })
+export function FoundFooter({ game, settings, location, seekerInfo, clockOffset, declareFound })
 {
     const now = useNow(1000);
-    const status = foundStatus({ game, settings, location, players, serverNow: now + clockOffset });
+    const status = foundStatus({ game, settings, location, seekerInfo, serverNow: now + clockOffset });
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
     const [isBusy, setIsBusy] = useState(false);
     const [error, setError] = useState('');
@@ -151,7 +152,8 @@ export function FoundFooter({ game, settings, location, players, clockOffset, de
         no_fix: 'Waiting for your position',
         no_seeker: `Unlocks when a seeker is within ${range}`,
         out_of_range: `Nearest seeker ${formatDistance(status.distance)} away · unlocks within ${range}`,
-        in_range: `${status.seeker ? playerName(status.seeker) : 'A seeker'} is ${formatDistance(status.distance)} away`
+        in_range: `A seeker is ${formatDistance(status.distance)} away`,
+        unknown: `Tap once a seeker is within ${range} of you`
     }[status.state];
 
     async function confirm()
@@ -173,7 +175,7 @@ export function FoundFooter({ game, settings, location, players, clockOffset, de
             <IonButton
                 expand="block"
                 data-testid="found-btn"
-                disabled={status.state !== 'in_range' || isBusy}
+                disabled={!['in_range', 'unknown'].includes(status.state) || isBusy}
                 onClick={() => setIsConfirmOpen(true)}
             >
                 {isBusy ? 'Sending…' : 'I’ve been found'}

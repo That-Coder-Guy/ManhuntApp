@@ -15,6 +15,8 @@ const LIMITS = Object.freeze({
     headStartMaxS: 10 * 60,
     foundRangeMinM: 10,   // tighter than phone GPS can tell apart
     foundRangeMaxM: 500,
+    seekerAlertMinM: 10,
+    seekerAlertMaxM: 1000,
     // A seeker's position older than this can't count toward a find: they
     // may have moved anywhere since
     foundFixMaxAgeMs: 2 * 60 * 1000,
@@ -26,7 +28,15 @@ const DEFAULT_SETTINGS = Object.freeze({
     time_limit_s: 0,      // 0 = no limit
     head_start_s: 0,      // seekers wait this long after the start
     found_range_m: 50,    // a hider may declare themselves found this close to a seeker
+    // What hiders learn about the seekers during a game:
+    //   'distance' — how far away the nearest seeker is
+    //   'nearby'   — only whether a seeker is within seeker_alert_m
+    //   'none'     — nothing
+    seeker_info: 'distance',
+    seeker_alert_m: 100,
 });
+
+const SEEKER_INFO_MODES = ['distance', 'nearby', 'none'];
 
 const isWholeInRange = (value, min, max) => Number.isInteger(value) && value >= min && value <= max;
 
@@ -75,6 +85,18 @@ function applySettings(current, update)
         next.found_range_m = update.found_range_m;
     }
 
+    if ('seeker_info' in update)
+    {
+        if (!SEEKER_INFO_MODES.includes(update.seeker_info)) return { error: 'Seeker info setting is invalid' };
+        next.seeker_info = update.seeker_info;
+    }
+
+    if ('seeker_alert_m' in update)
+    {
+        if (!isWholeInRange(update.seeker_alert_m, LIMITS.seekerAlertMinM, LIMITS.seekerAlertMaxM)) return { error: 'Alert distance is invalid' };
+        next.seeker_alert_m = update.seeker_alert_m;
+    }
+
     return { settings: next };
 }
 
@@ -111,6 +133,28 @@ function nearestSeeker(hider, players, now)
     return best;
 }
 
+/**
+ * What one hider is told about the seekers, as the lobby's seeker_info
+ * setting allows. Worked out here so seekers' positions never leave the
+ * server for a hider's phone:
+ *   { mode: 'distance', distance_m }   metres to the nearest seeker, or null
+ *   { mode: 'nearby', alert_m, nearby } true / false, or null without a fix
+ *   { mode: 'none' }
+ * Counts only seekers with a recent fix, as finding does.
+ */
+function seekerInfoFor(settings, hider, players, now)
+{
+    const mode = settings.seeker_info ?? DEFAULT_SETTINGS.seeker_info;
+    if (mode === 'none') return { mode };
+    const nearest = hasPosition(hider) ? nearestSeeker(hider, players, now) : null;
+    if (mode === 'nearby')
+    {
+        const alertM = settings.seeker_alert_m ?? DEFAULT_SETTINGS.seeker_alert_m;
+        return { mode, alert_m: alertM, nearby: hasPosition(hider) ? Boolean(nearest && nearest.distance <= alertM) : null };
+    }
+    return { mode: 'distance', distance_m: nearest ? Math.round(nearest.distance) : null };
+}
+
 /** True when a player with a known position is outside the play area */
 function isOutOfBounds(geofence, player)
 {
@@ -128,5 +172,6 @@ function isValidAvatar(avatar)
 }
 
 module.exports = {
-    PHASE, LIMITS, DEFAULT_SETTINGS, applySettings, isOutOfBounds, isValidAvatar, distanceMeters, nearestSeeker
+    PHASE, LIMITS, DEFAULT_SETTINGS, SEEKER_INFO_MODES, applySettings, isOutOfBounds, isValidAvatar, distanceMeters,
+    nearestSeeker, seekerInfoFor
 };
