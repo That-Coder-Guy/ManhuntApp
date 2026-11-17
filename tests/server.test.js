@@ -24,9 +24,9 @@ let base;
 const pushed = [];
 const fakePush = {
     publicKey: 'test-public-key',
-    async send(subscription, payload)
+    async send(subscription, payload, options)
     {
-        pushed.push({ endpoint: subscription.endpoint, payload });
+        pushed.push({ endpoint: subscription.endpoint, payload, options });
         return subscription.endpoint.includes('gone') ? { gone: true } : { ok: true };
     }
 };
@@ -591,6 +591,53 @@ test('a find is pushed to the other players who are not looking at the app', { s
     assert.deepEqual(pushed.map((p) => p.endpoint), ['https://web.push.apple.com/host']);
     assert.equal(pushed[0].payload.title, 'Everyone was found');
     assert.match(pushed[0].payload.body, /was the last\. The seekers win\./);
+});
+
+test('a player away from the app is reminded shortly before being removed', { skip }, async () => {
+    const { lobbyId, host } = await hostedLobby();
+    const away = await join({ lobby_id: lobbyId });
+    const quiet = await join({ lobby_id: lobbyId });
+    await ack(away.socket, 'push-subscribe', { subscription: subscription('away') });
+    const lobby = game.lobbies.get(lobbyId);
+    const awayPlayer = lobby.players.get(away.data.player_token);
+    const quietPlayer = lobby.players.get(quiet.data.player_token);
+    away.socket.disconnect();
+    quiet.socket.disconnect(); // no subscription: nothing to send
+    await new Promise((r) => setTimeout(r, 50));
+    const sent = () => pushed.filter((p) => p.payload.tag === `manhunt-${lobbyId}-away`);
+
+    pushed.length = 0;
+    awayPlayer.disconnected_at = quietPlayer.disconnected_at = Date.now() - 60_000; // away 1 min
+    game.cleanupExpired();
+    assert.equal(sent().length, 0, 'not yet');
+
+    awayPlayer.disconnected_at = quietPlayer.disconnected_at = Date.now() - 3.5 * 60_000; // 1.5 min left
+    game.cleanupExpired();
+    assert.equal(sent().length, 1, 'reminded once the end is near');
+    assert.deepEqual(sent()[0].payload, {
+        title: 'Still playing in Hosted?',
+        body: "Open Manhunt within 2 minutes or you'll be taken out of the lobby.",
+        url: `/lobby/${lobbyId}`,
+        tag: `manhunt-${lobbyId}-away`
+    });
+    assert.ok(sent()[0].options.ttl <= 90 && sent()[0].options.ttl > 80, 'not delivered after it stops mattering');
+    game.cleanupExpired();
+    assert.equal(sent().length, 1, 'only once');
+
+    // Coming back resets it: a later absence is reminded again
+    const back = await join({ lobby_id: lobbyId, player_token: away.data.player_token });
+    assert.equal(awayPlayer.connected, true);
+    back.socket.disconnect();
+    await new Promise((r) => setTimeout(r, 50));
+    awayPlayer.disconnected_at = Date.now() - 4.5 * 60_000;
+    game.cleanupExpired();
+    assert.equal(sent().length, 2, 'reminded again after another absence');
+    assert.match(sent()[1].payload.body, /within 1 minute or/);
+
+    awayPlayer.disconnected_at = 0;
+    game.cleanupExpired();
+    assert.equal(lobby.players.has(away.data.player_token), false, 'and removed when the time is up');
+    assert.ok(host.socket.connected);
 });
 
 test('a subscription the push service says is gone is forgotten', { skip }, async () => {

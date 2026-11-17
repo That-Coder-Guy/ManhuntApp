@@ -18,6 +18,7 @@ const SOCKET_PATH = `${API_PREFIX}/socket.io`;
 
 const DEFAULTS = {
     disconnectGraceMs: 5 * 60 * 1000, // keep a dropped player resumable this long
+    awayWarningMs: 2 * 60 * 1000,     // a player away this long before removal is sent a reminder
     lobbyGraceMs: 10 * 1000,          // a new, empty lobby waits this long for its creator
     cleanupIntervalMs: 30 * 1000,     // sweep for expired players and lobbies
     broadcastIntervalMs: 1000,        // at most one lobby-state push per lobby per second
@@ -212,6 +213,36 @@ function createGameServer(options = {})
      * notifications and isn't looking at the app right now (they get the
      * in-app notice instead). A subscription the browser dropped is forgotten.
      */
+    // Push to one player; a subscription the push service says is gone is forgotten
+    function pushTo(player, payload, options)
+    {
+        const subscription = player.push_subscription;
+        if (!push || !subscription) return;
+        push.send(subscription, payload, options).then((result) =>
+        {
+            if (result?.gone && player.push_subscription === subscription) player.push_subscription = null;
+        });
+    }
+
+    /**
+     * A player who left the app (closed, or the phone locked and dropped the
+     * connection) is removed after the grace period; shortly before, they're
+     * reminded, so opening the app (or tapping the notice) keeps them in
+     */
+    function warnAway(lobbyId, lobby, player, now)
+    {
+        player.away_warned = true;
+        const leftMs = player.disconnected_at + config.disconnectGraceMs - now;
+        const minutes = Math.max(1, Math.round(leftMs / 60_000));
+        const where = lobby.phase === PHASE.PLAYING ? 'the game' : 'the lobby';
+        pushTo(player, {
+            title: `Still playing in ${lobby.lobby_name}?`,
+            body: `Open Manhunt within ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} or you'll be taken out of ${where}.`,
+            url: `/lobby/${lobbyId}`,
+            tag: `manhunt-${lobbyId}-away`,
+        }, { ttl: Math.max(1, Math.floor(leftMs / 1000)) }); // worthless once they've been removed
+    }
+
     function notifyFound(lobbyId, lobby, found, hidersLeft)
     {
         if (!push) return;
@@ -224,13 +255,9 @@ function createGameServer(options = {})
 
         for (const p of lobby.players.values())
         {
-            if (p === found || !p.push_subscription) continue;
+            if (p === found) continue;
             if (p.connected && p.visible !== false) continue;
-            const subscription = p.push_subscription;
-            push.send(subscription, payload).then((result) =>
-            {
-                if (result?.gone && p.push_subscription === subscription) p.push_subscription = null;
-            });
+            pushTo(p, payload);
         }
     }
 
@@ -290,9 +317,15 @@ function createGameServer(options = {})
         {
             for (const [token, player] of lobby.players)
             {
-                if (!player.connected && now - player.disconnected_at >= config.disconnectGraceMs)
+                if (player.connected) continue;
+                const away = now - player.disconnected_at;
+                if (away >= config.disconnectGraceMs)
                 {
                     removePlayer(lobbyId, token);
+                }
+                else if (!player.away_warned && away >= config.disconnectGraceMs - config.awayWarningMs)
+                {
+                    warnAway(lobbyId, lobby, player, now);
                 }
             }
             // Lobbies nobody ever joined
@@ -397,6 +430,7 @@ function createGameServer(options = {})
 
         player.connected = true;
         player.disconnected_at = null;
+        player.away_warned = false;
         player.socket_id = socket.id;
         socket.data.token = token;
         socket.join(lobbyId);
@@ -647,6 +681,7 @@ function createGameServer(options = {})
 
             p.connected = false;
             p.disconnected_at = Date.now();
+            p.away_warned = false;
             p.socket_id = null;
             scheduleBroadcast(lobbyId);
         });

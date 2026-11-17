@@ -63,9 +63,10 @@ function loadVapidKeys(keysFile)
 }
 
 /**
- * The real sender: { publicKey, send(subscription, payload) }. send resolves
- * with { ok } or { gone } (the browser dropped that subscription: forget it);
- * it never rejects.
+ * The real sender: { publicKey, send(subscription, payload, { ttl }) }. send
+ * resolves with { ok } or { gone } (the browser dropped that subscription:
+ * forget it); it never rejects. `ttl` is how many seconds the push service
+ * may hold it for a phone that's off (10 minutes unless given).
  */
 function createPushSender({ keysFile = path.join(__dirname, '.vapid-keys.json'), subject } = {})
 {
@@ -76,10 +77,10 @@ function createPushSender({ keysFile = path.join(__dirname, '.vapid-keys.json'),
 
     return {
         publicKey: keys.publicKey,
-        async send(subscription, payload)
+        async send(subscription, payload, { ttl = 10 * 60 } = {})
         {
             try {
-                await webpush.sendNotification(subscription, JSON.stringify(payload), { TTL: 10 * 60, urgency: 'high' });
+                await webpush.sendNotification(subscription, JSON.stringify(payload), { TTL: ttl, urgency: 'high' });
                 return { ok: true };
             } catch (error) {
                 if (error.statusCode === 404 || error.statusCode === 410) return { gone: true };

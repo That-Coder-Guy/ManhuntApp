@@ -391,7 +391,10 @@ name, a small profile picture and a role; the host sets the rules and starts.
 - **Notifications**: anyone who turns them on gets one
   when another player is found ("Maya was found · 1 hider left"), even with
   the phone locked. Players looking at the app already see it on screen, so
-  they aren't sent one. Tapping it opens the lobby. On an iPhone they need iOS
+  they aren't sent one. Tapping it opens the lobby. A player whose app has
+  been closed (or whose locked phone dropped the connection) is taken out of
+  the lobby after 5 minutes; with about 2 minutes left they get a reminder
+  ("Still playing in Riverside Park?"), and opening the app keeps them in. On an iPhone they need iOS
   16.4 or later and the app added to the Home Screen (Share → Add to Home
   Screen).
 - **Add to Home Screen**: on a phone's first visit, a popup offers to install
