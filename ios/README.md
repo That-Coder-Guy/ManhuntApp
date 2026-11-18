@@ -12,7 +12,7 @@ Signed with a free Apple ID, the app runs for **7 days**. After that it won't op
 |---|---|
 | Phone locked, or another app in front | **The player stays in the lobby and keeps sending their position**, for as long as they're in one. iOS shows its blue location indicator meanwhile |
 | Keep screen on | Not offered (it's left off the Settings page): it only existed because a web page stops when the screen goes off |
-| Permissions | Offered on one page when the app first opens, which can be put off. Entering a lobby needs location and the compass; notifications and the camera are optional. No offer to "add to Home Screen" |
+| Permissions | Offered on one page when the app first opens, which can be put off, and on the Settings page afterwards. Entering a lobby needs location and the compass; notifications and the camera are optional. No offer to "add to Home Screen" |
 | A blocked permission | The permissions page has an **Open settings** button: the app says what Manhunt needs (location, while using the app, precise) and opens its page in iOS's Settings |
 | Turning a permission off | Only iOS's Settings can. Tapping a switch that's on says so, and its **Open settings** goes straight to the app's page there |
 | Location | From the app's own location service. iOS asks once, as for any app; "While Using the App" is enough |

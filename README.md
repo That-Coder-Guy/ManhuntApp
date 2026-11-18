@@ -29,7 +29,7 @@ real app, captured at phone size (390 × 844) from a scripted game.
   </tr>
   <tr>
     <td valign="top"><b>Create or join.</b> Name the lobby and tap <i>Create lobby</i>. Friends join with the lobby ID, a pasted invite link, or the QR button, which scans an invite with the camera.</td>
-    <td valign="top"><b>Before you play.</b> In the browser, entering a lobby asks for what the game uses: location and, on an iPhone, the compass are required; notifications are optional. <b>Leave lobby</b> is the way out for anyone who'd rather not. The installed app also offers the switches once, when it first opens, where they can be put off. Those are the only places with them: afterwards only the phone's own settings can change them.</td>
+    <td valign="top"><b>Before you play.</b> In the browser, entering a lobby asks for what the game uses: location and, on an iPhone, the compass are required; notifications are optional. <b>Leave lobby</b> is the way out for anyone who'd rather not. The installed app also offers the switches once, when it first opens, where they can be put off. They're on the Settings page afterwards too, where one that's on can only be turned off in the phone's own settings.</td>
     <td valign="top"><b>Invite.</b> The QR button in the top bar shows a code anyone can scan with their phone camera to land straight in the lobby.</td>
   </tr>
 </table>
@@ -420,17 +420,18 @@ name, a small profile picture and a role; the host sets the rules and starts.
   only means scanning a join code doesn't ask first); that page can be put
   off with **Not now**, and the app opens without any of it. It then sees
   **Before you play** at a lobby only if something a game needs is still
-  missing. These are the only places with the switches. A switch asks; it
+  missing. The switches are on the Settings page too. A switch asks; it
   can't take a permission back or undo a refusal, so once allowed it locks,
   and a blocked one says where it can be allowed: the phone's own settings
   (the native apps have an **Open settings** button that says what Manhunt
   needs there and opens them). Tapping a switch that's on brings up a popup
   saying it can only be turned off in those settings; in the native apps the
   popup's **Open settings** goes straight there.
-- **Settings** (the gear on the home page) holds how the app looks and
-  behaves, not what it may use: **Text size**, **Reduce motion**, and, where a
-  page can do it, **Keep screen on** during a game (the native apps don't need
-  it: they carry on with the screen off).
+- **Settings** (the gear on the home page) shows the permission switches
+  again (what's allowed, and a switch for what isn't yet), and holds how the
+  app looks and behaves: **Text size**, **Reduce motion**, and, where a page
+  can do it, **Keep screen on** during a game (the native apps don't need it:
+  they carry on with the screen off).
 - **Notifications**: anyone who turns them on gets one
   when another player is found ("Maya was found · 1 hider left"), even with
   the phone locked. Players looking at the app already see it on screen, so

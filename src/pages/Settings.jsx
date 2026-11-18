@@ -6,14 +6,15 @@ import {
 import { chevronBack } from 'ionicons/icons';
 import { useTextSize, useReduceMotion } from '../utils/accessibility';
 import { useKeepScreenOn, wakeLockSupported } from '../hooks/usePermissions';
+import PermissionsList from '../components/PermissionsList';
 
 const TEXT_SIZE_NAMES = { default: 'Default', large: 'Large', larger: 'Larger' };
 
 /**
- * How the app looks and behaves on this phone, reached from the home page.
- * What the app may use (location, notifications, the camera) isn't here: it
- * is asked for once, when it's first needed (PermissionsSetup,
- * PermissionsGate), and after that only the phone's own settings can change it.
+ * What the app may use on this phone, and how it looks and behaves, reached
+ * from the home page. The permission switches show what's allowed and can ask
+ * for what isn't; turning one off is the phone's own settings' to do, and a
+ * tap on one that's on says so (PermissionsList).
  */
 function Settings()
 {
@@ -36,6 +37,9 @@ function Settings()
                 </IonToolbar>
             </IonHeader>
             <IonContent className="settings-page">
+                <h3 className="settings-section">Permissions</h3>
+                <PermissionsList showCamera />
+
                 <h3 className="settings-section">Accessibility</h3>
                 <IonList inset className="settings-list preference-list">
                     <IonItem>

@@ -39,7 +39,7 @@ await page.locator('[data-testid="toggle-camera"]').click({ force: true }).catch
   const popup = page.locator('ion-alert[data-testid="permission-turn-off"]');
   const shown = await popup.locator('.alert-button').first().waitFor({ state: 'visible', timeout: 3000 }).then(() => true, () => false);
   const title = shown ? await popup.locator('.alert-title').innerText() : '';
-  check(/Turn camera off in Settings/.test(title), 'tapping the switch once it\'s on: a popup says only the settings can turn it off', title);
+  check(/Turn camera off in your phone’s settings/.test(title), 'tapping the switch once it\'s on: a popup says only the settings can turn it off', title);
   if (shown) await popup.locator('.alert-button').first().click();
   await popup.locator('.alert-wrapper').waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {});
 }
@@ -48,7 +48,10 @@ check(await isOn(page, 'camera') && await page.locator('[data-testid="toggle-cam
 await page.locator('[data-testid="setup-done"]').click();
 await page.goto(`${BASE}/settings`);
 await page.waitForSelector('[data-testid="settings-page"]');
-check(await page.locator('[data-testid="toggle-camera"]').count() === 0, 'Settings has no camera switch');
+await page.waitForSelector('[data-testid="toggle-camera"]');
+await page.waitForTimeout(400);
+check(await isOn(page, 'camera') && await page.locator('[data-testid="toggle-camera"]').getAttribute('aria-disabled') === 'true'
+  && (await page.evaluate(() => window.__camera.opened)) === 0, 'Settings shows the camera switch, on, without opening the camera');
 
 // A choice made in an older version (camera "off" in Settings): the switch turns it back on, without asking
 await page.evaluate(() => { localStorage.setItem('manhunt.cameraOff', '1'); localStorage.removeItem('manhunt.setupDone'); });

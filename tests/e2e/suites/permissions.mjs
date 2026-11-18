@@ -1,7 +1,7 @@
 // Permissions: asked on entering a lobby, which needs location (and on
 // iPhones the compass) to go on. The installed app also offers them all on
-// one page when it first opens, where they can be put off. Nowhere else:
-// Settings holds accessibility settings
+// one page when it first opens, where they can be put off, and shows them
+// again in Settings, beside the accessibility settings
 import { BASE, SHOT, makePlayer, passGate, createLobby, join, startGame } from '../lib/helpers.mjs';
 import { chromium } from '../lib/playwright.mjs';
 
@@ -82,7 +82,7 @@ check(await maya.evaluate(async () => !!(await (await navigator.serviceWorker.re
 await tapLocked(maya, 'notify');
 {
   const said = await alertSays(maya);
-  check(/Turn notifications off in Settings/.test(said.title) && /browser’s settings/.test(said.message), 'tapping a switch that\'s on: a popup says only the settings can turn it off', JSON.stringify(said));
+  check(/Turn notifications off in your phone’s settings/.test(said.title) && /browser’s settings/.test(said.message), 'tapping a switch that\'s on: a popup says only the settings can turn it off', JSON.stringify(said));
   check(said.buttons.length === 1 && /OK/i.test(said.buttons[0]), 'in a browser, which can\'t open them, it only says so', JSON.stringify(said.buttons));
   await maya.screenshot({ path: `${SHOT}/perm-turn-off-browser.png` });
   await answerAlert(maya, 'OK');
@@ -93,7 +93,7 @@ check(await isOn(maya, 'notify') && await maya.locator('[data-testid="toggle-not
 await tapLocked(maya, 'location');
 {
   const said = await alertSays(maya);
-  check(/Turn location off in Settings/.test(said.title) && /can’t be joined without it/.test(said.message), 'the same for location, which says a game needs it', JSON.stringify(said));
+  check(/Turn location off in your phone’s settings/.test(said.title) && /can’t be joined without it/.test(said.message), 'the same for location, which says a game needs it', JSON.stringify(said));
   await answerAlert(maya, 'OK');
 }
 await maya.screenshot({ path: `${SHOT}/perm-gate-on.png` });
@@ -172,13 +172,22 @@ await ctx.close();
   await page.reload();
   check(!(await visible(page, '[data-testid="setup-done"]', 2500)), 'not shown again');
 
-  // Settings: how the app looks and behaves, and no permissions
+  // Settings: the permissions again, and how the app looks and behaves
   await page.locator('[data-testid="open-settings"]').click();
   check(await visible(page, '[data-testid="settings-page"]'), 'Settings opens from the home page');
   await page.waitForTimeout(500);
-  check(await page.locator('ion-list.permission-list').count() === 0 && await page.locator('[data-testid="toggle-location"]').count() === 0
-    && await page.locator('[data-testid="toggle-notify"]').count() === 0 && await page.locator('[data-testid="toggle-camera"]').count() === 0,
-    'Settings has no permission switches');
+  check(await page.locator('ion-list.permission-list').count() === 1 && await page.locator('[data-testid="toggle-location"]').count() === 1
+    && await page.locator('[data-testid="toggle-notify"]').count() === 1 && await page.locator('[data-testid="toggle-camera"]').count() === 1,
+    'Settings has the permission switches: location, notifications, the camera');
+  check(await isOn(page, 'location') && await isOn(page, 'notify') && await isOn(page, 'compass'), 'showing what was allowed');
+  await tapLocked(page, 'location');
+  {
+    const said = await alertSays(page);
+    check(/Turn location off in your phone’s settings/.test(said.title), 'tapping one that\'s on: the popup says only the phone\'s settings can turn it off', JSON.stringify(said));
+    await page.screenshot({ path: `${SHOT}/perm-settings-turn-off.png` });
+    await answerAlert(page, 'OK');
+  }
+  await page.screenshot({ path: `${SHOT}/perm-settings.png` });
   const scale = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--ui-scale').trim());
   const rootPx = () => page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).fontSize));
   const basePx = await rootPx();
@@ -355,7 +364,7 @@ await ctx.close();
   await on.waitForFunction(() => document.querySelector('[data-testid="toggle-notify"]').checked, null, { timeout: 5000 }).catch(() => {});
   await tapLocked(on, 'notify');
   let said = await alertSays(on);
-  check(/Turn notifications off in Settings/.test(said.title) && /only your phone’s settings can/.test(said.message),
+  check(/Turn notifications off in your phone’s settings/.test(said.title) && /only your phone’s settings can/.test(said.message),
     'native app: tapping a switch that\'s on says only the phone\'s settings can turn it off', JSON.stringify(said));
   check(said.buttons.length === 2 && /Not now/i.test(said.buttons[0]) && /Open settings/i.test(said.buttons[1]), 'and offers to open them', JSON.stringify(said.buttons));
   await on.waitForTimeout(400);

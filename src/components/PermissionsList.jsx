@@ -46,13 +46,14 @@ function PermissionRow({ id, title, requirement, description, status, onToggle, 
 
 /**
  * Everything Manhunt may use on this phone, each with a switch that asks for
- * it: "Before you play" in the browser, and the installed app's permissions
- * page (PermissionsSetup). Nowhere else: once answered, only the phone's own
- * settings can change them. `location` and `compass` let the caller
+ * it: "Before you play" on entering a lobby, the installed app's permissions
+ * page (PermissionsSetup), and the Settings page. A switch can ask; once
+ * answered, only the phone's own settings can change it, and a tap on one
+ * says so. `location` and `compass` let the caller
  * share its own state for those (the required ones: useRequiredPermissions);
  * `onNotificationsOn` runs when notifications are allowed. `showCamera` adds
  * the camera (for scanning join codes), which matters outside a lobby: the
- * installed app's permissions page.
+ * installed app's permissions page, and Settings.
  */
 function PermissionsList({ location, compass, onNotificationsOn, showCamera = false })
 {
@@ -97,7 +98,8 @@ function PermissionsList({ location, compass, onNotificationsOn, showCamera = fa
         }
         return setTurnOff({
             open: true,
-            header: `Turn ${name} off in Settings`,
+            // ("Settings" alone would be this app's own page, where this may be showing)
+            header: `Turn ${name} off in your phone’s settings`,
             message: openPhoneSettings
                 ? `Manhunt can’t turn ${name} off itself: only your phone’s settings can.${needed}`
                 : `Manhunt can’t turn ${name} off itself: only your phone’s or browser’s settings for Manhunt can.${needed}`,

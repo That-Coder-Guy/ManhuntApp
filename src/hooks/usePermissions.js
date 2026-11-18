@@ -4,9 +4,10 @@
 // PermissionsGate), and a lobby can't be entered without the ones a game
 // needs. The installed app offers them all on one page the first time it
 // opens (PermissionsSetup), where they can be put off, and is asked again
-// at a lobby only if one a game needs is still missing. Those are the only
-// places: once answered, only the phone's own settings can change them. (Keep screen on isn't a permission:
-// it's on the Settings page.)
+// at a lobby only if one a game needs is still missing. The Settings page
+// shows them all again: what's allowed, and a switch for what isn't yet.
+// Once allowed, only the phone's own settings can take one back. (Keep
+// screen on isn't a permission: it's a setting, on the same page.)
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { pushStatus, notificationsWanted, setNotificationsWanted } from '../utils/push';
 import { isInstalled } from '../utils/install';

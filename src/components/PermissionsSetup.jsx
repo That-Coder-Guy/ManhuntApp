@@ -20,7 +20,7 @@ function PermissionsSetup()
             <div className="permissions-dialog-body">
                 <h2>Set up Manhunt</h2>
                 <p className="permissions-dialog-intro">
-                    Joining a game needs the required ones: allow them now, or when you join. To change any later, use your phone’s settings.
+                    Joining a game needs the required ones: allow them now, or when you join. They’re all in Settings afterwards.
                 </p>
                 {/* Only the switches scroll: the title and button stay in view */}
                 <div className="permissions-dialog-scroll">
