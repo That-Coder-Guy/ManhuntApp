@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The web app's colours (src/index.css), for the few native screens -->
+<resources>
+    <color name="ink_page">#0b0d14</color>        <!-- ink-1 -->
+    <color name="ink_raised">#1a1e28</color>      <!-- ink-3 -->
+    <color name="ink_pressed">#232836</color>     <!-- ink-4 -->
+    <color name="hairline">#14eef0f5</color>      <!-- text-1 at 8% -->
+    <color name="text_primary">#eef0f5</color>
+    <color name="text_secondary">#a3a9b8</color>
+    <color name="text_tertiary">#8990a2</color>
+    <color name="accent">#ff7b2c</color>
+    <color name="accent_pressed">#e8691c</color>
+    <color name="on_accent">#11141c</color>
+    <color name="negative">#eb656a</color>
+</resources>

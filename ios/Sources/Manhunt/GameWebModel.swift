@@ -13,12 +13,17 @@ final class GameWebModel: NSObject, ObservableObject {
     }
 
     @Published private(set) var phase = Phase.loading
+    /// True while the "Allow it in Settings" alert is up (GameScreen shows it)
+    @Published var showsSettingsHelp = false
 
     let serverURL: URL
     let webView: WKWebView
 
     private let location = LocationBridge()
+    private let notifications = NotificationBridge()
     private var loadedAt = Date()
+    /// The notification state the page's start script was last written with
+    private var scriptedNotifications: String?
 
     /// Left on the landing page this long, the app reloads to pick up a new
     /// version (the web app's own update check needs a service worker, which
@@ -36,9 +41,8 @@ final class GameWebModel: NSObject, ObservableObject {
 
         super.init()
 
-        let content = webView.configuration.userContentController
-        content.addUserScript(WKUserScript(source: Self.bridgeScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
-        content.addScriptMessageHandler(BridgeMessages(model: self), contentWorld: .page, name: "manhunt")
+        webView.configuration.userContentController
+            .addScriptMessageHandler(BridgeMessages(model: self), contentWorld: .page, name: "manhunt")
 
         webView.navigationDelegate = self
         webView.uiDelegate = self
@@ -51,11 +55,19 @@ final class GameWebModel: NSObject, ObservableObject {
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.bounces = false
 
+        // Each fix is handed to the page whether or not it is listening: in
+        // the background that is also what wakes the page, so it can keep
+        // its connection to the server going
         location.onFix = { [weak self] fix in self?.call("location", fix) }
         location.onError = { [weak self] code, message in self?.call("locationError", code, message) }
         location.onPermissionChange = { [weak self] state in self?.call("permission", "geolocation", state) }
 
-        load()
+        // The page reads whether notifications are allowed the moment it
+        // starts, so that has to be known before it loads
+        notifications.refresh { [weak self] _ in
+            self?.installBridgeScript()
+            self?.load()
+        }
     }
 
     func load() {
@@ -71,12 +83,22 @@ final class GameWebModel: NSObject, ObservableObject {
 
     /// The app came back to the screen
     func becameActive() {
+        // What a notification said is on screen now
+        notifications.clearFound()
+        // It may have been changed in Settings meanwhile
+        notifications.refresh { [weak self] state in
+            self?.call("permission", "notifications", state)
+            self?.installBridgeScript()
+        }
+
         if case .failed = phase { return load() }
         let onLandingPage = webView.url?.path == "/" || webView.url?.path.isEmpty == true
         if phase == .ready, onLandingPage, Date().timeIntervalSince(loadedAt) > Self.staleAfter {
             webView.reload()
         }
     }
+
+    // ---- The script each page starts with ----
 
     private static let bridgeScript: String = {
         guard let file = Bundle.module.url(forResource: "bridge", withExtension: "js"),
@@ -86,6 +108,28 @@ final class GameWebModel: NSObject, ObservableObject {
         }
         return script
     }()
+
+    /// bridge.js, after what the page needs to know before it can ask.
+    /// Written again when that changes, so the next page to load starts
+    /// with the truth.
+    private func installBridgeScript() {
+        let state = notifications.state
+        if state == scriptedNotifications { return }
+        scriptedNotifications = state
+
+        // nativeLocation: the page's positions come from LocationBridge
+        let initial: [String: Any] = ["notifications": state, "nativeLocation": true]
+        guard let json = try? JSONSerialization.data(withJSONObject: initial),
+              let object = String(data: json, encoding: .utf8) else { return }
+
+        let content = webView.configuration.userContentController
+        content.removeAllUserScripts()
+        content.addUserScript(WKUserScript(
+            source: "window.__manhuntInitial = \(object);\n\(Self.bridgeScript)",
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        ))
+    }
 
     // ---- Talking to the page ----
 
@@ -103,28 +147,56 @@ final class GameWebModel: NSObject, ObservableObject {
         return origin.protocol == "https" && origin.host == serverURL.host && port == serverURL.port ?? 443
     }
 
-    /// A message from bridge.js; the return value is its answer
-    fileprivate func handle(_ message: WKScriptMessage) -> Any? {
+    /// A message from bridge.js; `reply` gives it its answer (once, always)
+    fileprivate func handle(_ message: WKScriptMessage, reply: @escaping (Any?) -> Void) {
         guard message.frameInfo.isMainFrame, isGame(message.frameInfo.securityOrigin),
-              let body = message.body as? [String: Any], let type = body["type"] as? String else { return nil }
+              let body = message.body as? [String: Any], let type = body["type"] as? String else { return reply(nil) }
 
         switch type {
         case "location-start":
             location.start()
         case "location-stop":
             location.stop()
-        case "wake-lock":
-            UIApplication.shared.isIdleTimerDisabled = body["held"] as? Bool == true
         case "permission-query":
             switch body["name"] as? String {
-            case "geolocation": return location.permission
-            case "camera": return Self.cameraPermission
+            case "geolocation": return reply(location.permission)
+            case "camera": return reply(Self.cameraPermission)
             default: break
+            }
+        case "notifications-request":
+            // The web app's Notifications switch: iOS asks the player, once
+            return notifications.request { [weak self] state in
+                self?.installBridgeScript()
+                reply(state)
+            }
+        case "session":
+            // In a lobby: keep running, and sending the player's position, in the background
+            location.inLobby = body["active"] as? Bool == true
+        case "settings":
+            // The web app's "Open settings": beside a blocked switch the app
+            // first says what Manhunt needs there; for turning one off the
+            // page has already said why, so it goes straight there
+            if body["direct"] as? Bool == true {
+                openPhoneSettings()
+            } else {
+                showsSettingsHelp = true
+            }
+        case "found":
+            // Looking at the game: it says so itself
+            if UIApplication.shared.applicationState != .active,
+               let title = body["title"] as? String, let text = body["body"] as? String {
+                notifications.showFound(title: title, body: text)
             }
         default:
             break
         }
-        return nil
+        reply(nil)
+    }
+
+    /// Manhunt's own page in the phone's Settings, where a refused permission can be allowed
+    func openPhoneSettings() {
+        guard let settings = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(settings)
     }
 
     private static var cameraPermission: String {
@@ -135,10 +207,10 @@ final class GameWebModel: NSObject, ObservableObject {
         }
     }
 
-    /// A new page has nothing listening yet: let go of what the last one held
+    /// A new page is listening for nothing and is in no lobby until it says so
     private func resetPageState() {
         location.stop()
-        UIApplication.shared.isIdleTimerDisabled = false
+        location.inLobby = false
     }
 
     private func fail(_ error: Error) {
@@ -165,7 +237,8 @@ private final class BridgeMessages: NSObject, WKScriptMessageHandlerWithReply {
         didReceive message: WKScriptMessage,
         replyHandler: @escaping (Any?, String?) -> Void
     ) {
-        replyHandler(model?.handle(message), nil)
+        guard let model else { return replyHandler(nil, nil) }
+        model.handle(message) { answer in replyHandler(answer, nil) }
     }
 }
 

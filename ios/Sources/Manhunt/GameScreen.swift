@@ -39,6 +39,23 @@ struct GameScreen: View {
         .onChange(of: scenePhase) { phase in
             if phase == .active { model.becameActive() }
         }
+        // A permission that was refused can only be allowed again in iOS's
+        // Settings: say which ones Manhunt needs there, then open its page
+        .alert("Allow it in Settings", isPresented: $model.showsSettingsHelp) {
+            Button("Open Settings") { model.openPhoneSettings() }
+            Button("Not now", role: .cancel) {}
+        } message: {
+            Text("""
+            iOS only lets a blocked permission be allowed in Settings.
+
+            Manhunt needs:
+            • Location: While Using the App, with Precise Location on
+
+            And if you want them:
+            • Notifications: when players are found
+            • Camera: for scanning join codes
+            """)
+        }
     }
 }
 

@@ -1,7 +1,14 @@
 import CoreLocation
 
 /// The phone's location service, for the web app's `navigator.geolocation`
-/// (Resources/bridge.js). It runs only while the page is listening.
+/// (Resources/bridge.js), and what keeps the app running in the background.
+///
+/// iOS stops an app soon after it leaves the screen, unless it is doing one
+/// of a few things iOS allows in the background. Following the player's
+/// location is one, and it is what a game of Manhunt is doing anyway. So
+/// while the player is in a lobby the service keeps running with the phone
+/// locked or another app in front (iOS shows its blue location indicator),
+/// and each fix it hands the page wakes the page up to send it on.
 @MainActor
 final class LocationBridge: NSObject, CLLocationManagerDelegate {
     /// A fix, as the fields of a browser's GeolocationCoordinates plus `timestamp`
@@ -11,7 +18,14 @@ final class LocationBridge: NSObject, CLLocationManagerDelegate {
     /// "granted" | "denied" | "prompt", whenever it changes
     var onPermissionChange: ((String) -> Void)?
 
+    /// True while the player is in a lobby: fixes then keep coming, in the
+    /// background too, whether or not the page is asking for them
+    var inLobby = false {
+        didSet { if inLobby != oldValue { apply() } }
+    }
+
     private let manager = CLLocationManager()
+    /// True while the page is listening for positions
     private var wanted = false
 
     override init() {
@@ -32,11 +46,11 @@ final class LocationBridge: NSObject, CLLocationManagerDelegate {
         }
     }
 
-    /// Start sending fixes; the first time, iOS asks the player
+    /// The page wants positions; the first time, iOS asks the player
     func start() {
         wanted = true
         switch permission {
-        case "granted": manager.startUpdatingLocation()
+        case "granted": apply()
         case "denied": onError?(1, "Location isn't allowed for Manhunt")
         default: manager.requestWhenInUseAuthorization()
         }
@@ -44,7 +58,20 @@ final class LocationBridge: NSObject, CLLocationManagerDelegate {
 
     func stop() {
         wanted = false
-        manager.stopUpdatingLocation()
+        apply()
+    }
+
+    /// Run the service exactly when it's wanted and allowed
+    private func apply() {
+        let allowed = permission == "granted"
+        // Needs "location" under UIBackgroundModes in Info.plist, which it has
+        manager.allowsBackgroundLocationUpdates = inLobby && allowed
+        manager.showsBackgroundLocationIndicator = inLobby
+        if (wanted || inLobby) && allowed {
+            manager.startUpdatingLocation()
+        } else {
+            manager.stopUpdatingLocation()
+        }
     }
 
     // ---- CLLocationManagerDelegate (called on the main thread, where the manager was made) ----
@@ -53,7 +80,8 @@ final class LocationBridge: NSObject, CLLocationManagerDelegate {
         MainActor.assumeIsolated {
             onPermissionChange?(permission)
             // Answered the prompt, or changed it in Settings and came back
-            if wanted && permission != "prompt" { start() }
+            if wanted && permission == "denied" { onError?(1, "Location isn't allowed for Manhunt") }
+            if permission != "prompt" { apply() }
         }
     }
 
@@ -73,7 +101,7 @@ final class LocationBridge: NSObject, CLLocationManagerDelegate {
             "timestamp": (location.timestamp.timeIntervalSince1970 * 1000).rounded()
         ]
         MainActor.assumeIsolated {
-            guard wanted else { return }
+            guard wanted || inLobby else { return }
             onFix?(fix)
         }
     }

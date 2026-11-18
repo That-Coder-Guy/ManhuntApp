@@ -5,18 +5,28 @@ tags: [manhunt, ios]
 
 A native iPhone app in `ios/`, added 2026-11-17. It is a **shell around the web app**: a full-screen web view that opens the game server's own address, so it always runs the server's version. Nothing in `src/`, `server/` or the build was changed for it. `ios/README.md` is the full guide.
 
-Built and installed from Windows (WSL) with [xtool](https://xtool.sh), signed with a free Apple ID: no Mac, no App Store. That removes the "needs a Mac" hurdle noted in [[Decisions]], though this shell does not add background location.
+Built and installed from Windows (WSL) with [xtool](https://xtool.sh), signed with a free Apple ID: no Mac, no App Store. That removes the "needs a Mac" hurdle noted in [[Decisions]].
 
-## What it adds over the web app
-- **Location** from the phone's own location service (`LocationBridge.swift`), so iOS asks once. A script run before the page (`Resources/bridge.js`) swaps it in behind `navigator.geolocation`.
-- **Keep screen on** works (web views have no wake lock).
+## What it's for
+Background processing: a player locks the phone or switches apps and **stays in the lobby, sending their position**. A web page can't (see [[Decisions]]), which is why the web app keeps the screen on; the app doesn't offer that. A disconnect then means the phone really lost signal, or the player closed the app.
+
+## Staying in the lobby, and notifications
+Asked for by the owner on 2026-11-17, with no server or web app changes.
+- **Background location is what keeps it running.** `Info.plist` has the `location` background mode; while the player is in a lobby `LocationBridge.swift` keeps the location service on, and each fix it hands the page wakes the page, which keeps the socket alive. "While Using the App" permission is enough, and Background App Refresh isn't involved.
+- The web app leaves its socket on `window.__manhuntSocket`. `bridge.js` (one file shared with the [[Android app]]) listens on it for joining and leaving a lobby and for `player-found`.
+- **A find while the app is off screen** becomes a local notification (`NotificationBridge.swift`) with the web push's own wording. Local, not pushed, so a free Apple ID is enough.
+- **No web push.** The web app's Notifications switch drives iOS's permission through stand-ins for `Notification`, `PushManager` and the missing service worker; the server sends this phone nothing, the "Still playing?" reminder included ([[Notifications]]).
+- **Swiping the app closed ends it**: iOS allows nothing else.
+- **A blocked permission**: the web app's permissions page shows **Open settings** ([[Permissions]]); the app's alert says what Manhunt needs and opens its page in iOS's Settings.
+- **Turning a permission off**: the web app's popup for a switch that's on ([[Permissions]]) has **Open settings**, which opens the app's page in iOS's Settings directly, without the alert (`GameWebModel` reads `direct` from the `settings` message).
+
+## What else it adds
+- **Location** from the phone's own location service, so iOS asks once.
 - **Camera and compass** without the web view's own extra prompts.
 - The web app is told it's the **installed app**: no [[Install offer]], and the one-time [[Permissions]] popup.
 
 ## What it lacks
-- **[[Notifications]]**: a free Apple ID can't sign for push. Accepted by the owner.
 - **Offline**: no service worker in a web view, so it needs the server to open. [[App updates and version]] doesn't apply; it reloads from the server instead.
-- **Background**: same as the web app.
 
 ## The 7 days
 A free Apple ID signs the app for 7 days. Renew by plugging the phone in and running `ios\install.cmd`; settings on the phone are kept.
@@ -30,6 +40,6 @@ Typed in on first launch and remembered. When the quick tunnel's address changes
 - **If xtool's Apple ID sign-in fails** (it did at first, with HTTP 401 and then `-22411` after the code): check <https://www.apple.com/support/systemstatus/> before anything else. Those failures coincided with an Apple sign-in incident, and the same login worked once Apple recovered.
 
 ## Checked so far
-- Builds with no warnings; installed on the owner's iPhone; connects to the Pi's server and runs (2026-11-17).
-- `node --test ios/tests/bridge.test.mjs` covers the bridge script.
-- Not individually confirmed on the phone yet: the compass, the QR scanner, keep-screen-on during a game, and the app-icon **Change server** action.
+- The first version (no background running) was installed on the owner's iPhone and connected to the Pi's server (2026-11-17).
+- The background version builds with no warnings. Its bridge script was run against the real web app in a desktop browser set up like the app's web view, and `node --test ios/tests/bridge.test.mjs` covers it.
+- **Not yet tried on the phone:** staying connected and sending positions while locked, the notifications, the "Allow it in Settings" alert, and whether iOS keeps the page awake for a long game. Also still unconfirmed: the compass, the QR scanner, and the app-icon **Change server** action.

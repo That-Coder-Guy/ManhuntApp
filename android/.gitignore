@@ -1,0 +1,15 @@
+# Gradle and Android build output
+.gradle/
+build/
+.kotlin/
+
+# Where this machine's Android SDK is (written by install.mjs)
+local.properties
+
+# Android Studio
+.idea/
+*.iml
+captures/
+
+# Built by install.mjs
+/Manhunt.apk

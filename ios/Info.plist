@@ -8,9 +8,16 @@
 
     <!-- Shown in iOS's own permission prompts -->
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Manhunt shares your position with the players in your game while you play.</string>
+    <string>Manhunt shares your position with the players in your lobby, including while the phone is locked.</string>
     <key>NSCameraUsageDescription</key>
     <string>Manhunt uses the camera to scan a lobby's invite code, and for a profile photo if you take one.</string>
+
+    <!-- Staying in a lobby with the phone locked: iOS lets an app that is
+         following the player's location keep running (LocationBridge.swift) -->
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>location</string>
+    </array>
 
     <!-- Always dark, like the web app, the launch screen included -->
     <key>UIUserInterfaceStyle</key>

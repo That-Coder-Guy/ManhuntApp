@@ -1,0 +1,5 @@
+# Run by Windows: needs its own line endings
+*.cmd text eol=crlf
+# Run by sh on Linux and macOS
+gradlew text eol=lf
+*.jar binary

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The web app fills the screen, so the way back to the server screen is a
+     long press on the app's icon (and the "can't reach the server" screen) -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="change_server"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_server"
+        android:shortcutShortLabel="@string/shortcut_change_server">
+        <intent
+            android:action="com.manhunt.android.CHANGE_SERVER"
+            android:targetClass="com.manhunt.android.MainActivity"
+            android:targetPackage="com.manhunt.android" />
+    </shortcut>
+</shortcuts>

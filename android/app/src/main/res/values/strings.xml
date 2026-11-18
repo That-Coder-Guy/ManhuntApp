@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Manhunt</string>
+
+    <!-- Choosing the game server -->
+    <string name="setup_title">Game server</string>
+    <string name="setup_intro">Enter the address your Manhunt server gives, like name.trycloudflare.com</string>
+    <string name="setup_address_hint">Server address</string>
+    <string name="setup_connect">Connect</string>
+    <string name="setup_cancel">Cancel</string>
+    <string name="setup_needs_https">The address needs to start with https</string>
+    <string name="setup_not_an_address">That doesn\'t look like a server address</string>
+    <string name="setup_unreachable">Couldn\'t reach %1$s. %2$s</string>
+    <string name="setup_not_manhunt">Something answered at %1$s, but it isn\'t a Manhunt server. %2$s</string>
+    <string name="setup_answered_http">It answered with HTTP %1$d</string>
+    <string name="setup_answered_other">It answered with something other than the server\'s health check</string>
+
+    <!-- The server can't be reached -->
+    <string name="problem_title">Can\'t reach the server</string>
+    <string name="problem_http">The server answered with an error (%1$d)</string>
+    <string name="problem_not_manhunt">Something else is answering at this address now</string>
+    <string name="problem_retry">Try again</string>
+    <string name="problem_change_server">Change server</string>
+
+    <!-- Sending the player to Android's Settings for a blocked permission -->
+    <string name="phone_settings_title">Allow it in Settings</string>
+    <string name="phone_settings_message">Android only lets a blocked permission be allowed in Settings.\n\nUnder Permissions, Manhunt needs:\n• Location: Allow only while using the app, with Use precise location on\n\nAnd if you want them:\n• Notifications: when players are found\n• Camera: for scanning join codes</string>
+    <string name="phone_settings_open">Open settings</string>
+    <string name="phone_settings_not_now">Not now</string>
+
+    <!-- Notifications -->
+    <string name="lobby_notification_title">In a lobby</string>
+    <string name="game_notification_title">Game in progress</string>
+    <string name="game_notification_text">Manhunt stays connected until you leave</string>
+    <string name="channel_game">In a lobby or game</string>
+    <string name="channel_found">Players found</string>
+
+    <string name="shortcut_change_server">Change server</string>
+    <string name="share_chooser_title">Share invite</string>
+</resources>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The compass needle and fix dot of public/icon.svg, in that file's own
+     512-unit coordinates. The group shrinks them to three quarters and
+     centres them, so the whole mark sits inside the circle every launcher
+     shape keeps (the middle 66 of 108). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.158203"
+        android:scaleY="0.158203"
+        android:translateX="13.5"
+        android:translateY="13.5">
+
+        <!-- Bezel -->
+        <path
+            android:pathData="M80,256a176,176 0,1 0,352 0a176,176 0,1 0,-352 0"
+            android:strokeColor="#262b39"
+            android:strokeWidth="12" />
+
+        <!-- The needle, turned toward the dot -->
+        <group
+            android:pivotX="256"
+            android:pivotY="256"
+            android:rotation="40">
+            <path android:fillColor="#ffa05c" android:pathData="M256,124L216,256L256,256z" />
+            <path android:fillColor="#e2600f" android:pathData="M256,124L296,256L256,256z" />
+            <path android:fillColor="#7a8296" android:pathData="M256,388L216,256L256,256z" />
+            <path android:fillColor="#4d5466" android:pathData="M256,388L296,256L256,256z" />
+        </group>
+
+        <!-- Hub -->
+        <path android:fillColor="#eef0f5" android:pathData="M232,256a24,24 0,1 0,48 0a24,24 0,1 0,-48 0" />
+        <path android:fillColor="#0b0d14" android:pathData="M247,256a9,9 0,1 0,18 0a9,9 0,1 0,-18 0" />
+
+        <!-- The hider: a live fix on the bezel, where the needle points -->
+        <path
+            android:fillColor="#4cc38a"
+            android:pathData="M345.1,121.2a24,24 0,1 0,48 0a24,24 0,1 0,-48 0"
+            android:strokeColor="#0b0d14"
+            android:strokeWidth="10" />
+    </group>
+</vector>

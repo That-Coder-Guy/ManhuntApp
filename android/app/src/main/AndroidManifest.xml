@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Telling "the server has gone" from "this phone is offline" -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Sharing your position with the players in your game -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Scanning a lobby's invite code -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- The buzz when a seeker comes near (the web app's navigator.vibrate) -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- "Someone was found", and "In a lobby" while the player is in one -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Staying in a lobby, and sending the player's position, with the phone locked (GameService) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Phones without these can still install and play -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.Manhunt">
+
+        <!-- configChanges: the web view (and the game in it) survives the
+             keyboard, a font-size change and the like instead of restarting -->
+        <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|fontScale|locale|layoutDirection"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- "Change server" on a long press of the app's icon -->
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
+        </activity>
+
+        <!-- Runs only while the player is in a lobby, and never outlives the app -->
+        <service
+            android:name=".GameService"
+            android:exported="false"
+            android:foregroundServiceType="location"
+            android:stopWithTask="true" />
+    </application>
+</manifest>

@@ -2,7 +2,7 @@
 
 A native iOS app around the Manhunt web app, built and installed from Windows or Linux with [xtool](https://xtool.sh): no Mac, no App Store, no paid developer account.
 
-It is a shell, not a second copy of the game. The app opens the web app from your game server in a full-screen web view, so it always shows the version the server runs, and nothing in the web app or server was changed to make it. What the app adds is the phone's own location service and a few other things a web view can't do by itself.
+It is a shell, not a second copy of the game. The app opens the web app from your game server in a full-screen web view, so it always shows the version the server runs, and nothing in the web app or server was changed to make it. What the app adds is what a web page can't do: it **keeps running with the phone locked**, so a player stays in their lobby and keeps sending their position without the screen on.
 
 Signed with a free Apple ID, the app runs for **7 days**. After that it won't open until you install it again (same command; your name and settings on the phone are kept).
 
@@ -10,14 +10,30 @@ Signed with a free Apple ID, the app runs for **7 days**. After that it won't op
 
 | | iOS app |
 |---|---|
-| Location | From the app's own location service. iOS asks once, as for any app |
+| Phone locked, or another app in front | **The player stays in the lobby and keeps sending their position**, for as long as they're in one. iOS shows its blue location indicator meanwhile |
+| Keep screen on | Not offered (it's left off the Settings page): it only existed because a web page stops when the screen goes off |
+| Permissions | Offered on one page when the app first opens, which can be put off. Entering a lobby needs location and the compass; notifications and the camera are optional. No offer to "add to Home Screen" |
+| A blocked permission | The permissions page has an **Open settings** button: the app says what Manhunt needs (location, while using the app, precise) and opens its page in iOS's Settings |
+| Turning a permission off | Only iOS's Settings can. Tapping a switch that's on says so, and its **Open settings** goes straight to the app's page there |
+| Location | From the app's own location service. iOS asks once, as for any app; "While Using the App" is enough |
+| Notifications | The phone's own, made by the app when someone is found. Web push isn't used, and neither is the "Still playing?" reminder: there is no dropping out to remind about |
 | Compass, camera | iOS asks once; the web view's extra "allow this site?" prompts are skipped |
-| Keep screen on | Works (handled by the app; web views have no wake lock) |
-| Permissions | Asked once on first open, like the Home Screen app. No offer to "add to Home Screen" |
-| Notifications | **Not available.** A free Apple ID can't sign an app for push notifications |
 | Offline | The app needs the server to open (there's no service worker in a web view) |
 | Updates | Always the server's version. Left on the landing page for 30 minutes, it reloads when you come back |
-| Background | As in the web app: location and the connection stop while the app is in the background |
+
+## Staying in the lobby, and notifications
+
+iOS stops an app soon after it leaves the screen unless it is doing one of a few things iOS allows in the background. Following the player's location is one, and it is what a game of Manhunt does anyway. So:
+
+- **While the player is in a lobby** (before, during and after a game), the app keeps its location service running in the background. Each position it hands the page also wakes the page, which is what keeps the connection to the server alive. It stops when the player leaves the lobby.
+- **This doesn't use Background App Refresh**, and doesn't need "Always" location: "While Using the App" covers it, because the app was on screen when it started.
+- **When someone is found** and the app isn't on screen, it shows a notification in the words the web push would have used ("Maya was found · 1 hider left · Riverside Park"). These are made on the phone, not pushed, so they work with a free Apple ID.
+- **The web app's own Notifications switch** (in *Set up Manhunt* and Settings) is what asks iOS for permission, and turning it off there turns them off.
+
+So a disconnect now means something: the phone lost its signal or its battery, or the player closed the app. Limits:
+
+- **Swiping the app closed ends it.** iOS gives an app no way round that. The player is then away, and the server removes them after its usual five minutes.
+- **Battery**: location stays on for as long as the player is in a lobby.
 
 ## One-time setup
 
@@ -70,12 +86,13 @@ The address must be `https` (the camera and compass need it), and the app checks
 
 | | |
 |---|---|
-| `Sources/Manhunt/Resources/bridge.js` | Runs in the page before the web app: hands `navigator.geolocation`, permission checks and the wake lock to the app, and says it's the installed app |
+| `Sources/Manhunt/Resources/bridge.js` | Runs in the page before the web app. The same file as the Android app's (a test keeps the two copies identical): location, permission checks and notifications go to the app, and it tells the app when the player is in a lobby and when someone is found |
 | `Sources/Manhunt/GameWebModel.swift` | The web view, and the app's side of that bridge |
-| `Sources/Manhunt/LocationBridge.swift` | The phone's location service |
+| `Sources/Manhunt/LocationBridge.swift` | The phone's location service, and running in the background |
+| `Sources/Manhunt/NotificationBridge.swift` | The "someone was found" notifications |
 | `Sources/Manhunt/ServerStore.swift`, `ServerSetupView.swift` | Choosing and remembering the server |
-| `Sources/Manhunt/GameScreen.swift` | The web view on screen, and the "can't reach the server" screen |
-| `xtool.yml`, `Info.plist`, `Resources/AppIcon.png` | Bundle ID, permission wording, icon (rendered from `public/icon.svg`) |
+| `Sources/Manhunt/GameScreen.swift` | The web view on screen, the "can't reach the server" screen, and the "Allow it in Settings" alert |
+| `xtool.yml`, `Info.plist`, `Resources/AppIcon.png` | Bundle ID, permission wording, the location background mode, icon (rendered from `public/icon.svg`) |
 | `build.sh`, `install.cmd`, `tools/usbmux-relay.cjs` | Building, and reaching the phone from WSL |
 
 The bridge only answers the game server's own page, and only that page is given the camera and compass. Links to anywhere else open in the browser.
@@ -86,4 +103,8 @@ The bridge only answers the game server's own page, and only that page is given 
 node --test ios/tests/bridge.test.mjs
 ```
 
-covers the bridge script against a stand-in page. The Swift side can only be checked by building it (`ios/build.sh --build-only`) and on a phone.
+runs the bridge script against a stand-in page, as the iPhone app would run it (`ios/tests/bridge-suite.mjs` holds the tests, shared with the Android app).
+
+The script was also run against the real web app in a desktop browser set up like the app's web view (no service worker, the app's message channel, positions fed in by hand): the web app started normally, showed its Notifications switch and no "Keep screen on", told the app when a lobby was joined, and sent on a position it was handed.
+
+The Swift side can only be checked by building it (`ios/build.sh --build-only`) and on a phone. **Staying connected with the phone locked, the notifications, and the "Allow it in Settings" alert have not been tried on a phone yet.**
