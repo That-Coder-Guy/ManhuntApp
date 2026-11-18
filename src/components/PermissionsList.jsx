@@ -1,8 +1,7 @@
-import { useLayoutEffect, useRef } from 'react';
-import { IonList, IonItem, IonLabel, IonToggle, IonNote } from '@ionic/react';
-import {
-    useLocationPermission, useNotificationPermission, useCompassPermission, useCameraPermission, useKeepScreenOn, wakeLockSupported
-} from '../hooks/usePermissions';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { IonList, IonItem, IonLabel, IonToggle, IonNote, IonButton, IonAlert } from '@ionic/react';
+import { useLocationPermission, useNotificationPermission, useCompassPermission, useCameraPermission } from '../hooks/usePermissions';
+import { phoneSettingsOpener } from '../utils/nativeApp';
 
 // Said only when the switch can't say it: plain on and off need no words
 const STATUS_LABELS = {
@@ -12,11 +11,14 @@ const STATUS_LABELS = {
     install: 'Only in the Home Screen app',
 };
 
-function PermissionRow({ id, title, requirement, description, status, onToggle, checked = status === 'granted', disabled })
+function PermissionRow({ id, title, requirement, description, status, onToggle, onLockedTap, checked = status === 'granted', disabled })
 {
     const note = STATUS_LABELS[status];
+    // Once allowed, only the phone's own settings can take it back
+    const locked = disabled ?? !['prompt', 'denied'].includes(status);
     return (
-        <IonItem>
+        // A locked switch takes no taps itself, so one meant for it lands on its row
+        <IonItem data-testid={`row-${id}`} onClick={locked ? onLockedTap : undefined}>
             <IonLabel>
                 <h3>
                     <span className="permission-title">{title}</span>
@@ -34,9 +36,9 @@ function PermissionRow({ id, title, requirement, description, status, onToggle, 
                 data-testid={`toggle-${id}`}
                 aria-label={title}
                 checked={checked}
-                // Once allowed, only the phone's own settings can take it back
-                disabled={disabled ?? !['prompt', 'denied'].includes(status)}
-                onClick={onToggle}
+                disabled={locked}
+                // (the row passes a tap on its padding to its switch, locked or not)
+                onClick={locked ? undefined : onToggle}
             />
         </IonItem>
     );
@@ -44,14 +46,15 @@ function PermissionRow({ id, title, requirement, description, status, onToggle, 
 
 /**
  * Everything Manhunt may use on this phone, each with a switch that asks for
- * it: "Before you play" in the browser, the installed app's first-open
- * popup, and the Settings page. `location` and `compass` let the caller
+ * it: "Before you play" in the browser, and the installed app's permissions
+ * page (PermissionsSetup). Nowhere else: once answered, only the phone's own
+ * settings can change them. `location` and `compass` let the caller
  * share its own state for those (the required ones: useRequiredPermissions);
- * `onNotificationsOn` / `onNotificationsOff` run when notifications are
- * turned on or off. `showCamera` adds the camera (for scanning join codes),
- * which matters outside a lobby: the installed app's popup and Settings.
+ * `onNotificationsOn` runs when notifications are allowed. `showCamera` adds
+ * the camera (for scanning join codes), which matters outside a lobby: the
+ * installed app's permissions page.
  */
-function PermissionsList({ location, compass, onNotificationsOn, onNotificationsOff, showCamera = false })
+function PermissionsList({ location, compass, onNotificationsOn, showCamera = false })
 {
     const ownLocation = useLocationPermission();
     const ownCompass = useCompassPermission();
@@ -60,16 +63,49 @@ function PermissionsList({ location, compass, onNotificationsOn, onNotifications
     const [notifyStatus, toggleNotificationsState] = useNotificationPermission();
     const toggleNotifications = async () =>
     {
-        const next = await toggleNotificationsState();
-        if (next === 'granted') onNotificationsOn?.();
-        if (next === 'off') onNotificationsOff?.();
+        if (await toggleNotificationsState() === 'granted') onNotificationsOn?.();
     };
     const [cameraStatus, toggleCamera, cameraKnown] = useCameraPermission();
     // Until the browser's first-ever answer arrives (a few milliseconds), the
     // switches stay hidden rather than show a state they'd jump away from
     const settled = locationKnown !== false && (!showCamera || cameraKnown !== false);
-    const [keepScreenOn, setKeepScreenOn] = useKeepScreenOn();
-    const canKeepOn = wakeLockSupported();
+    // A switch can ask, but it can't undo a refusal: only the phone's settings can
+    const blocked = [locationStatus, compassStatus, notifyStatus, showCamera ? cameraStatus : null].includes('denied');
+    const openPhoneSettings = phoneSettingsOpener();
+
+    // A tap on a switch that can't do what the tap means. One that's on can
+    // only be turned off in the phone's settings: say so, and offer to go
+    // there (the native apps can; a browser can only say where to look). One
+    // that's blocked can only be allowed there: the same as the button under
+    // the list. `inSettings: false` is the compass, which has no setting.
+    const [turnOff, setTurnOff] = useState({ open: false, header: '', message: '', buttons: [] });
+    const lockedTap = (title, status, { required = false, inSettings = true } = {}) => () =>
+    {
+        if (status === 'denied') return openPhoneSettings?.();
+        if (status !== 'granted') return undefined;
+
+        const name = title.toLowerCase();
+        const needed = required ? ' A game can’t be joined without it.' : '';
+        if (!inSettings)
+        {
+            return setTurnOff({
+                open: true,
+                header: `The ${name} stays on`,
+                message: `Manhunt can’t turn the ${name} off.${needed}`,
+                buttons: ['OK']
+            });
+        }
+        return setTurnOff({
+            open: true,
+            header: `Turn ${name} off in Settings`,
+            message: openPhoneSettings
+                ? `Manhunt can’t turn ${name} off itself: only your phone’s settings can.${needed}`
+                : `Manhunt can’t turn ${name} off itself: only your phone’s or browser’s settings for Manhunt can.${needed}`,
+            buttons: openPhoneSettings
+                ? [{ text: 'Not now', role: 'cancel' }, { text: 'Open settings', handler: () => { openPhoneSettings({ direct: true }); } }]
+                : ['OK']
+        });
+    };
 
     // "Required" and "Optional" start on one line down the list: every title
     // gets the width of the longest one, measured once the font has loaded
@@ -109,6 +145,7 @@ function PermissionsList({ location, compass, onNotificationsOn, onNotifications
     useLayoutEffect(() => measureTitles.current());
 
     return (
+        <>
         <IonList ref={listRef} inset className="permission-list" style={settled ? undefined : { visibility: 'hidden' }}>
             <PermissionRow
                 id="location"
@@ -119,6 +156,7 @@ function PermissionsList({ location, compass, onNotificationsOn, onNotifications
                 // A refusal can't be asked again from here; the phone's settings can
                 disabled={locationStatus !== 'prompt'}
                 onToggle={requestLocation}
+                onLockedTap={lockedTap('Location', locationStatus, { required: true })}
             />
             {compassStatus !== 'unsupported' && (
                 <PermissionRow
@@ -128,6 +166,7 @@ function PermissionsList({ location, compass, onNotificationsOn, onNotifications
                     description="Points the arrow the right way"
                     status={compassStatus}
                     onToggle={requestCompass}
+                    onLockedTap={lockedTap('Compass', compassStatus, { required: true, inSettings: false })}
                 />
             )}
             {/* Required ones first, then the optional ones */}
@@ -138,9 +177,10 @@ function PermissionsList({ location, compass, onNotificationsOn, onNotifications
                     requirement="Optional"
                     description="When players are found"
                     status={notifyStatus}
-                    // Optional, so it turns off again (and back on without asking)
-                    disabled={!['prompt', 'granted', 'off'].includes(notifyStatus)}
+                    // Asks once. ('off' is a choice made in older versions: it turns back on)
+                    disabled={!['prompt', 'off'].includes(notifyStatus)}
                     onToggle={toggleNotifications}
+                    onLockedTap={lockedTap('Notifications', notifyStatus)}
                 />
             )}
             {showCamera && cameraStatus !== 'unsupported' && (
@@ -150,22 +190,37 @@ function PermissionsList({ location, compass, onNotificationsOn, onNotifications
                     requirement="Optional"
                     description="For scanning join codes"
                     status={cameraStatus}
-                    // Optional, so it turns off again (and back on without asking)
-                    disabled={!['prompt', 'granted', 'off'].includes(cameraStatus)}
+                    // Asks once. ('off' is a choice made in older versions: it turns back on)
+                    disabled={!['prompt', 'off'].includes(cameraStatus)}
                     onToggle={toggleCamera}
+                    onLockedTap={lockedTap('Camera', cameraStatus)}
                 />
             )}
-            <PermissionRow
-                id="wake"
-                title="Keep screen on"
-                requirement="Optional"
-                description="During a game"
-                status={!canKeepOn ? 'unsupported' : keepScreenOn ? 'granted' : 'prompt'}
-                checked={canKeepOn && keepScreenOn}
-                disabled={!canKeepOn}
-                onToggle={() => setKeepScreenOn(!keepScreenOn)}
-            />
         </IonList>
+        {settled && blocked && (
+            <div className="permission-blocked" data-testid="permission-blocked">
+                <p className="settings-note">
+                    {openPhoneSettings
+                        ? 'A blocked one can only be allowed in your phone’s settings for Manhunt.'
+                        : 'A blocked one can only be allowed in your phone’s or browser’s settings for Manhunt. Allow it there, then come back.'}
+                </p>
+                {openPhoneSettings && (
+                    <IonButton size="small" className="button-secondary" data-testid="open-phone-settings" onClick={() => openPhoneSettings()}>
+                        Open settings
+                    </IonButton>
+                )}
+            </div>
+        )}
+        <IonAlert
+            data-testid="permission-turn-off"
+            isOpen={turnOff.open}
+            header={turnOff.header}
+            message={turnOff.message}
+            buttons={turnOff.buttons}
+            // (what it says stays while it closes)
+            onDidDismiss={() => setTurnOff((alert) => ({ ...alert, open: false }))}
+        />
+        </>
     );
 }
 

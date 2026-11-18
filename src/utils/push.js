@@ -4,8 +4,9 @@
 
 import { isIOS, isInstalled } from './install';
 
-// Turning notifications off: the browser's permission can't be taken back
-// by a page, so the app remembers the choice and drops its subscription
+// Notifications turned off in an older version of the app, which had a
+// switch for it. The choice is still kept to (no subscription is made) until
+// the switch on the permissions page turns them back on
 const TURNED_OFF_KEY = 'manhunt.notificationsOff';
 
 /** False once the player turned notifications off in the app */
@@ -20,15 +21,6 @@ export function setNotificationsWanted(on)
         if (on) localStorage.removeItem(TURNED_OFF_KEY);
         else localStorage.setItem(TURNED_OFF_KEY, '1');
     } catch { /* not remembered */ }
-}
-
-/** Drop this phone's subscription, so nothing more can be pushed to it */
-export async function disablePush()
-{
-    try {
-        const registration = await navigator.serviceWorker.ready;
-        await (await registration.pushManager.getSubscription())?.unsubscribe();
-    } catch { /* nothing to drop */ }
 }
 
 /**

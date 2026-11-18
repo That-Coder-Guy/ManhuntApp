@@ -24,12 +24,12 @@ real app, captured at phone size (390 × 844) from a scripted game.
 <table>
   <tr>
     <td width="33%" valign="top"><img src="docs/walkthrough/01-home.png" alt="Home screen with Start a game and Join a game cards" width="100%"></td>
-    <td width="33%" valign="top"><img src="docs/walkthrough/02-permissions.png" alt="Before you play popup with switches for location, notifications and keeping the screen on" width="100%"></td>
+    <td width="33%" valign="top"><img src="docs/walkthrough/02-permissions.png" alt="Before you play popup with switches for location and notifications" width="100%"></td>
     <td width="33%" valign="top"><img src="docs/walkthrough/06-invite.png" alt="Invite sheet with a QR code and a Copy link button" width="100%"></td>
   </tr>
   <tr>
     <td valign="top"><b>Create or join.</b> Name the lobby and tap <i>Create lobby</i>. Friends join with the lobby ID, a pasted invite link, or the QR button, which scans an invite with the camera.</td>
-    <td valign="top"><b>Before you play.</b> In the browser, entering a lobby asks for what the game uses: location and, on an iPhone, the compass are required; notifications and keeping the screen on are optional. The installed app asks the same once, when it first opens, instead. Both keep the switches on the Settings page (the gear on the home page).</td>
+    <td valign="top"><b>Before you play.</b> In the browser, entering a lobby asks for what the game uses: location and, on an iPhone, the compass are required; notifications are optional. <b>Leave lobby</b> is the way out for anyone who'd rather not. The installed app also offers the switches once, when it first opens, where they can be put off. Those are the only places with them: afterwards only the phone's own settings can change them.</td>
     <td valign="top"><b>Invite.</b> The QR button in the top bar shows a code anyone can scan with their phone camera to land straight in the lobby.</td>
   </tr>
 </table>
@@ -411,17 +411,26 @@ name, a small profile picture and a role; the host sets the rules and starts.
   ~40 m scatter shows as ~10 m, and stops jumping around), with good ones it
   follows straight away, so walking out of a building shows at once. Only
   the jitter averages out; a building can still shift the whole scatter.
-- **Permissions**: in the browser, **Before you play** asks for them on
-  entering a lobby (location and, on an iPhone, the compass are required;
-  notifications and keeping the screen on are optional). The
-  installed app asks for the same once, in a popup when it first opens, and
-  not in lobbies, plus an optional **Camera** switch: allowing it only means
-  scanning a join code doesn't ask first (it turns off and on like the other
-  optional ones). Both have the same switches on
-  **Settings** (the gear on the home page). Optional ones turn off again there: *Keep screen on*, and
-  notifications (the phone's subscription is dropped and the server told;
-  turning them back on doesn't ask again). The screen is kept on only during
-  a game.
+- **Permissions**: **Before you play** asks for them on entering a lobby,
+  and the lobby can't be entered without location and, on an iPhone, the
+  compass (notifications are optional). **Leave lobby** is the way out for
+  anyone who'd rather not allow them. The browser shows it on the way into
+  every lobby. The installed app offers the same switches on a permissions
+  page when it first opens, plus an optional **Camera** switch (allowing it
+  only means scanning a join code doesn't ask first); that page can be put
+  off with **Not now**, and the app opens without any of it. It then sees
+  **Before you play** at a lobby only if something a game needs is still
+  missing. These are the only places with the switches. A switch asks; it
+  can't take a permission back or undo a refusal, so once allowed it locks,
+  and a blocked one says where it can be allowed: the phone's own settings
+  (the native apps have an **Open settings** button that says what Manhunt
+  needs there and opens them). Tapping a switch that's on brings up a popup
+  saying it can only be turned off in those settings; in the native apps the
+  popup's **Open settings** goes straight there.
+- **Settings** (the gear on the home page) holds how the app looks and
+  behaves, not what it may use: **Text size**, **Reduce motion**, and, where a
+  page can do it, **Keep screen on** during a game (the native apps don't need
+  it: they carry on with the screen off).
 - **Notifications**: anyone who turns them on gets one
   when another player is found ("Maya was found · 1 hider left"), even with
   the phone locked. Players looking at the app already see it on screen, so

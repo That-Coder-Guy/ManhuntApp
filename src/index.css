@@ -1490,8 +1490,11 @@ ion-modal.permissions-dialog .permissions-dialog-intro {
   color: var(--text-2);
 }
 
-/* The permission switches: in the first-open popup and on the Settings page */
-ion-list.permission-list.list-inset.list-inset {
+/* The permission switches (the installed app's permissions page and "Before
+   you play"), and the Settings page's own rows, which sit on the page the
+   same way */
+ion-list.permission-list.list-inset.list-inset,
+ion-list.preference-list.list-inset.list-inset {
   --ion-item-background: transparent;
   margin-inline: 0;
   background: var(--ink-3);
@@ -1500,9 +1503,30 @@ ion-list.permission-list.list-inset.list-inset {
   overflow: hidden;
 }
 
-ion-list.permission-list ion-item {
+ion-list.permission-list ion-item,
+ion-list.preference-list ion-item {
   --padding-start: var(--space-4);
   --inner-padding-end: var(--space-4);
+  --min-height: var(--row-height);
+}
+
+/* A choice row's name reads like a switch row's */
+ion-list.preference-list ion-select::part(label) {
+  font-weight: 500;
+  color: var(--text-1);
+}
+
+/* Under the switches when one is blocked: where it can be changed */
+.permission-blocked {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.permission-blocked .settings-note {
+  margin: 0 var(--space-1);
 }
 
 /* Title, then its tag; the title column is as wide as the longest title,
@@ -1574,6 +1598,17 @@ ion-modal.permissions-dialog .permissions-dialog-body > ion-button {
   margin: var(--space-4) 0 0;
   font-size: var(--fs-body);
   font-weight: 500;
+}
+
+/* The way out under it ("Leave lobby"): plain, so the one accent stays on
+   the way forward */
+ion-modal.permissions-dialog .permissions-dialog-body > ion-button.permissions-dialog-secondary {
+  --background: transparent;
+  --background-hover: var(--ink-3);
+  --background-activated: var(--ink-4);
+  --color: var(--text-2);
+  margin-top: var(--space-2);
+  font-weight: 400;
 }
 
 ion-alert .alert-wrapper {
@@ -2334,10 +2369,10 @@ ion-action-sheet {
 }
 
 /* ===== MOTION PREFERENCE ===== */
-@media (prefers-reduced-motion: reduce) {
-  ion-segment.role-segment::before,
-  .proximity-bar-fill,
-  ion-content ion-button[expand="block"] {
-    transition: none;
-  }
+/* "Reduce motion" in Settings, which starts out as the phone's own setting
+   (utils/accessibility.js puts the class on the root element) */
+:root.reduce-motion ion-segment.role-segment::before,
+:root.reduce-motion .proximity-bar-fill,
+:root.reduce-motion ion-content ion-button[expand="block"] {
+  transition: none;
 }

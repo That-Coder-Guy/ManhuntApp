@@ -1,11 +1,14 @@
 // What the app may use on this phone, and asking for it.
 //
 // In the browser they're asked for on entering a lobby ("Before you play",
-// PermissionsGate). The installed app asks for them all in one popup the
-// first time it opens (PermissionsSetup) instead. Both have them on the
-// Settings page.
+// PermissionsGate), and a lobby can't be entered without the ones a game
+// needs. The installed app offers them all on one page the first time it
+// opens (PermissionsSetup), where they can be put off, and is asked again
+// at a lobby only if one a game needs is still missing. Those are the only
+// places: once answered, only the phone's own settings can change them. (Keep screen on isn't a permission:
+// it's on the Settings page.)
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { pushStatus, notificationsWanted, setNotificationsWanted, disablePush } from '../utils/push';
+import { pushStatus, notificationsWanted, setNotificationsWanted } from '../utils/push';
 import { isInstalled } from '../utils/install';
 import { permissionRequestRequired, readSavedPermission, savePermission } from './useCompassHeading';
 
@@ -117,10 +120,12 @@ export function useLocationPermission()
 
 /**
  * Notifications as 'prompt' | 'requesting' | 'granted' (on) | 'off' (allowed,
- * but turned off in the app) | 'denied' | 'unsupported' | 'install' (iPhone,
- * outside the Home Screen app). `toggle()` must be called from a tap: it asks
- * the first time, and after that turns them off and on again. Subscribing
- * happens when a lobby is joined (the server's key comes with it).
+ * but turned off in an older version of the app, which had a switch for it)
+ * | 'denied' | 'unsupported' | 'install' (iPhone, outside the Home Screen
+ * app). `toggle()` must be called from a tap: it asks the first time (and
+ * turns an old 'off' back on); once allowed it does nothing, as only the
+ * phone's settings can take that back. Subscribing happens when a lobby is
+ * joined (the server's key comes with it).
  */
 const notificationStatus = () =>
 {
@@ -134,19 +139,13 @@ export function useNotificationPermission()
 
     const toggle = async () =>
     {
-        if (status === 'granted')
-        {
-            setNotificationsWanted(false);
-            setStatus('off');
-            await disablePush();
-            return 'off';
-        }
         if (status === 'off')
         {
             setNotificationsWanted(true);
             setStatus('granted');
             return 'granted';
         }
+        // Allowed already, or refused: only the phone's settings can change either
         if (status !== 'prompt') return status;
         setStatus('requesting');
         try {
@@ -217,8 +216,8 @@ const cameraWanted = () => read(CAMERA_OFF_KEY) !== '1';
  * Camera as [status, toggle, known]: 'prompt' | 'requesting' | 'granted'
  * (on) | 'off' | 'denied' | 'unsupported'. Allowing it ahead of time is all
  * this does: the QR scanner then opens without the browser asking first. A
- * page can't give the camera back, so off is the app's own setting, and
- * turning it on again doesn't ask.
+ * page can't give the camera back, so once allowed the switch does nothing.
+ * ('off' is a choice made in an older version of the app; it turns back on.)
  */
 export function useCameraPermission()
 {
@@ -228,13 +227,13 @@ export function useCameraPermission()
 
     const toggle = async () =>
     {
-        if (status === 'granted' || status === 'off')
+        if (status === 'off')
         {
-            const on = status === 'off';
-            write(CAMERA_OFF_KEY, on ? '0' : '1');
-            setWanted(on);
+            write(CAMERA_OFF_KEY, '0');
+            setWanted(true);
             return;
         }
+        // Allowed already, or refused: only the phone's settings can change either
         if (status !== 'prompt') return;
         setPermission('requesting');
         try {
@@ -278,7 +277,7 @@ const setupListeners = new Set();
 const subscribeSetup = (listener) => { setupListeners.add(listener); return () => setupListeners.delete(listener); };
 const getSetupNeeded = () => typeof window !== 'undefined' && isInstalled() && read(SETUP_DONE_KEY) !== '1';
 
-/** True until the installed app's first-open permissions popup is done */
+/** True until the installed app's first-open permissions page is closed (allowed or put off) */
 export function useSetupNeeded()
 {
     return useSyncExternalStore(subscribeSetup, getSetupNeeded, () => false);

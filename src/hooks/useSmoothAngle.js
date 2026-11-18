@@ -1,15 +1,10 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { smoothDamp } from '../utils/orientation';
+import { getReduceMotion } from '../utils/accessibility';
 
 // How long a turn takes to settle, in seconds: long enough to feel like a
 // needle swinging, short enough to keep up while turning
 const SETTLE_TIME_S = 0.3;
-
-function prefersReducedMotion()
-{
-    return typeof window !== 'undefined'
-        && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
-}
 
 /**
  * Ease toward `angle` (degrees, wrapping): each frame a critically damped
@@ -66,7 +61,7 @@ function useSmoothAngle(angle, paint)
         m.lastRaw = raw;
         m.target += diff;
 
-        if (prefersReducedMotion()) {
+        if (getReduceMotion()) {
             m.current = m.target;
             m.velocity = 0;
             repaint();

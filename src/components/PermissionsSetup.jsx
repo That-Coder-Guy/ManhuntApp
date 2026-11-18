@@ -3,9 +3,12 @@ import PermissionsList from './PermissionsList';
 import { useRequiredPermissions, useSetupNeeded, finishSetup } from '../hooks/usePermissions';
 
 /**
- * The installed app's first-open popup: everything it may use, asked for in
- * one place. Location and (on iPhones) the compass are needed to finish.
- * Shown once; the same switches stay on the Settings page.
+ * The installed app's permissions page: everything it may use, offered in
+ * one place the first time the app opens. It can be put off: the app opens
+ * without any of it, and what a game needs (location, and on iPhones the
+ * compass) is insisted on where it's needed, on entering a lobby
+ * (PermissionsGate). An app that won't open until it's given access isn't
+ * allowed on the App Store, and has no reason to be here.
  */
 function PermissionsSetup()
 {
@@ -16,13 +19,15 @@ function PermissionsSetup()
         <IonModal isOpen={isOpen} backdropDismiss={false} cssClass="permissions-dialog" data-testid="setup-modal">
             <div className="permissions-dialog-body">
                 <h2>Set up Manhunt</h2>
-                <p className="permissions-dialog-intro">You can change these later in Settings.</p>
+                <p className="permissions-dialog-intro">
+                    Joining a game needs the required ones: allow them now, or when you join. To change any later, use your phone’s settings.
+                </p>
                 {/* Only the switches scroll: the title and button stay in view */}
                 <div className="permissions-dialog-scroll">
                     <PermissionsList location={location} compass={compass} showCamera />
                 </div>
-                <IonButton data-testid="setup-done" expand="block" disabled={!ready} onClick={finishSetup}>
-                    {ready ? 'Done' : 'Allow what’s needed'}
+                <IonButton data-testid="setup-done" expand="block" onClick={finishSetup}>
+                    {ready ? 'Done' : 'Not now'}
                 </IonButton>
             </div>
         </IonModal>

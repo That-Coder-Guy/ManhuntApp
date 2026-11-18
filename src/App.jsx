@@ -6,12 +6,17 @@ import Settings from './pages/Settings';
 import ErrorBoundary from './components/ErrorBoundary';
 import InstallOffer from './components/InstallOffer';
 import PermissionsSetup from './components/PermissionsSetup';
+import { getReduceMotion, onAccessibilityChange } from './utils/accessibility';
 
 // Ionic components only — routing stays on react-router v7 (Ionic's own router
 // binding requires react-router v5), so pages render without native transitions.
 // mode: 'ios' renders Apple-style components on every platform to match the
 // liquid-glass theme in index.css.
-setupIonicReact({ mode: 'ios' });
+// animated: Ionic's sheets and popups slide in unless "Reduce motion" is on
+// (Settings); set again whenever that changes.
+const setupIonic = () => setupIonicReact({ mode: 'ios', animated: !getReduceMotion() });
+setupIonic();
+onAccessibilityChange(setupIonic);
 
 function App() {
     return (

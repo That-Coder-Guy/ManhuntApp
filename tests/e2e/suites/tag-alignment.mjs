@@ -29,21 +29,15 @@ for (const width of [390, 375, 320]) {
   await page.screenshot({ path: `${SHOT}/tags-${width}.png` });
   await ctx.close();
 }
-// "Before you play" (browser) and the Settings page
+// "Before you play" (browser)
 const ctx = await makePlayer(browser, { latitude: 39.19, longitude: -96.58 });
 const page = await ctx.newPage();
 await page.goto(`${BASE}/lobby/${await createLobby('Tags')}`);
 await page.waitForSelector('[data-testid="gate-continue"]');
 await page.waitForTimeout(800);
-let t = await tags(page);
+const t = await tags(page);
 check(new Set(t.map((x) => x.tagX)).size === 1 && t.every((x) => !x.wrapped), '"Before you play": one line', t.map((x) => `${x.title}@${x.tagX}`).join(' | '));
 await page.screenshot({ path: `${SHOT}/tags-gate.png` });
-await page.goto(`${BASE}/settings`);
-await page.waitForSelector('[data-testid="settings-page"]');
-await page.waitForTimeout(800);
-t = await tags(page);
-check(new Set(t.map((x) => x.tagX)).size === 1 && t.every((x) => !x.wrapped), 'Settings: one line', t.map((x) => `${x.title}@${x.tagX}`).join(' | '));
-await page.screenshot({ path: `${SHOT}/tags-settings.png` });
 await browser.close();
 console.log(failures ? `${failures} FAILED` : 'ALL PASSED');
 process.exit(failures ? 1 : 0);

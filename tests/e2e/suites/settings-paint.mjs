@@ -1,4 +1,5 @@
-// Settings opens with every switch already in its real state: no jump
+// The installed app's permissions page opens with every switch already in
+// its real state: no jump. (It was Settings that showed these switches.)
 import { BASE } from '../lib/helpers.mjs';
 import { chromium } from '../lib/playwright.mjs';
 let failures = 0;
@@ -31,15 +32,17 @@ const jumps = (frames) => {
 const browser = await chromium.launch({ args: ['--use-fake-device-for-media-stream'] });
 const ctx = await browser.newContext({ permissions: ['geolocation', 'camera'], geolocation: { latitude: 39.19, longitude: -96.58 } });
 await ctx.addInitScript(recorder);
+// The installed app: its permissions page is up until Done is tapped
+await ctx.addInitScript(() => Object.defineProperty(navigator, 'standalone', { get: () => true }));
 const page = await ctx.newPage();
 for (const label of ['first visit', 'a later visit']) {
   // The first visit has nothing remembered; the later one reloads with it
-  if (label === 'first visit') await page.goto(`${BASE}/settings`); else await page.reload();
+  if (label === 'first visit') await page.goto(BASE); else await page.reload();
   await page.waitForSelector('[data-testid="toggle-location"]');
   await page.waitForTimeout(1500);
   const frames = await page.evaluate(() => window.__frames);
   const final = frames.at(-1);
-  check(final?.['toggle-location'] === 'on/locked' && final?.['toggle-camera'] === 'on', `${label}: location on (locked), camera on (switchable)`, JSON.stringify(final));
+  check(final?.['toggle-location'] === 'on/locked' && final?.['toggle-camera'] === 'on/locked', `${label}: location and camera on, and locked (already allowed)`, JSON.stringify(final));
   const j = jumps(frames);
   check(j.length === 0, `${label}: no switch changes after it appears (${frames.length} frames)`, j.join('; '));
 }

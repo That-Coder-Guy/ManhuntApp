@@ -27,7 +27,10 @@ import App from './App.jsx'
 import { initAppUpdates } from './utils/appUpdate.js'
 import { initInstallOffer } from './utils/install.js'
 import { initNoShakeUndo } from './utils/noShakeUndo.js'
+import { initAccessibility } from './utils/accessibility.js'
 
+// Text size and motion, as chosen in Settings, before anything is drawn
+initAccessibility()
 // Offline support, and looking for new versions of the app
 initAppUpdates()
 // On a first visit, offer to add the app to the Home Screen
