@@ -5,6 +5,9 @@
  *
  *   node android/install.mjs               build Manhunt.apk and install it
  *   node android/install.mjs --build-only  just build android/Manhunt.apk
+ *   node android/install.mjs --server <address>
+ *                                          the same, showing a different server from
+ *                                          the one built in (for trying a test server)
  *
  * The APK can also be sent to a phone and opened there: nothing about it is
  * tied to one phone, and it doesn't expire.
@@ -23,7 +26,7 @@ const buildOnly = process.argv.includes('--build-only');
 
 if (process.argv.includes('--help') || process.argv.includes('-h'))
 {
-    console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(2, 12).map((line) => line.replace(/^ \* ?/, '')).join('\n'));
+    console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(2, 15).map((line) => line.replace(/^ \* ?/, '')).join('\n'));
     process.exit(0);
 }
 
@@ -31,6 +34,15 @@ function fail(message)
 {
     console.error(`\n${message}`);
     process.exit(1);
+}
+
+// The app shows the game's own server (app/build.gradle.kts) unless told otherwise
+const serverFlag = process.argv.indexOf('--server');
+const server = serverFlag === -1 ? null : process.argv[serverFlag + 1];
+// (it goes on a command line: nothing but an address gets through)
+if (serverFlag !== -1 && !/^(https:\/\/)?[a-z0-9.-]+(:\d+)?\/?$/i.test(server ?? ''))
+{
+    fail('--server needs an https address, like name.example.com');
 }
 
 // ---- The Android SDK ----
@@ -64,7 +76,8 @@ writeFileSync(LOCAL_PROPERTIES, `sdk.dir=${sdk.replaceAll('\\', '/').replace(':'
 
 console.log('Building the app...');
 // A .bat file only runs through the shell on Windows, as one command line with its path spelled out
-const GRADLE_TASK = ['assembleDebug', '--console=plain', '--quiet'];
+const GRADLE_TASK = ['assembleDebug', '--console=plain', '--quiet', ...(server ? [`-Pserver=${server}`] : [])];
+if (server) console.log(`Built to show this server instead of the game's own: ${server}`);
 const gradle = WINDOWS
     ? spawnSync(`"${join(HERE, 'gradlew.bat')}" ${GRADLE_TASK.join(' ')}`, { cwd: HERE, stdio: 'inherit', shell: true })
     : spawnSync('./gradlew', GRADLE_TASK, { cwd: HERE, stdio: 'inherit' });

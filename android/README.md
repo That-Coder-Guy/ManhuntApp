@@ -19,7 +19,7 @@ What the app adds is what a web page can't do: it **keeps running with the phone
 | Sharing an invite | Opens Android's share sheet (web views have no share) |
 | Notifications | Android's own, made by the app when someone is found. Web push isn't used, and neither is the "Still playing?" reminder: there is no dropping out to remind about |
 | Offline, updates | As in the web app: it keeps a copy of itself on the phone and updates itself |
-| Server gone | The app checks the server each time it opens and says so, with **Change server**, instead of sitting on "reconnecting" |
+| Server down | The app checks the server each time it opens and says so, with **Try again**, instead of sitting on "reconnecting" |
 
 ## One-time setup
 
@@ -54,9 +54,13 @@ Updates install over the old copy as long as they are built on the same computer
 
 ## The server address
 
-The app asks for the address once and remembers it. A quick tunnel's address changes when the tunnel restarts; when the old one stops answering, the app says so and offers **Change server**. To change it at any other time, long-press the app's icon and choose **Change server**.
+The address is built in: `https://manhunt.fly.dev`, in `app/build.gradle.kts`. The game is hosted at one address that doesn't change, so the app never asks for it and has no screen for changing it. If the server doesn't answer, the app says so and offers **Try again**.
 
-The address must be `https`, and the app checks that a Manhunt server answers there before using it.
+To host the game somewhere else, change the address in that file (and in the iPhone app's `Sources/Manhunt/Server.swift`). It must be `https`. To try the app against a test server without changing the file:
+
+```bash
+node android/install.mjs --server name.example.com
+```
 
 ## Staying in the lobby, and notifications
 
@@ -97,7 +101,7 @@ runs the bridge script against a stand-in page, as the Android app would run it 
 
 The app itself was checked by hand in an emulator (Android 16) against a local server:
 
-- the server screen and its errors, the permission prompts, a lobby with a simulated GPS fix, the share sheet, the QR scanner's viewfinder, the back button, the server-gone screen and retry, and opening with the phone offline;
+- the permission prompts, a lobby with a simulated GPS fix, the share sheet, the QR scanner's viewfinder, the back button, the server-down screen and retry, and opening with the phone offline (these were with the version that asked for the server's address; since it was built in, checked again: a fresh install and an upgrade both open straight to the game, and the server-down screen's **Try again** loads it once the server is back);
 - **locked in a lobby** for two and a half minutes, then **locked during a game** for another two and a half, with a scripted second player: the server kept showing the player connected, with a position never more than 2 seconds old, and a position changed while locked was the one the server used;
 - a "found" while locked arrived as a notification and opened the game when tapped; the ongoing notification followed the game starting and ending; leaving the lobby stopped the service;
 - **a blocked permission**: with location refused twice, the permissions page showed "Blocked" and **Open settings**; the app's dialog listed what's needed and opened Android's Settings for Manhunt; with location allowed there, the page let the player in on return. The Settings page showed only Text size and Reduce motion.

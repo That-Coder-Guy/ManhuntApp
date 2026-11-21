@@ -24,7 +24,7 @@ Asked for by the owner on 2026-11-17, with no server or web app changes.
 ## How it differs from the iOS app
 - **Location, compass and camera are the web view's own.** The app only answers Android's permission prompts; there is no location bridge as on iOS. Keeping location going in the background takes `GameWebView`'s "still on screen" trick.
 - **The service worker runs**, so offline and [[App updates and version]] work as in the web app.
-- Because of that offline copy, a dead server address would still open the app. So the app asks the server directly each time it loads, and shows **Can't reach the server** with **Change server** if it's gone (but not when the phone is simply offline).
+- Because of that offline copy, the app would still open with the server down. So the app asks the server directly each time it loads, and shows **Can't reach the server** with **Try again** if it doesn't answer (but not when the phone is simply offline).
 - No 7-day expiry, no Apple ID.
 
 ## Setup facts worth keeping
@@ -34,7 +34,8 @@ Asked for by the owner on 2026-11-17, with no server or web app changes.
 - `scripts/tunnel.cjs` (`npm run tunnel`) doesn't start on Windows (`spawn npm ENOENT`). For testing, the server and `cloudflared` were started by hand.
 
 ## Checked so far
-- In the emulator, against a local server: server screen and errors, permission prompts, a lobby with a simulated fix, share sheet, QR viewfinder, back button, server-gone screen and retry, opening offline (2026-11-17).
+- In the emulator, against a local server: server screen and errors (since removed), permission prompts, a lobby with a simulated fix, share sheet, QR viewfinder, back button, server-gone screen and retry, opening offline (2026-11-17).
+- With the address built in (2026-11-21), in the emulator against the live server: an upgrade over a copy that had an old tunnel address saved opened `manhunt.fly.dev` and dropped the saved one; a fresh install opened straight to the game; with the server down it showed **Can't reach the server** with only **Try again**, which loaded the game once the server was back; Back left the app.
 - Background, with a scripted second player: locked 2.5 min in a lobby and 2.5 min in a game, the server showed the player connected with a position at most 2 s old; a "found" while locked became a notification that opened the game; leaving stopped the service (2026-11-17).
 - Blocked location: the permissions page's **Open settings**, the app's dialog, Android's Settings, and back in once allowed (2026-11-17).
 - `node --test android/tests/bridge.test.mjs` covers the bridge script.

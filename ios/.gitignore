@@ -5,4 +5,4 @@
 .swiftpm/
 
 # Written by build.sh --server
-/Sources/Manhunt/Resources/default-server.txt
+/Sources/Manhunt/Resources/server-override.txt

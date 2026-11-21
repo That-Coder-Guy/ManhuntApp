@@ -2,7 +2,7 @@ import AVFoundation
 import UIKit
 import WebKit
 
-/// The web view showing the web app from one server, and the app's side of
+/// The web view showing the web app from the game server, and the app's side of
 /// the bridge its page talks to (Resources/bridge.js).
 @MainActor
 final class GameWebModel: NSObject, ObservableObject {
@@ -268,8 +268,8 @@ extension GameWebModel: WKNavigationDelegate {
         decidePolicyFor navigationResponse: WKNavigationResponse,
         decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void
     ) {
-        // A tunnel whose server is down answers with its own error page:
-        // say so natively, with a way to change the address
+        // A host whose server is down answers with its own error page: say
+        // so natively, with a way to try again
         if navigationResponse.isForMainFrame,
            let status = (navigationResponse.response as? HTTPURLResponse)?.statusCode, status >= 400 {
             resetPageState()

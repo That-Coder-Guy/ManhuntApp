@@ -4,8 +4,8 @@
 # Run it in Linux, or in WSL on Windows (ios\install.cmd does that for you).
 #
 #   ios/build.sh                      build, sign and install
-#   ios/build.sh --server <address>   the same, with the game server's address
-#                                     built in, so the app doesn't ask for it
+#   ios/build.sh --server <address>   the same, showing a different server from
+#                                     the one built in (for trying a test server)
 #   ios/build.sh --build-only         just build (no phone or Apple ID needed)
 #   ios/build.sh --devices            list the phones xtool can see
 #
@@ -94,12 +94,14 @@ case "$HERE" in
         ;;
 esac
 
-DEFAULT_SERVER="$BUILD/Sources/Manhunt/Resources/default-server.txt"
+# The app shows the game's own server (Sources/Manhunt/Server.swift) unless
+# told otherwise here
+SERVER_OVERRIDE="$BUILD/Sources/Manhunt/Resources/server-override.txt"
 if [ -n "$SERVER" ]; then
-    printf '%s\n' "$SERVER" > "$DEFAULT_SERVER"
-    echo "Server address built in: $SERVER"
+    printf '%s\n' "$SERVER" > "$SERVER_OVERRIDE"
+    echo "Built to show this server instead of the game's own: $SERVER"
 else
-    rm -f "$DEFAULT_SERVER"
+    rm -f "$SERVER_OVERRIDE"
 fi
 
 cd "$BUILD"

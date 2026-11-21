@@ -32,7 +32,7 @@ Asked for by the owner on 2026-11-17, with no server or web app changes.
 A free Apple ID signs the app for 7 days. Renew by plugging the phone in and running `ios\install.cmd`; settings on the phone are kept.
 
 ## The server address
-Typed in on first launch and remembered. When the quick tunnel's address changes ([[Deployment]]), the app says it can't reach the server and offers **Change server**; a long press on the app icon offers it too.
+Built in since 2026-11-21: `https://manhunt.fly.dev`, in `Sources/Manhunt/Server.swift` (Android: `app/build.gradle.kts`). The owner asked for the address screen to go once the game had a fixed address ([[Deployment]]). Gone with it: the first-launch screen, **Change server** on the "can't reach the server" screen (it has only **Try again** now) and on the app icon's menu. On an upgrade the app clears the old icon-menu item and the saved address, which iOS would otherwise keep. `build.sh --server` (Android: `install.mjs --server`) still builds a different address in, for trying a test server.
 
 ## Setup facts worth keeping
 - xtool 1.24.0, Swift 6.4.2 and usbmuxd live in WSL (Ubuntu). The iOS SDK came from `Xcode_27.1.xip`; give xtool the WSL path (`/mnt/c/…`), not the Windows one.
@@ -42,4 +42,4 @@ Typed in on first launch and remembered. When the quick tunnel's address changes
 ## Checked so far
 - The first version (no background running) was installed on the owner's iPhone and connected to the Pi's server (2026-11-17).
 - The background version builds with no warnings. Its bridge script was run against the real web app in a desktop browser set up like the app's web view, and `node --test ios/tests/bridge.test.mjs` covers it.
-- **Not yet tried on the phone:** staying connected and sending positions while locked, the notifications, the "Allow it in Settings" alert, and whether iOS keeps the page awake for a long game. Also still unconfirmed: the compass, the QR scanner, and the app-icon **Change server** action.
+- **Not yet tried on the phone:** staying connected and sending positions while locked, the notifications, the "Allow it in Settings" alert, and whether iOS keeps the page awake for a long game. Also still unconfirmed: the compass and the QR scanner. The version with the address built in (2026-11-21) builds, but hasn't been installed on the phone.

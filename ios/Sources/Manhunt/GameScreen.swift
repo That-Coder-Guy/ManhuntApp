@@ -4,7 +4,6 @@ import WebKit
 /// The web app, full screen, with a native screen over it while it loads or
 /// when the server can't be reached.
 struct GameScreen: View {
-    @EnvironmentObject private var server: ServerStore
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var model: GameWebModel
 
@@ -31,8 +30,7 @@ struct GameScreen: View {
                 ConnectionProblem(
                     host: model.serverURL.host ?? "",
                     reason: reason,
-                    retry: { model.load() },
-                    changeServer: { server.isChoosing = true }
+                    retry: { model.load() }
                 )
             }
         }
@@ -70,7 +68,6 @@ private struct ConnectionProblem: View {
     let host: String
     let reason: String
     let retry: () -> Void
-    let changeServer: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
@@ -89,23 +86,13 @@ private struct ConnectionProblem: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            VStack(spacing: 12) {
-                Button(action: retry) {
-                    Text("Try again")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(Theme.onAccent)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 52)
-                        .background(Theme.accent, in: RoundedRectangle(cornerRadius: 12))
-                }
-                Button(action: changeServer) {
-                    Text("Change server")
-                        .font(.system(size: 17))
-                        .foregroundStyle(Theme.text)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 52)
-                        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 12))
-                }
+            Button(action: retry) {
+                Text("Try again")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(Theme.onAccent)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(Theme.accent, in: RoundedRectangle(cornerRadius: 12))
             }
         }
         .padding(.horizontal, 20)

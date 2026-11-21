@@ -67,7 +67,7 @@ or inside WSL / Linux:
 ios/build.sh
 ```
 
-Add `--server your-address.trycloudflare.com` to build the game server's address in; otherwise the app asks for it the first time it opens.
+The app shows the game's own server, whose address is built in (below). `--server name.example.com` builds a different one in, for trying the app against a test server.
 
 The first time, the phone needs two things, and xtool stops to say so:
 
@@ -78,9 +78,9 @@ Then run the command again. A free Apple ID allows three sideloaded apps on a ph
 
 ## The server address
 
-The app asks for the address once and remembers it. A quick tunnel's address changes when the tunnel restarts; when the old one stops answering, the app says so and offers **Change server**. To change it at any other time, long-press the app's icon and choose **Change server**.
+The address is built in: `https://manhunt.fly.dev`, in `Sources/Manhunt/Server.swift`. The game is hosted at one address that doesn't change, so the app never asks for it and has no screen for changing it. If the server doesn't answer, the app says so and offers **Try again**.
 
-The address must be `https` (the camera and compass need it), and the app checks that a Manhunt server answers there before using it.
+To host the game somewhere else, change the address in that file (and in the Android app's `app/build.gradle.kts`). It must be `https`: the camera and compass need it.
 
 ## How it fits together
 

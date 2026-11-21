@@ -24,15 +24,4 @@
         <item name="android:textColor">@color/on_accent</item>
         <item name="android:fontFamily">sans-serif-medium</item>
     </style>
-
-    <style name="Manhunt.Button.Secondary">
-        <item name="android:background">@drawable/button_secondary</item>
-        <item name="android:textColor">@color/text_primary</item>
-    </style>
-
-    <style name="Manhunt.Button.Plain">
-        <item name="android:layout_height">44dp</item>
-        <item name="android:background">?android:attr/selectableItemBackground</item>
-        <item name="android:textColor">@color/text_secondary</item>
-    </style>
 </resources>
