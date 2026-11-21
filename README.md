@@ -243,7 +243,8 @@ check [its pricing](https://fly.io/pricing)).
 
 ### What you need
 
-- A Fly.io account, with a payment card on it.
+- A Fly.io account, with a payment card on it. Without one the account is a
+  trial, and a trial's machines are stopped after five minutes.
 - The Fly.io CLI ([install](https://fly.io/docs/flyctl/install/)). On Windows:
 
   ```powershell
