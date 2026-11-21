@@ -5,7 +5,7 @@
 
 # The name is the address, and must be one nobody else on Fly.io has taken:
 # `npm run deploy:fly -- --app your-name` sets it here the first time
-app = "manhunt-choose-a-name"
+app = "manhunt"
 
 # Where the machine runs. Pick the one nearest the players (dfw is Dallas,
 # ord is Chicago; https://fly.io/docs/reference/regions/ lists them all)
