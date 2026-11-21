@@ -1,0 +1,20 @@
+# Everything the image doesn't copy stays out of the build upload. The
+# Dockerfile takes: package*.json, index.html, vite.config.js, public/,
+# shared/, src/ and server/.
+.git
+.claude
+node_modules
+server/node_modules
+dist
+android
+ios
+docs
+tests
+scripts
+deploy
+
+# Secrets and local settings never go into an image
+.env
+.env.*
+*.local
+server/.vapid-keys.json

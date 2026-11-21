@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const cors = require('cors');
+const compression = require('compression');
 const { Server } = require('socket.io');
 const { v4: uuidv4 } = require('uuid');
 
@@ -691,6 +692,9 @@ function createGameServer(options = {})
     const distDir = options.distDir === undefined ? path.join(__dirname, '..', 'dist') : options.distDir;
     if (distDir && fs.existsSync(distDir))
     {
+        // Compressed on the way out (the app's script is a quarter the size):
+        // a phone fetches the whole app once per update, often on mobile data
+        app.use(compression());
         app.use(express.static(distDir));
         app.get(/^\/(?!manhunt-api).*/, (req, res) => res.sendFile(path.join(distDir, 'index.html')));
     }

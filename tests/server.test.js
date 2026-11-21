@@ -1,6 +1,9 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { io as connect } from 'socket.io-client';
 
 const require = createRequire(import.meta.url);
@@ -551,6 +554,29 @@ test('the health check reports which update the server runs', { skip }, async ()
     assert.equal(health.status, 'success');
     assert.match(health.version.commit, /^[0-9a-f]{7,}$/);
     assert.ok(Number.isInteger(health.version.build) && health.version.build > 0);
+});
+
+test('the built app is served compressed, and unknown paths get the app', { skip }, async () => {
+    const distDir = mkdtempSync(path.join(tmpdir(), 'manhunt-dist-'));
+    writeFileSync(path.join(distDir, 'index.html'), '<!doctype html><title>Manhunt</title>');
+    const script = 'const padding = "manhunt";\n'.repeat(4000);
+    writeFileSync(path.join(distDir, 'app.js'), script);
+    const served = createGameServer({ distDir, push: fakePush });
+    await new Promise((resolve) => served.server.listen(0, '127.0.0.1', resolve));
+    const origin = `http://127.0.0.1:${served.server.address().port}`;
+    try {
+        const zipped = await fetch(`${origin}/app.js`, { headers: { 'Accept-Encoding': 'gzip' } });
+        assert.equal(zipped.headers.get('content-encoding'), 'gzip');
+        assert.equal(await zipped.text(), script, 'and arrives whole');
+        const plain = await fetch(`${origin}/app.js`, { headers: { 'Accept-Encoding': 'identity' } });
+        assert.equal(plain.headers.get('content-encoding'), null, 'only for a browser that asks');
+        await plain.arrayBuffer();
+        assert.match(await (await fetch(`${origin}/lobby/abc`)).text(), /<title>Manhunt<\/title>/);
+        assert.equal((await (await fetch(`${origin}/manhunt-api/health`)).json()).status, 'success');
+    } finally {
+        await served.close();
+        rmSync(distDir, { recursive: true, force: true });
+    }
 });
 
 test('players can subscribe to push, but only through real push services', { skip }, async () => {

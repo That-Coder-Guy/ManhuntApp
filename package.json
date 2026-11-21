@@ -10,6 +10,7 @@
     "build:selfhost": "VITE_API_ORIGIN= vite build",
     "serve": "node server/server.js",
     "tunnel": "node scripts/tunnel.cjs",
+    "deploy:fly": "node scripts/deploy-fly.mjs",
     "screenshots": "node scripts/capture-walkthrough.mjs",
     "icons": "node scripts/make-icons.mjs",
     "lint": "eslint .",

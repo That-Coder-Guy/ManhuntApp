@@ -21,6 +21,16 @@ systemctl status manhunt manhunt-tunnel
 journalctl -u manhunt -f
 ```
 
+## Fly.io (cloud), as an alternative to the Pi
+Added 2026-11-21, after the Pi's quick tunnel stalled on large files and then dropped (the landing page wouldn't load, and the old address went dead). `npm run deploy:fly -- --app <name>` (first time) or `npm run deploy:fly` (updates) puts the same single-origin app on one always-on Fly.io machine at `https://<name>.fly.dev`, an address that never changes. The pieces: `Dockerfile`, `.dockerignore`, `fly.toml`, `scripts/deploy-fly.mjs`. The README has the guide.
+
+- **Not deployed yet when this was written.** The owner chose Fly.io (about $2 a month, no free plan) and has to create the account and run the script. Until then the Pi is still the server. The image build and the deploy itself are untested: only a rehearsal of the Dockerfile's steps outside the repo, and the script against a stand-in `fly`.
+- **One machine, always on.** Lobbies are in memory: `--ha=false` on deploy (Fly makes two by default) and `auto_stop_machines = "off"`.
+- **Version without git.** The image has no checkout, so the script passes `MANHUNT_BUILD` / `MANHUNT_COMMIT` / `MANHUNT_COMMIT_DATE` as build arguments; `shared/version.js` falls back to them when git can't be read.
+- **Push keys are Fly secrets** (`VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`), made once by the script. A new address means phones subscribe again anyway, so the Pi's keys aren't carried over.
+- **Compression.** The server now compresses what it serves from `dist/` (the `compression` package): the 1.76 MB script goes out at about 430 KB. Behind Cloudflare the edge did this for phones, but the Pi still uploaded the full size; Fly's proxy isn't documented as compressing at all.
+- **The native apps** take the new address once (their server-address screen).
+
 ## The address
 It's a **quick tunnel** (`*.trycloudflare.com`): free, no domain, but a new address whenever the tunnel restarts (reboot, power cut, a changed port). Re-running the script with nothing changed keeps it. `--hostname manhunt.example.com` switches to a fixed address on your own Cloudflare domain. See [[Decisions]] for why it isn't on Vercel or workers.dev.
 

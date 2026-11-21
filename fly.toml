@@ -1,0 +1,41 @@
+# Fly.io: the whole app (frontend and game server) on one small machine that
+# is always on, at https://<app>.fly.dev. Deploy with `npm run deploy:fly`
+# (scripts/deploy-fly.mjs), not `fly deploy` alone: the script also passes the
+# version in and keeps it to one machine. The README has the guide.
+
+# The name is the address, and must be one nobody else on Fly.io has taken:
+# `npm run deploy:fly -- --app your-name` sets it here the first time
+app = "manhunt-choose-a-name"
+
+# Where the machine runs. Pick the one nearest the players (dfw is Dallas,
+# ord is Chicago; https://fly.io/docs/reference/regions/ lists them all)
+primary_region = "dfw"
+
+[env]
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Games live in this machine's memory: it must never be stopped for being
+  # idle, so nothing needs to start it again either
+  auto_stop_machines = "off"
+  auto_start_machines = false
+
+  # One connection per player (their socket), plus page loads. There is only
+  # this machine, so the limit is a note of what it expects, not a balancer
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 250
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/manhunt-api/health"
+
+# The smallest machine: the server only holds a few lobbies in memory
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

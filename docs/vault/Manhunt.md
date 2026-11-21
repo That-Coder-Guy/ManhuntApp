@@ -14,7 +14,7 @@ Repository: `That-Coder-Guy/ManhuntApp` on GitHub. Work goes straight to `main`.
 
 ## The project
 - [[Architecture]]: the pieces and how they talk
-- [[Deployment]]: the Pi, the tunnel, updating
+- [[Deployment]]: the Pi, the tunnel, Fly.io, updating
 - [[iOS app]]: the native iPhone shell, sideloaded with xtool
 - [[Android app]]: the native Android shell, built to an APK
 - [[Testing]]: unit tests, browser tests, audits

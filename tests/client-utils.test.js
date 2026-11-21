@@ -156,6 +156,20 @@ test('settings summary describes what hiders see', () => {
     assert.equal(describeSettings({ seeker_info: 'none' }).seekerInfo, 'Seekers hidden');
 });
 
+test('the version comes from git, or from the build where there is no checkout', async () => {
+    const { readVersion } = await import('../shared/version.js');
+    const { tmpdir } = await import('node:os');
+    const { fileURLToPath } = await import('node:url');
+    const here = readVersion(fileURLToPath(new URL('..', import.meta.url)), {});
+    assert.match(here.commit, /^[0-9a-f]{7}$/, 'this repository: read from git, whatever the environment says');
+
+    const passedIn = { MANHUNT_BUILD: '412', MANHUNT_COMMIT: '63269ad', MANHUNT_COMMIT_DATE: '2026-11-18T02:40:00-06:00' };
+    assert.deepEqual(readVersion(tmpdir(), passedIn), { build: 412, commit: '63269ad', date: '2026-11-18T02:40:00-06:00' });
+    assert.deepEqual(readVersion(tmpdir(), {}), { build: null, commit: 'unknown', date: null });
+    assert.equal(readVersion(tmpdir(), { MANHUNT_BUILD: '', MANHUNT_COMMIT: '' }).commit, 'unknown', 'empty build arguments count as none');
+    assert.equal(readVersion(tmpdir(), { MANHUNT_BUILD: '412', MANHUNT_COMMIT: 'not a commit' }).commit, 'unknown');
+});
+
 test('version line and mismatch check', async () => {
     const { formatVersion, isDifferentVersion } = await import('../src/utils/version.js');
     const v = { build: 60, commit: 'cb64839', date: '2026-11-17T10:00:00-06:00' };

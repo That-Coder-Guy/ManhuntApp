@@ -202,6 +202,8 @@ Notes:
   headers for `/manhunt-api/socket.io`. If it can't, Socket.IO automatically
   falls back to HTTP long-polling.
 - Lobby state is in-memory only: restarting the server ends all live games.
+- The server compresses the app as it serves it (the main script goes out at
+  about a quarter of its size), so nothing in front of it has to.
 
 ## Play over the internet (Cloudflare Tunnel)
 
@@ -224,9 +226,81 @@ everyone else in. The URL changes every run and needs no Cloudflare account.
 To keep the server running on an always-on machine such as a Raspberry Pi,
 with the same kind of trycloudflare.com address or your own domain, use
 `scripts/setup-server.sh` ([below](#set-up-the-server-with-cloudflare-raspberry-pi-or-any-linux-box)).
+For a fixed address with no machine of your own, see
+[Host it in the cloud](#host-it-in-the-cloud-flyio).
 
 Prerequisite: the `cloudflared` CLI
 ([downloads](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)).
+
+## Host it in the cloud (Fly.io)
+
+For an address that never changes, and no machine of your own to keep
+running, `npm run deploy:fly` puts the whole app (frontend, API and
+websocket) on [Fly.io](https://fly.io): one small machine that is always on,
+at `https://your-name.fly.dev`. Fly.io charges for the machine (a couple of
+dollars a month for this size when this was written; it has no free plan, so
+check [its pricing](https://fly.io/pricing)).
+
+### What you need
+
+- A Fly.io account, with a payment card on it.
+- The Fly.io CLI ([install](https://fly.io/docs/flyctl/install/)). On Windows:
+
+  ```powershell
+  pwsh -Command "iwr https://fly.io/install.ps1 -useb | iex"
+  ```
+
+- This repository, with the server's packages installed (the script uses one
+  of them to make the push keys): `npm --prefix server ci`.
+
+### Run it
+
+```bash
+fly auth signup                          # or: fly auth login
+npm run deploy:fly -- --app your-name    # your-name becomes the address
+```
+
+The name must be one nobody else on Fly.io has taken. The script
+(`scripts/deploy-fly.mjs`):
+
+1. creates the app on your account and writes its name into `fly.toml`
+   (commit that change, so later deploys know it);
+2. makes the key pair that signs push notifications and stores it as Fly.io
+   secrets, once. They have to outlive every deploy, and the machine's own
+   disk doesn't;
+3. builds the image from the `Dockerfile` on Fly.io's builders (no Docker
+   needed here) and deploys it as a **single** machine. Games live in the
+   server's memory, so two machines would be two separate servers;
+4. prints the address. Enter it once in the iPhone and Android apps.
+
+`fly.toml` holds the rest: the region (`primary_region`, Dallas by default;
+pick the one nearest your players), the machine's size, and that it is never
+stopped for being idle.
+
+### Update
+
+```bash
+git pull && npm run deploy:fly
+```
+
+Deploying restarts the server, which ends games in progress, so do it
+between rounds. The version at the foot of the landing page tells you it
+went through; the image has no git checkout, so the script reads the version
+and passes it in.
+
+### Check on it, or remove it
+
+```bash
+fly status                 # the machine should be "started"
+fly logs                   # what the server says
+fly apps destroy your-name # remove it (and stop being charged)
+```
+
+The `Dockerfile` isn't tied to Fly.io: any host that runs a container and
+forwards WebSockets can use it. The server listens on `$PORT`; pass the
+build arguments `MANHUNT_BUILD`, `MANHUNT_COMMIT` and `MANHUNT_COMMIT_DATE`
+to give it a version, and set `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` so
+the push keys survive restarts.
 
 ## Set up the server with Cloudflare (Raspberry Pi or any Linux box)
 
