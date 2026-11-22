@@ -1,5 +1,5 @@
 // The seeker's map turns with the phone, like the compass dial
-import { BASE, SHOT, createLobby, join, startGame, makePlayer, passGate, hostKeyFor } from '../lib/helpers.mjs';
+import { BASE, SHOT, createLobby, join, startGame, exactPositions, makePlayer, passGate, hostKeyFor } from '../lib/helpers.mjs';
 import { chromium } from '../lib/playwright.mjs';
 const browser = await chromium.launch();
 let failures = 0;
@@ -27,6 +27,7 @@ await page.goto(`${BASE}/lobby/${id}`);
 await passGate(page);
 await page.locator('[data-testid="role-seeker"]').click();
 const hider = await join(browser, id, EAST, { name: 'Eastwood' });
+await exactPositions(page); // where the pin sits is what this checks
 await startGame(page, hider.page);
 await page.waitForSelector('[data-testid="target-card"]');
 await page.waitForTimeout(1200);

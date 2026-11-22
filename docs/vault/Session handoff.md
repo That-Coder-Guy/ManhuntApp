@@ -7,7 +7,7 @@ A long cloud session (Claude Code on the web) built most of the recent history i
 
 ## Where things stand
 - `main` is at **Version 83** (`8abb790`), everything committed and pushed. This vault was added after it.
-- All 78 unit tests and all 13 browser suites pass; the audits show only known notes ([[Testing]]).
+- All 108 unit tests and all 17 browser suites pass (2026-11-21; track-map's "Fit settles back" timing check still fails now and then in a full run and passes alone); the audits show only known notes ([[Testing]]).
 - Nothing is half-done. The temporary test-notification button was added (Version 74) and removed again (Version 79).
 - The Pi needs updating to get the latest: see [[Deployment]].
 

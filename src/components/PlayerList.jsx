@@ -3,7 +3,7 @@ import {
     IonItem, IonLabel, IonNote
 } from '@ionic/react';
 import Avatar from './Avatar';
-import { formatDistance } from '../utils/geo';
+import { formatDistance, formatHiderDistance } from '../utils/geo';
 import { playerFreshness, playerName } from '../utils/players';
 
 /**
@@ -35,7 +35,11 @@ export function PlayerListCard({ title, count, emptyText, testIds, children })
  */
 export function PlayerRow({ player, avatar, distance, now, onClick, testIds })
 {
-    const { fresh, offline, label } = playerFreshness(player, now);
+    const { fresh, offline, jammed, label } = playerFreshness(player, now);
+    // One warning leads the line: jammed (the position is an old one) before out of bounds
+    const outside = player.out_of_bounds && !jammed;
+    // A slow or still hider is only placed to within this many metres
+    const vague = player.uncertainty_m > 0;
 
     return (
         <IonItem
@@ -50,15 +54,18 @@ export function PlayerRow({ player, avatar, distance, now, onClick, testIds })
             <IonLabel>
                 <h2 data-testid={testIds.name}>{playerName(player)}</h2>
                 <p className="player-freshness">
-                    {/* Out of bounds leads the line, so it is never the part cut off */}
-                    {player.out_of_bounds && <span className="meta-warning" data-testid="row-out-of-bounds">Outside ·</span>}
-                    {player.out_of_bounds && ' '}
-                    {/* "Outside · 8s ago": the shorter form keeps the time from being cut off */}
-                    {player.out_of_bounds ? label.replace('updated ', '') : label}
+                    {/* The warning leads the line, so it is never the part cut off */}
+                    {jammed && <span className="meta-warning" data-testid="row-jammed">Jammed ·</span>}
+                    {outside && <span className="meta-warning" data-testid="row-out-of-bounds">Outside ·</span>}
+                    {(jammed || outside) && ' '}
+                    {/* "Outside · 8s ago", "Jammed · seen 8s ago": the shorter forms keep the time from being cut off */}
+                    {jammed ? label.replace(/^Jammed( · last )?/, '') : outside ? label.replace('updated ', '')
+                        : vague ? <span data-testid="row-vague">{`±${formatDistance(player.uncertainty_m)} · ${label.replace('updated ', '')}`}</span>
+                            : label}
                 </p>
             </IonLabel>
             <span slot="end" className="target-distance" data-testid={testIds.distance}>
-                {formatDistance(distance)}
+                {formatHiderDistance(distance, player.uncertainty_m)}
             </span>
         </IonItem>
     );

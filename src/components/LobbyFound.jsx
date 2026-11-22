@@ -4,7 +4,7 @@ import {
     IonPage, IonHeader, IonToolbar, IonTitle, IonContent, IonFooter,
     IonButtons, IonButton, IonIcon, IonAlert, IonToast
 } from '@ionic/react';
-import { qrCodeOutline, peopleOutline, exitOutline, stopCircleOutline } from 'ionicons/icons';
+import { qrCodeOutline, peopleOutline, exitOutline, stopCircleOutline, chatbubbleOutline } from 'ionicons/icons';
 import ProfileCard from './ProfileCard';
 import RoleSwitcher from './RoleSwitcher';
 import LobbyPlayers from './LobbyPlayers';
@@ -13,9 +13,10 @@ import SeekerView from './SeekerView';
 import HiderView from './HiderView';
 import PlayerTableModal from './PlayerTableModal';
 import ShareModal from './ShareModal';
+import ChatModal from './ChatModal';
 import ConnectionBanner from './ConnectionBanner';
 import { PlayerListCard } from './PlayerList';
-import { SettingsRow, GameStatusCard, GameOverCard, PhaseFooter, FoundFooter } from './GamePanels';
+import { SettingsRow, GameStatusCard, JamCard, GameOverCard, PhaseFooter, FoundFooter } from './GamePanels';
 import { PHASE } from '../hooks/useLobbySocket';
 import useGeolocation from '../hooks/useGeolocation';
 import useWakeLock from '../hooks/useWakeLock';
@@ -23,6 +24,7 @@ import { useLocationPermission, useKeepScreenOn } from '../hooks/usePermissions'
 import { withDummyPlayers } from '../utils/dummyPlayers';
 import { playerName } from '../utils/players';
 import { useUpdateReady, applyAppUpdate } from '../utils/appUpdate';
+import { unreadCount, loadLastRead, saveLastRead } from '../utils/chat';
 
 const LOBBY_LIST_IDS = { card: 'lobby-players-card', title: 'lobby-players-title', list: 'lobby-players-list', empty: 'no-players' };
 
@@ -36,9 +38,9 @@ function LobbyFound({ lobbyId, lobby, onLeft })
 {
     const navigate = useNavigate();
     const {
-        lobbyName, selfPlayer, players, phase, hostId, isHost, settings, game, seekerInfo, avatars,
+        lobbyName, selfPlayer, players, phase, hostId, isHost, settings, game, seekerInfo, jam, avatars,
         clockOffset, connectionState, lastSyncTime, updateLocation, updatePlayer, setAvatar,
-        declareFound, foundNotice, hostActions, leaveLobby
+        declareFound, foundNotice, startJam, jamNotice, chat, sendChat, hostActions, leaveLobby
     } = lobby;
 
     // Location is followed once it's allowed (in "Before you play", or the
@@ -56,6 +58,17 @@ function LobbyFound({ lobbyId, lobby, onLeft })
 
     const [isPlayersOpen, setIsPlayersOpen] = useState(false);
     const [isShareOpen, setIsShareOpen] = useState(false);
+    const [isChatOpen, setIsChatOpen] = useState(false);
+    // The last chat message this player has seen: the button counts what came after
+    const [lastRead, setLastRead] = useState(() => loadLastRead(lobbyId));
+    const newestMessage = chat.length ? chat[chat.length - 1].id : 0;
+    useEffect(() =>
+    {
+        if (!isChatOpen || newestMessage <= lastRead) return;
+        setLastRead(newestMessage);
+        saveLastRead(lobbyId, newestMessage);
+    }, [isChatOpen, newestMessage, lastRead, lobbyId]);
+    const unread = isChatOpen ? 0 : unreadCount(chat, lastRead, selfPlayer?.player_id);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isLeaveConfirmOpen, setIsLeaveConfirmOpen] = useState(false);
     const [isEndConfirmOpen, setIsEndConfirmOpen] = useState(false);
@@ -95,6 +108,17 @@ function LobbyFound({ lobbyId, lobby, onLeft })
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [foundNotice]);
 
+    // Tell the seekers when a hider starts jamming them (the hider's own
+    // jammer card says so already)
+    useEffect(() =>
+    {
+        if (!jamNotice || !isSeeker || jamNotice.player_id === selfPlayer?.player_id) return;
+        const who = everyone.find((p) => p.player_id === jamNotice.player_id);
+        setNotice(`${who ? playerName(who) : jamNotice.name || 'A hider'} is jamming your tracking`);
+        // Only a new notice should trigger this, not every lobby update
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [jamNotice]);
+
     // leaveLobby never rejects: offline, the server just expires the player
     async function handleLeave()
     {
@@ -111,9 +135,18 @@ function LobbyFound({ lobbyId, lobby, onLeft })
     return (
         <IonPage data-testid="lobby-page" data-phase={phase}>
             <IonHeader>
-                <IonToolbar className={showEnd ? 'toolbar--four' : undefined}>
+                <IonToolbar className={showEnd ? 'toolbar--five' : 'toolbar--four'}>
                     <IonTitle data-testid="lobby-title">{lobbyName}</IonTitle>
                     <IonButtons slot="end">
+                        <IonButton
+                            data-testid="chat-btn"
+                            className="chat-btn"
+                            onClick={() => setIsChatOpen(true)}
+                            aria-label={unread ? `Chat, ${unread} new ${unread === 1 ? 'message' : 'messages'}` : 'Chat'}
+                        >
+                            <IonIcon slot="icon-only" icon={chatbubbleOutline} />
+                            {unread > 0 && <span className="toolbar-badge" data-testid="chat-unread">{unread > 9 ? '9+' : unread}</span>}
+                        </IonButton>
                         <IonButton data-testid="invite-btn" onClick={() => setIsShareOpen(true)} aria-label="Invite players">
                             <IonIcon slot="icon-only" icon={qrCodeOutline} />
                         </IonButton>
@@ -173,6 +206,7 @@ function LobbyFound({ lobbyId, lobby, onLeft })
                                     clockOffset={clockOffset}
                                     onOpenMap={settings?.geofence ? () => setIsSettingsOpen(true) : undefined}
                                 />
+                                {!isSeeker && <JamCard jam={jam} clockOffset={clockOffset} startJam={startJam} />}
                             </div>
                             <div className="lobby-body-main">
                                 {isSeeker ? (
@@ -183,7 +217,16 @@ function LobbyFound({ lobbyId, lobby, onLeft })
                                         playArea={settings?.geofence?.points ?? null}
                                     />
                                 ) : (
-                                    <HiderView seekerInfo={seekerInfo} />
+                                    <HiderView
+                                        seekerInfo={seekerInfo}
+                                        // (only where the host has hiders shown vaguely; a jam says its own piece)
+                                        seenWithin={settings?.hider_blur_m === 0 || selfPlayer?.jammed_until ? null : selfPlayer?.uncertainty_m ?? null}
+                                        // For the map of the hiders' own side
+                                        self={selfPlayer}
+                                        players={players}
+                                        currentLocation={currentLocation}
+                                        playArea={settings?.geofence?.points ?? null}
+                                    />
                                 )}
                             </div>
                         </>
@@ -267,6 +310,16 @@ function LobbyFound({ lobbyId, lobby, onLeft })
             />
 
             <ShareModal lobbyId={lobbyId} isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} />
+
+            <ChatModal
+                isOpen={isChatOpen}
+                onClose={() => setIsChatOpen(false)}
+                messages={chat}
+                players={everyone}
+                selfId={selfPlayer?.player_id}
+                showRoles={phase === PHASE.PLAYING}
+                sendChat={sendChat}
+            />
 
             <PlayerTableModal
                 isOpen={isPlayersOpen}

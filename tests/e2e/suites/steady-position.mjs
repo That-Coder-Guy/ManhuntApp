@@ -1,5 +1,5 @@
 // A hider indoors: scattered fixes in, a steady position out to the seekers
-import { createLobby, join, startGame } from '../lib/helpers.mjs';
+import { createLobby, join, startGame, exactPositions } from '../lib/helpers.mjs';
 import { chromium } from '../lib/playwright.mjs';
 const browser = await chromium.launch();
 let failures = 0;
@@ -15,6 +15,7 @@ const dist = (a, b) => Math.hypot((a.latitude - b.latitude) * M, (a.longitude - 
 const id = await createLobby('Steady');
 const host = await join(browser, id, SEEKER, { name: 'Hank', host: true, seeker: true });
 const maya = await join(browser, id, SPOT, { name: 'Maya' });
+await exactPositions(host.page); // this is about the phone steadying its fixes, seen through the seeker
 await startGame(host.page, maya.page);
 await host.page.evaluate(() => { window.__seen = []; window.__manhuntSocket.on('lobby-state', (s) => {
   const m = s.players.find((p) => p.name === 'Maya'); if (m?.latitude != null) window.__seen.push({ latitude: m.latitude, longitude: m.longitude }); }); });

@@ -102,6 +102,14 @@ export async function join(browser, id, coords, { name, seeker = false, viewport
   return { ctx, page };
 }
 
+// Seekers get every hider's exact position in this lobby (by default a still
+// hider is only shown as an area). For suites that are about something else
+// and read positions or distances off the seeker's screen
+export async function exactPositions(hostPage) {
+  const saved = await hostPage.evaluate(() => window.__manhuntSocket.timeout(4000).emitWithAck('update-settings', { settings: { hider_blur_m: 0 } }));
+  if (saved?.status !== 'success') throw new Error(`Couldn't set exact positions: ${JSON.stringify(saved)}`);
+}
+
 // Host starts the game and everyone given waits for the playing phase
 export async function startGame(hostPage, ...others) {
   await hostPage.locator('[data-testid="start-game"]').click();

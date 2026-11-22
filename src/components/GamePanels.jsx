@@ -3,16 +3,22 @@ import { IonItem, IonLabel, IonCard, IonCardHeader, IonCardTitle, IonCardContent
 import { warningOutline } from 'ionicons/icons';
 import useNow from '../hooks/useNow';
 import { formatDistance } from '../utils/geo';
-import { formatClock, describeSettings, playAreaStatus, gameClock, foundStatus, FOUND_RANGE_DEFAULT_M, SEEKER_INFO_DEFAULT } from '../utils/game';
+import {
+    formatClock, formatDuration, describeSettings, playAreaStatus, gameClock, foundStatus, jamView, jamSettings,
+    FOUND_RANGE_DEFAULT_M, SEEKER_INFO_DEFAULT, JAM_DEFAULTS, HIDER_BLUR_DEFAULT_M
+} from '../utils/game';
 import { playerName } from '../utils/players';
 
 /** One fixed-height row summarising the rules; opens the settings sheet */
 export function SettingsRow({ settings, isHost, onOpen })
 {
-    const { playArea, timeLimit, headStart, foundRange, seekerInfo } = describeSettings(settings);
-    // The found range and seeker info only show when the host changed them, to keep the line short
+    const { playArea, timeLimit, headStart, foundRange, seekerInfo, jamming, hiderBlur } = describeSettings(settings);
+    // The found range, seeker info, jamming and hider positions only show when the host changed them, to keep the line short
+    const customBlur = (settings?.hider_blur_m ?? HIDER_BLUR_DEFAULT_M) !== HIDER_BLUR_DEFAULT_M;
     const customRange = (settings?.found_range_m ?? FOUND_RANGE_DEFAULT_M) !== FOUND_RANGE_DEFAULT_M;
     const customInfo = (settings?.seeker_info ?? SEEKER_INFO_DEFAULT) !== SEEKER_INFO_DEFAULT;
+    const jam = jamSettings(settings);
+    const customJam = ['enabled', 'duration_s', 'charge_s'].some((key) => jam[key] !== JAM_DEFAULTS[key]);
     return (
         <IonItem
             button
@@ -25,7 +31,8 @@ export function SettingsRow({ settings, isHost, onOpen })
             <IonLabel>
                 <h2>Game settings</h2>
                 <p className="player-freshness" data-testid="settings-summary">
-                    {[playArea, timeLimit, headStart !== 'None' && `${headStart} head start`, customRange && `found ≤ ${foundRange}`, customInfo && seekerInfo]
+                    {[playArea, timeLimit, headStart !== 'None' && `${headStart} head start`, customRange && `found ≤ ${foundRange}`, customInfo && seekerInfo,
+                        customBlur && hiderBlur, customJam && jamming]
                         .filter(Boolean).join(' · ')}
                 </p>
             </IonLabel>
@@ -87,6 +94,66 @@ export function GameStatusCard({ game, settings, isSeeker, location, clockOffset
                     )}
                 </div>
             </div>
+        </IonItem>
+    );
+}
+
+/**
+ * The hider's jammer: how charged it is, and the button that sets it off.
+ * While it runs, the seekers keep the position this hider had when it
+ * started. Nothing is drawn when the host has turned jamming off. Fixed height.
+ */
+export function JamCard({ jam, clockOffset, startJam })
+{
+    const now = useNow(500);
+    const view = jamView(jam, now + clockOffset);
+    const [isBusy, setIsBusy] = useState(false);
+    const [error, setError] = useState('');
+    if (!view) return null;
+
+    const status = {
+        charging: `Charging · ready in ${formatClock(view.remainingMs)}`,
+        // (short enough for one line on a narrow phone)
+        ready: `Ready · hides you for ${formatDuration(jam.duration_s)}`,
+        active: `Hidden from seekers · ${formatClock(view.remainingMs)} left`
+    }[view.state];
+
+    async function run()
+    {
+        setIsBusy(true);
+        try {
+            await startJam();
+        } catch (err) {
+            setError(err.status === 'network_error'
+                ? "Couldn't reach the server. Check your connection and try again."
+                : err.message || 'That didn’t work. Try again.');
+        } finally {
+            setIsBusy(false);
+        }
+    }
+
+    return (
+        <IonItem lines="none" className={`name-card jam-card jam-card--${view.state}`} data-testid="jam-card" data-state={view.state}>
+            <div className="jam-row">
+                <div className="jam-text">
+                    <span className="jam-title">Jammer</span>
+                    <span className="jam-status" data-testid="jam-status">{status}</span>
+                    {/* Fills as it charges, empties as a jam runs out */}
+                    <span className="jam-bar" aria-hidden="true">
+                        <span className="proximity-bar-fill" style={{ transform: `scaleX(${view.progress})` }} />
+                    </span>
+                </div>
+                <IonButton
+                    size="small"
+                    className="jam-btn"
+                    data-testid="jam-btn"
+                    disabled={view.state !== 'ready' || isBusy}
+                    onClick={run}
+                >
+                    {view.state === 'active' ? 'Jamming' : 'Jam'}
+                </IonButton>
+            </div>
+            <IonToast isOpen={!!error} message={error} duration={4000} onDidDismiss={() => setError('')} />
         </IonItem>
     );
 }

@@ -63,6 +63,10 @@ real app, captured at phone size (390 × 844) from a scripted game.
       <br><br>
       <b>What hiders see.</b> The distance to the nearest seeker (the default), only an alert when a seeker comes within a set distance, or nothing at all.
       <br><br>
+      <b>What seekers see.</b> A hider who stands still is only shown as somewhere within 100 m (the host can change the distance, or choose <i>Exactly</i>). The faster a hider moves, the smaller that gets, and from walking pace seekers see the exact spot.
+      <br><br>
+      <b>Jamming.</b> Each hider has a jammer that hides them from the seekers for a while: the seekers keep seeing where that hider was when it started. By default a jam lasts 60 seconds and takes 15 minutes to charge, counted from when the seekers set off and again after each jam. The host can change both times, or turn jamming off.
+      <br><br>
       Everyone else can open the same sheet to see the rules and the area, but can't change them.
     </td>
   </tr>
@@ -97,7 +101,7 @@ real app, captured at phone size (390 × 844) from a scripted game.
   </tr>
   <tr>
     <td valign="top"><b>Watch them close in.</b> By default hiders see how far away the nearest seeker is (not who, or which way), with a bar that fills as they get closer and turns red under 100 m. Once a seeker is within the found range (50 m unless the host changes it), <b>I’ve been found</b> unlocks: tap it and you join the seekers. If the host chose the nearby alert, hiders only see <i>Seeker nearby</i> or <i>All clear</i>; with seeker info off, nothing. In those games the button is always there, and the server checks the distance.</td>
-    <td valign="top"><b>Stay in bounds.</b> Step outside the area and the status card says how far back it is and which way to go.</td>
+    <td valign="top"><b>Stay in bounds.</b> Step outside the area and the status card says how far back it is and which way to go.<br><br><b>Find each other.</b> The <b>Map</b> tab shows you and the other hiders, as the seekers see them: a hider who is caught joins the seekers, so hiders are told no more about each other than the seekers are. No seeker is ever on it.</td>
     <td valign="top"><b>See the area.</b> Tap the status card to open the map, framed to show both the area and you.</td>
   </tr>
 </table>
@@ -174,14 +178,26 @@ can't do them: real push delivery, iPhone shake-to-undo, and a real compass.
     preserved). This is what makes dead zones survivable: reconnecting after
     a dropout restores the same identity.
   - Client → server: `update-location`, `update-player`, `leave-lobby` (all acked).
+    `jam` starts a hider's jam, if it is charged; the server answers with
+    why not otherwise. `chat-send` adds a message (up to 280 characters) to
+    the lobby's chat.
     `push-subscribe` hands the server the phone's Web Push subscription (or
     `null`), and `set-visibility` says whether the app is on screen; the
     server pushes "found" notices only to players who aren't looking.
   - Server → clients: `lobby-state` pushed to the lobby room on any change,
     throttled to 1/second per lobby. During a game each player gets their own
-    copy: a hider's has no one else's position, and instead a `seeker_info`
-    (`distance`, `nearby` or `none`, as the host set it). Includes each player's
-    `location_last_updated` and `connected` flag so clients can show staleness.
+    copy: a hider's has no seeker's position (of the other hiders it has
+    just what the seekers have), and instead a `seeker_info`
+    (`distance`, `nearby` or `none`, as the host set it) and a `jam` saying
+    where their own jammer stands. Includes each player's
+    `location_last_updated` and `connected` flag so clients can show staleness,
+    and `jammed_until` for a hider who is jamming: everyone else's copy then
+    carries the position that hider had when the jam started. A hider's
+    position in everyone else's copy is only as exact as the hider is fast:
+    `uncertainty_m` says how far from the given point they may be (0 when it
+    is their real position).
+  - The chat: `chat-history` (the lobby's last 200 messages) on every
+    connection, then `chat-message` to everyone as each is sent.
 - A player who disconnects is marked offline (not deleted) and kept for
   **5 minutes** before removal. After that, their token is rejected and the
   client offers the rejoin flow.
@@ -272,7 +288,9 @@ The name must be one nobody else on Fly.io has taken. The script
 3. builds the image from the `Dockerfile` on Fly.io's builders (no Docker
    needed here) and deploys it as a **single** machine. Games live in the
    server's memory, so two machines would be two separate servers;
-4. prints the address. Enter it once in the iPhone and Android apps.
+4. prints the address. The iPhone and Android apps have the game's address
+   built in; if yours is a different one, change it there (their READMEs say
+   where).
 
 `fly.toml` holds the rest: the region (`primary_region`, Dallas by default;
 pick the one nearest your players), the machine's size, and that it is never
@@ -478,8 +496,21 @@ name, a small profile picture and a role; the host sets the rules and starts.
 - **What hiders see** about the seekers: the distance to the nearest one (the
   default), only an alert when one comes within a chosen distance (25–500 m,
   100 m by default), or nothing. The server enforces it: during a game a
-  hider's phone is never sent anyone else's position, only what this setting
+  hider's phone is never sent a seeker's position, only what this setting
   allows, worked out on the server.
+- **What seekers see** of a hider depends on the hider's speed: standing
+  still, only an area (within 100 m by default; the host can change it or
+  choose *Exactly*); the radius halves as the speed doubles, and from walking
+  pace it is the exact spot. The server sends seekers the middle of a fixed
+  square, not a point near the hider, so there is nothing to average.
+- **Jamming**: each hider's jammer freezes what the seekers see of them (60
+  seconds by default, 15 minutes to charge; the host can change both or turn
+  it off).
+- **Hiders see each other** on the **Map** tab, as the seekers see them and
+  no more exactly: a hider who is caught joins the seekers, and shouldn't
+  arrive knowing better than them where the rest are.
+- **Chat**: the speech-bubble button opens one conversation for everyone in
+  the lobby, both sides, before, during and after a game.
 - **Steady hider positions**: GPS indoors scatters tens of metres. A
   hider's phone weighs each fix by the accuracy it reports
   (`src/utils/positionFilter.js`): with poor fixes it averages over many (a

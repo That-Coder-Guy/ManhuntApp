@@ -4,13 +4,19 @@ import {
     IonList, IonItem, IonLabel, IonToggle, IonSelect, IonSelectOption, IonToast
 } from '@ionic/react';
 import PlayAreaMap from './PlayAreaMap';
-import { formatDuration, formatArea, FOUND_RANGE_DEFAULT_M, SEEKER_INFO_DEFAULT, SEEKER_ALERT_DEFAULT_M } from '../utils/game';
+import {
+    formatDuration, formatArea, jamSettings, FOUND_RANGE_DEFAULT_M, SEEKER_INFO_DEFAULT, SEEKER_ALERT_DEFAULT_M, HIDER_BLUR_DEFAULT_M
+} from '../utils/game';
 import { polygonArea, polygonProblem, POLYGON_LIMITS } from '../../shared/geofence.js';
 
 const TIME_LIMITS_MIN = [0, 10, 15, 20, 30, 45, 60, 90, 120];
 const HEAD_STARTS_S = [0, 30, 60, 120, 180, 300];
 const FOUND_RANGES_M = [10, 25, 50, 75, 100, 150, 200, 300];
 const ALERT_DISTANCES_M = [25, 50, 75, 100, 150, 200, 300, 500];
+// How far off a still hider is shown to seekers; 0 is always exact
+const HIDER_BLURS_M = [0, 50, 100, 150, 200, 300];
+const JAM_DURATIONS_S = [15, 30, 45, 60, 120, 180, 300];
+const JAM_CHARGES_MIN = [1, 2, 5, 10, 15, 20, 30, 45, 60];
 
 // What hiders learn about the seekers during a game
 const SEEKER_INFO_OPTIONS = [
@@ -62,6 +68,8 @@ function SettingsSheet({ isOpen, onClose, settings, isHost, canEdit, currentLoca
     }
     const problem = fenceOn ? polygonProblem(points) : null;
     const seekerInfo = draft?.seeker_info ?? SEEKER_INFO_DEFAULT;
+    const jam = jamSettings(draft);
+    const hiderBlur = draft?.hider_blur_m ?? HIDER_BLUR_DEFAULT_M;
 
     // Start each opening from what the lobby currently has
     const handleWillPresent = () =>
@@ -272,6 +280,85 @@ function SettingsSheet({ isOpen, onClose, settings, isHost, canEdit, currentLoca
                     )}
                 </IonList>
                 <p className="settings-note" data-testid="seeker-info-note">{SEEKER_INFO_NOTES[seekerInfo]}</p>
+
+                <h3 className="settings-section">Seekers see</h3>
+                <IonList inset className="settings-list">
+                    <IonItem>
+                        <IonSelect
+                            label="A still hider"
+                            data-testid="hider-blur"
+                            interface="action-sheet"
+                            value={hiderBlur}
+                            disabled={!editable}
+                            onIonChange={(e) => setDraft((d) => ({ ...d, hider_blur_m: e.detail.value }))}
+                        >
+                            {HIDER_BLURS_M.map((m) => (
+                                <IonSelectOption key={m} value={m}>{m ? `Within ${m}\u202Fm` : 'Exactly'}</IonSelectOption>
+                            ))}
+                        </IonSelect>
+                    </IonItem>
+                </IonList>
+                <p className="settings-note" data-testid="hider-blur-note">
+                    {hiderBlur
+                        ? 'The slower a hider moves, the less exactly seekers see where they are. From walking pace up, seekers see the exact spot.'
+                        : 'Seekers always see exactly where each hider is.'}
+                </p>
+
+                <h3 className="settings-section">Jamming</h3>
+                <IonList inset className="settings-list">
+                    <IonItem>
+                        <IonLabel>
+                            <h2>Hiders can jam</h2>
+                            <p>Hides them from seekers briefly</p>
+                        </IonLabel>
+                        <IonToggle
+                            slot="end"
+                            aria-label="Hiders can jam"
+                            data-testid="jam-toggle"
+                            checked={jam.enabled}
+                            disabled={!editable}
+                            onIonChange={(e) => setDraft((d) => ({ ...d, jam_enabled: e.detail.checked }))}
+                        />
+                    </IonItem>
+                    {/* The two times only matter, and only show, while jamming is on */}
+                    {jam.enabled && (
+                        <IonItem>
+                            <IonSelect
+                                label="Jam lasts"
+                                data-testid="jam-duration"
+                                interface="action-sheet"
+                                value={jam.duration_s}
+                                disabled={!editable}
+                                onIonChange={(e) => setDraft((d) => ({ ...d, jam_duration_s: e.detail.value }))}
+                            >
+                                {JAM_DURATIONS_S.map((s) => (
+                                    <IonSelectOption key={s} value={s}>{formatDuration(s)}</IonSelectOption>
+                                ))}
+                            </IonSelect>
+                        </IonItem>
+                    )}
+                    {jam.enabled && (
+                        <IonItem>
+                            <IonSelect
+                                label="Charge time"
+                                data-testid="jam-charge"
+                                interface="action-sheet"
+                                value={jam.charge_s / 60}
+                                disabled={!editable}
+                                onIonChange={(e) => setDraft((d) => ({ ...d, jam_charge_s: e.detail.value * 60 }))}
+                            >
+                                {JAM_CHARGES_MIN.map((m) => (
+                                    <IonSelectOption key={m} value={m}>{formatDuration(m * 60)}</IonSelectOption>
+                                ))}
+                            </IonSelect>
+                        </IonItem>
+                    )}
+                </IonList>
+                <p className="settings-note" data-testid="jam-note">
+                    {jam.enabled
+                        ? 'While a hider jams, seekers only see where that hider was when it started. A jam charges from the moment the seekers set off, and again after each one.'
+                        : 'Seekers can track every hider for the whole game.'}
+                </p>
 
                 <IonToast isOpen={!!error} message={error} duration={4000} onDidDismiss={() => setError('')} />
             </IonContent>

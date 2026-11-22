@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { API_ORIGIN, SOCKET_PATH } from '../utils/api.js';
 import { currentSubscription } from '../utils/push.js';
+import { withMessage, CHAT_HISTORY } from '../utils/chat.js';
 
 // High-level join state of the lobby connection
 export const JOIN_STATE = {
@@ -74,7 +75,7 @@ async function emitWithAck(socket, event, payload, timeoutMs = ACK_TIMEOUT_MS)
     return response;
 }
 
-const EMPTY_LOBBY = { phase: PHASE.LOBBY, hostId: null, settings: null, game: null, players: [], seekerInfo: null };
+const EMPTY_LOBBY = { phase: PHASE.LOBBY, hostId: null, settings: null, game: null, players: [], seekerInfo: null, jam: null };
 
 /**
  * The Socket.IO connection for one lobby: join or resume with a player token
@@ -95,8 +96,12 @@ function useLobbySocket(lobbyId, credentials, onJoined)
     const [selfId, setSelfId] = useState(null);
     const [lobby, setLobby] = useState(EMPTY_LOBBY);
     const [avatars, setAvatars] = useState({});
+    // The lobby's chat, oldest first (utils/chat.js)
+    const [chat, setChat] = useState([]);
     // The latest "someone was found" notice: { player_id, name, hiders_left, at }
     const [foundNotice, setFoundNotice] = useState(null);
+    // The latest "a hider started jamming" notice: { player_id, name, until, at }
+    const [jamNotice, setJamNotice] = useState(null);
     // The server's key for push notifications (null when it sends none)
     const [pushKey, setPushKey] = useState(null);
     // Server clock minus ours, so countdowns agree across phones
@@ -131,6 +136,7 @@ function useLobbySocket(lobbyId, credentials, onJoined)
         setJoinState(JOIN_STATE.CONNECTING);
         setLobby(EMPTY_LOBBY);
         setAvatars({});
+        setChat([]);
 
         const applyState = (state) =>
         {
@@ -142,7 +148,9 @@ function useLobbySocket(lobbyId, credentials, onJoined)
                 game: state.game,
                 players: Array.isArray(state.players) ? state.players : [],
                 // A hider's view of the seekers during a game (server/game.js seekerInfoFor)
-                seekerInfo: state.seeker_info ?? null
+                seekerInfo: state.seeker_info ?? null,
+                // A hider's own jammer (server/game.js jamStatus)
+                jam: state.jam ?? null
             });
             if (Number.isFinite(state.server_time)) setClockOffset(state.server_time - Date.now());
             setLastSyncTime(Date.now());
@@ -208,7 +216,11 @@ function useLobbySocket(lobbyId, credentials, onJoined)
         socket.on('avatars', (data) => setAvatars(data?.avatars && typeof data.avatars === 'object' ? data.avatars : {}));
         socket.on('avatar', ({ player_id: playerId, avatar } = {}) =>
             setAvatars((current) => ({ ...current, [playerId]: avatar || undefined })));
+        // The chat: all of it on (re)joining, then each message as it's sent
+        socket.on('chat-history', (data) => setChat(Array.isArray(data?.messages) ? data.messages.slice(-CHAT_HISTORY) : []));
+        socket.on('chat-message', (message) => setChat((current) => withMessage(current, message)));
         socket.on('player-found', (data) => { if (data) setFoundNotice({ ...data, at: Date.now() }); });
+        socket.on('player-jammed', (data) => { if (data) setJamNotice({ ...data, at: Date.now() }); });
 
         socket.on('fatal-error', (data) =>
         {
@@ -266,6 +278,12 @@ function useLobbySocket(lobbyId, credentials, onJoined)
         ? { latitude: location.latitude, longitude: location.longitude }
         : {}), [send]);
 
+    // A message to everyone in the lobby; it comes back with the rest of the chat
+    const sendChat = useCallback((text) => send('chat-send', { text }), [send]);
+
+    // A hider's jammer: the server decides (it rejects with 'charging', 'jam_off', …)
+    const startJam = useCallback(() => send('jam'), [send]);
+
     // Refused by the server unless this player is the host
     const hostActions = useMemo(() => ({
         updateSettings: (settings) => send('update-settings', { settings }),
@@ -304,7 +322,10 @@ function useLobbySocket(lobbyId, credentials, onJoined)
         settings: lobby.settings,
         game: lobby.game,
         seekerInfo: lobby.seekerInfo,
+        jam: lobby.jam,
         avatars,
+        chat,
+        sendChat,
         clockOffset,
         connectionState,
         lastSyncTime,
@@ -313,6 +334,8 @@ function useLobbySocket(lobbyId, credentials, onJoined)
         setAvatar,
         declareFound,
         foundNotice,
+        startJam,
+        jamNotice,
         pushKey,
         registerPush,
         hostActions,

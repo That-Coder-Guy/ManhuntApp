@@ -3,7 +3,7 @@ tags: [manhunt, index]
 ---
 # Manhunt
 
-A real-world hide-and-seek game for phones. Seekers follow a live compass (or a street map) to each hider; hiders see what the host allows about the seekers. It's a web app, installable to the Home Screen, served from Fly.io at `https://manhunt.fly.dev` (before 2026-11-21, from a Raspberry Pi through a Cloudflare tunnel).
+A real-world hide-and-seek game for phones. Seekers follow a live compass (or a street map) to each hider; hiders see what the host allows about the seekers. It's a web app, installable to the Home Screen, served from Fly.io at `https://manhunt.fly.dev` (before 2026-11-21, from a Raspberry Pi through a Cloudflare tunnel). See [[Deployment]].
 
 Repository: `That-Coder-Guy/ManhuntApp` on GitHub. Work goes straight to `main`.
 
@@ -24,6 +24,10 @@ Repository: `That-Coder-Guy/ManhuntApp` on GitHub. Work goes straight to `main`.
 ## Features
 - [[Found mechanic]]
 - [[Hider seeker info]]
+- [[Jamming]]
+- [[Hider position blur]]
+- [[Hider map]]
+- [[Chat]]
 - [[Tracking map]]
 - [[Steady hider positions]]
 - [[Notifications]]

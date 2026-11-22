@@ -33,16 +33,31 @@ export function formatArea(squareMetres)
     return `${(squareMetres / 1_000_000).toFixed(1)}\u202Fkm²`;
 }
 
-// Mirrors the server (server/game.js): the defaults for the found range and
-// for what hiders learn about the seekers
+// Mirrors the server (server/game.js): the defaults for the found range,
+// for what hiders learn about the seekers, and for jamming
 export const FOUND_RANGE_DEFAULT_M = 50;
 export const SEEKER_INFO_DEFAULT = 'distance';
 export const SEEKER_ALERT_DEFAULT_M = 100;
+export const JAM_DEFAULTS = Object.freeze({ enabled: true, duration_s: 60, charge_s: 15 * 60 });
+// How far off a still hider's position is shown to seekers (0: always exact)
+export const HIDER_BLUR_DEFAULT_M = 100;
+
+/** The lobby's jam settings, with the defaults for any it doesn't have */
+export function jamSettings(settings)
+{
+    return {
+        enabled: settings?.jam_enabled ?? JAM_DEFAULTS.enabled,
+        duration_s: settings?.jam_duration_s ?? JAM_DEFAULTS.duration_s,
+        charge_s: settings?.jam_charge_s ?? JAM_DEFAULTS.charge_s
+    };
+}
 
 /** One-line descriptions of each setting, for the summary card */
 export function describeSettings(settings)
 {
     const fence = settings?.geofence;
+    const jam = jamSettings(settings);
+    const blur = settings?.hider_blur_m ?? HIDER_BLUR_DEFAULT_M;
     return {
         playArea: fence ? formatArea(polygonArea(fence.points)) : 'Anywhere',
         timeLimit: formatDuration(settings?.time_limit_s, 'No limit'),
@@ -52,8 +67,37 @@ export function describeSettings(settings)
             distance: 'Distance to nearest seeker',
             nearby: `Alert within ${settings?.seeker_alert_m ?? SEEKER_ALERT_DEFAULT_M}\u202Fm`,
             none: 'Seekers hidden'
-        }[settings?.seeker_info ?? SEEKER_INFO_DEFAULT]
+        }[settings?.seeker_info ?? SEEKER_INFO_DEFAULT],
+        jamming: jam.enabled ? `${formatDuration(jam.duration_s)} jam, ${formatDuration(jam.charge_s)} charge` : 'No jamming',
+        hiderBlur: blur ? `Still hiders ±${blur}\u202Fm` : 'Exact hider positions'
     };
+}
+
+const fraction = (value) => Math.min(1, Math.max(0, value));
+
+/**
+ * What a hider's jammer is doing right now, from what the server sent with
+ * the lobby state (`jam`: server/game.js jamStatus) and the server's clock.
+ * The times are the server's, so this moves on between updates:
+ *   null                                          jamming is off
+ *   { state: 'charging', remainingMs, progress }  progress: how charged, 0 to 1
+ *   { state: 'ready', progress: 1 }
+ *   { state: 'active', remainingMs, progress }    progress: how much is left, 1 to 0
+ */
+export function jamView(jam, serverNow)
+{
+    if (!jam?.enabled) return null;
+    if (jam.until != null && serverNow < jam.until)
+    {
+        const remainingMs = jam.until - serverNow;
+        return { state: 'active', remainingMs, progress: fraction(remainingMs / (jam.duration_s * 1000)) };
+    }
+    if (serverNow < jam.ready_at)
+    {
+        const remainingMs = jam.ready_at - serverNow;
+        return { state: 'charging', remainingMs, progress: fraction(1 - remainingMs / (jam.charge_s * 1000)) };
+    }
+    return { state: 'ready', progress: 1 };
 }
 
 /**

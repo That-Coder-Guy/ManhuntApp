@@ -1,6 +1,16 @@
-import { useEffect, useRef } from 'react';
-import { IonCard, IonCardHeader, IonCardTitle, IonCardContent } from '@ionic/react';
+import { useEffect, useRef, useState } from 'react';
+import { IonCard, IonCardHeader, IonCardTitle, IonCardContent, IonSegment, IonSegmentButton, IonLabel } from '@ionic/react';
+import TrackMap from './TrackMap';
+import useNow from '../hooks/useNow';
 import { formatDistance } from '../utils/geo';
+
+// Each hider's choice of the seekers card or the map is remembered on their phone
+const HIDER_MODE_KEY = 'manhunt.hiderMode';
+
+function loadMode()
+{
+    try { return localStorage.getItem(HIDER_MODE_KEY) === 'map' ? 'map' : 'info'; } catch { return 'info'; }
+}
 
 // Closer than this, the nearest seeker is flagged
 const DANGER_DISTANCE_M = 100;
@@ -44,9 +54,42 @@ function describe(info)
     };
 }
 
-function HiderView({ seekerInfo })
+/**
+ * How exactly the seekers are seeing this hider right now, which is theirs
+ * to change: stay still to stay vague. `seenWithin` is the radius the server
+ * is giving the seekers (0: the exact position; null: not shown at all, or
+ * jamming, which the jammer card covers).
+ */
+function seenLine(seenWithin)
 {
+    if (seenWithin == null) return null;
+    return seenWithin > 0
+        ? `Seekers see you within ${formatDistance(seenWithin)}`
+        : 'Moving · seekers see exactly where you are';
+}
+
+/**
+ * The hider's screen during a game, in two modes:
+ *   Seekers — what the host lets hiders know about the seekers
+ *   Map     — where this hider and their fellow hiders are, and the play
+ *             area. Hiders see each other as the seekers see them (an area
+ *             while still, frozen while jamming), so that one who is caught
+ *             joins the seekers knowing no more than they do. No seeker is
+ *             on it
+ */
+function HiderView({ seekerInfo, seenWithin = null, self = null, players = [], currentLocation = null, playArea = null })
+{
+    const now = useNow();
+    const [mode, setMode] = useState(loadMode);
     const view = describe(seekerInfo);
+    const seen = seenLine(seenWithin);
+    const fellows = players.filter((player) => !player.is_seeker);
+
+    function chooseMode(next)
+    {
+        setMode(next);
+        try { localStorage.setItem(HIDER_MODE_KEY, next); } catch { /* not remembered */ }
+    }
 
     // A buzz when a seeker comes into alert range, for a phone in a pocket
     // (Android; iPhones don't vibrate for web pages)
@@ -59,6 +102,36 @@ function HiderView({ seekerInfo })
     }, [nearbyNow]);
 
     return (
+        <div className={`hider-screen track-screen track-screen--${mode === 'map' ? 'map' : 'compass'}`} data-testid="hider-screen" data-mode={mode}>
+            <IonSegment
+                className={`role-segment hider-mode track-mode--${mode === 'map' ? 'map' : 'compass'}`}
+                value={mode}
+                onIonChange={(e) => chooseMode(e.detail.value)}
+                aria-label="Show"
+            >
+                <IonSegmentButton value="info" data-testid="hider-info-btn">
+                    <IonLabel>Seekers</IonLabel>
+                </IonSegmentButton>
+                <IonSegmentButton value="map" data-testid="hider-map-btn">
+                    <IonLabel>Map</IonLabel>
+                </IonSegmentButton>
+            </IonSegment>
+            {mode === 'map' ? (
+                <>
+                    <TrackMap
+                        you={currentLocation}
+                        youAre="hider"
+                        self={self}
+                        hiders={fellows}
+                        playArea={playArea}
+                        now={now}
+                    />
+                    <p className="hider-map-note" data-testid="hider-map-note">
+                        {fellows.length === 0 ? 'You’re the only hider' : `You and ${fellows.length} other ${fellows.length === 1 ? 'hider' : 'hiders'}`}
+                        {' · seekers aren’t shown'}
+                    </p>
+                </>
+            ) : (
         <IonCard className="targets-card seeker-info-card" data-testid="seeker-info" data-mode={view.mode}>
             <IonCardHeader className="targets-card-header">
                 <IonCardTitle>Seekers</IonCardTitle>
@@ -77,8 +150,13 @@ function HiderView({ seekerInfo })
                         <span className="proximity-bar-fill" style={{ transform: `scaleX(${view.proximity})` }} />
                     </span>
                 )}
+                {seen && (
+                    <p className={`hider-seen${seenWithin > 0 ? '' : ' hider-seen--exact'}`} data-testid="hider-seen">{seen}</p>
+                )}
             </IonCardContent>
         </IonCard>
+            )}
+        </div>
     );
 }
 

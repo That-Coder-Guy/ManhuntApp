@@ -53,3 +53,13 @@ export function formatDistance(distance)
     if (distance < 1000) return `${Math.round(distance)}\u202Fm`;
     return `${(distance / 1000).toFixed(1)}\u202Fkm`;
 }
+
+/**
+ * The distance to a hider as a seeker is shown it. When the server is only
+ * giving the hider's whereabouts to within `uncertainty` metres (they are
+ * slow or still), the distance is to the middle of that area: "≈ 120 m".
+ */
+export function formatHiderDistance(distance, uncertainty)
+{
+    return uncertainty > 0 && distance != null ? `≈\u202F${formatDistance(distance)}` : formatDistance(distance);
+}

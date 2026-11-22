@@ -36,6 +36,7 @@ function SeekerView({ players, avatars = {}, currentLocation, playArea = null })
     }
 
     const hiders = players.filter((player) => !player.is_seeker);
+    const seekers = players.filter((player) => player.is_seeker);
     const distanceTo = (player) =>
         calculateDistance(currentLocation.latitude, currentLocation.longitude, player.latitude, player.longitude);
 
@@ -86,6 +87,7 @@ function SeekerView({ players, avatars = {}, currentLocation, playArea = null })
                             you={currentLocation}
                             target={selected}
                             hiders={hiders}
+                            seekers={seekers}
                             playArea={playArea}
                             onSelect={setSelectedId}
                             now={now}

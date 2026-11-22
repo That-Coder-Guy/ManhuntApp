@@ -45,11 +45,11 @@ test('isStale treats missing and old fixes as stale', () => {
 test('playerFreshness describes fresh, stale and offline players', () => {
     const now = 1_000_000_000;
     assert.deepEqual(playerFreshness({ location_last_updated: now - 12_000, connected: true }, now),
-        { offline: false, fresh: true, label: 'updated 12s ago' });
+        { offline: false, jammed: false, fresh: true, label: 'updated 12s ago' });
     assert.deepEqual(playerFreshness({ location_last_updated: now - 120_000 }, now),
-        { offline: false, fresh: false, label: 'updated 2m ago' });
+        { offline: false, jammed: false, fresh: false, label: 'updated 2m ago' });
     assert.deepEqual(playerFreshness({ location_last_updated: null, connected: false }, now),
-        { offline: true, fresh: false, label: 'Offline · no location yet' });
+        { offline: true, jammed: false, fresh: false, label: 'Offline · no location yet' });
     assert.equal(playerName({ player_id: 3 }), 'Player 3');
     assert.equal(playerName({ player_id: 3, name: 'Ana' }), 'Ana');
 });
@@ -93,7 +93,7 @@ const square = [
 
 test('settings summary', () => {
     assert.deepEqual(describeSettings({ geofence: null, time_limit_s: 0, head_start_s: 60 }),
-        { playArea: 'Anywhere', timeLimit: 'No limit', headStart: '1 min', foundRange: '50\u202Fm', seekerInfo: 'Distance to nearest seeker' });
+        { playArea: 'Anywhere', timeLimit: 'No limit', headStart: '1 min', foundRange: '50\u202Fm', seekerInfo: 'Distance to nearest seeker', jamming: '1 min jam, 15 min charge', hiderBlur: 'Still hiders ±100\u202Fm' });
     assert.equal(describeSettings({ found_range_m: 100 }).foundRange, '100\u202Fm');
     assert.equal(describeSettings({ geofence: { points: square } }).playArea, '38,300\u202Fm²');
     assert.equal(formatArea(1_234_567), '1.2\u202Fkm²');

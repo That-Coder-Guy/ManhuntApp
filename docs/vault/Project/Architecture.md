@@ -15,7 +15,7 @@ Lobbies go **lobby → playing → ended**. The creator gets a secret host key a
 - One REST call creates a lobby (`POST /manhunt-api/create-lobby`); `GET /manhunt-api/health` reports the server's version.
 - Everything else is one Socket.IO connection (`/manhunt-api/socket.io`), authenticated by `{ lobby_id, player_token }`; a stored token resumes the same player after a dropout.
 - Phones send: location, profile, role, `found`, `push-subscribe`, `set-visibility`; the host sends settings and game controls. All are acknowledged.
-- The server pushes `lobby-state` at most once a second per lobby. **During a game each player gets their own copy**: a hider's has no one else's position, only the `seeker_info` the host allows (`viewFor` / `emitState` in `server/server.js`). Seekers see everything.
+- The server pushes `lobby-state` at most once a second per lobby. **During a game each player gets their own copy**: a hider's has no seeker's position (and of the other hiders, what the seekers have: [[Hider map]]), only the `seeker_info` the host allows (`viewFor` / `emitState` in `server/server.js`). Seekers see everything.
 - A dropped player is kept **5 minutes** before removal ([[Notifications]] reminds them at about 2 minutes left).
 
 ## Where to look

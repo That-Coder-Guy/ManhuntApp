@@ -12,7 +12,7 @@ The host's **Hiders see** setting decides what hiders learn about the seekers du
 | **Nothing** | No seeker information |
 
 **Enforced on the server.**
-- During a game each player gets their own copy of the lobby state. A hider's copy has no one else's coordinates, only a `seeker_info` worked out for them (`seekerInfoFor` in `server/game.js`, `viewFor` in `server.js`).
+- During a game each player gets their own copy of the lobby state. A hider's copy has no seeker's coordinates, only a `seeker_info` worked out for them. (Since 2026-11-21 it does carry the other hiders, as the seekers see them: [[Hider map]].) (`seekerInfoFor` in `server/game.js`, `viewFor` in `server.js`).
 - Seekers still see all hiders.
 
 **How it ties in with finding.**

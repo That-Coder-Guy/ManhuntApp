@@ -212,6 +212,32 @@ ion-toolbar.toolbar--four ion-title {
   padding-inline-end: 11rem;
 }
 
+ion-toolbar.toolbar--five ion-title {
+  padding-inline-end: 13.5rem;
+}
+
+/* A count on a toolbar button: unread chat messages */
+ion-toolbar ion-buttons ion-button.chat-btn {
+  position: relative;
+  overflow: visible;
+}
+
+.toolbar-badge {
+  position: absolute;
+  top: 0.125rem;
+  right: 0;
+  box-sizing: border-box;
+  min-width: 1rem;
+  height: 1rem;
+  padding: 0 0.25rem;
+  border-radius: 0.5rem;
+  background: var(--accent);
+  color: var(--on-accent);
+  font: 600 0.625rem / 1rem var(--font-mono);
+  text-align: center;
+  pointer-events: none;
+}
+
 ion-toolbar ion-buttons ion-button {
   --color: var(--text-2);
   --background: transparent;
@@ -991,6 +1017,20 @@ ion-card.seeker-info-card ion-card-content p.seeker-info-caption {
   background: var(--negative);
 }
 
+/* How exactly the seekers see this hider: one line at the foot of the card */
+ion-card.seeker-info-card ion-card-content p.hider-seen {
+  height: 1.25rem;
+  margin: var(--space-3) 0 0;
+  font-size: var(--fs-caption);
+  line-height: 1.25rem;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+ion-card.seeker-info-card ion-card-content p.hider-seen--exact {
+  color: var(--accent);
+}
+
 /* ===== FIX DOT — the signature ===== */
 .fix-dot {
   display: inline-block;
@@ -1052,6 +1092,59 @@ ion-segment.track-mode ion-segment-button {
   --padding-start: var(--space-2);
   --padding-end: var(--space-2);
   font-size: var(--fs-caption);
+}
+
+/* The hider's screen: the Seekers / Map switch across the top, then the
+   seekers card or the map filling the rest */
+.hider-screen {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: var(--space-2);
+  align-items: stretch;
+}
+
+ion-segment.hider-mode {
+  flex: 0 0 auto;
+  width: 100%;
+  height: 2.5rem;
+}
+
+ion-segment.hider-mode ion-segment-button {
+  font-size: var(--fs-caption);
+}
+
+.hider-screen ion-card.seeker-info-card {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.hider-map-note {
+  height: 1.25rem;
+  margin: 0;
+  text-align: center;
+  font-size: var(--fs-caption);
+  line-height: 1.25rem;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A seeker's name, on tapping their dot */
+.leaflet-tooltip.track-seeker-name {
+  padding: 1px var(--space-2);
+  border: 0;
+  border-radius: 6px;
+  background: rgba(11, 13, 20, 0.88);
+  color: var(--text-1);
+  font: 500 12px / 18px var(--font-sans);
+  box-shadow: none;
+}
+
+.leaflet-tooltip.track-seeker-name::before {
+  display: none;
 }
 
 /* Map mode: the map takes the room between the switch and the readout */
@@ -2044,6 +2137,71 @@ ion-content .name-card.settings-row {
   vertical-align: -2px;
 }
 
+/* ===== IN GAME: the hider's jammer, under the status card ===== */
+ion-content .name-card.jam-card {
+  --min-height: calc(var(--row-height) + var(--space-2) - 2px);
+  height: calc(var(--row-height) + var(--space-2));
+  margin-top: var(--space-3);
+}
+
+.jam-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  height: 100%;
+  padding: 0 var(--space-3) 0 var(--space-4);
+  box-sizing: border-box;
+}
+
+.jam-text {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.jam-title {
+  font-size: var(--fs-body);
+  line-height: 1.375rem;
+  font-weight: 500;
+  color: var(--text-1);
+}
+
+/* One line, whatever it says: the card never changes height */
+.jam-status {
+  font-size: var(--fs-meta);
+  line-height: 1rem;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.jam-bar {
+  display: block;
+  height: 3px;
+  margin-top: var(--space-2);
+  border-radius: 2px;
+  background: var(--hairline-color);
+  overflow: hidden;
+}
+
+.jam-card--ready .jam-bar .proximity-bar-fill,
+.jam-card--active .jam-bar .proximity-bar-fill {
+  background: var(--accent);
+}
+
+.jam-card--active .jam-status {
+  color: var(--accent);
+}
+
+ion-button.jam-btn {
+  flex-shrink: 0;
+  min-width: 5.5rem;
+  margin: 0;
+}
+
 /* ===== GAME OVER ===== */
 ion-card.game-over-card ion-card-content {
   padding-inline: var(--space-4);
@@ -2150,6 +2308,119 @@ ion-footer.phase-footer-bar {
   margin: 0;
   font-size: var(--fs-body);
   color: var(--text-2);
+}
+
+/* ===== CHAT SHEET: the conversation, with the box to write in under it ===== */
+.chat-empty {
+  margin: var(--space-6) var(--space-4);
+  text-align: center;
+  font-size: var(--fs-body);
+  line-height: 1.375rem;
+  color: var(--text-3);
+}
+
+.chat-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Other people's on the left, your own on the right */
+.chat-message {
+  align-self: flex-start;
+  max-width: 85%;
+  padding: var(--space-2) var(--space-3);
+  border: var(--hairline);
+  border-radius: var(--radius-card);
+  background: var(--ink-3);
+}
+
+.chat-message--mine {
+  align-self: flex-end;
+  background: var(--ink-4);
+}
+
+.chat-meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--fs-meta);
+  line-height: 1rem;
+  color: var(--text-3);
+}
+
+.chat-name {
+  font-weight: 500;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-role,
+.chat-time {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+}
+
+.chat-time {
+  margin-inline-start: auto;
+}
+
+ion-content.chat-content p.chat-text {
+  margin: var(--space-1) 0 0;
+  font-size: var(--fs-body);
+  line-height: 1.375rem;
+  color: var(--text-1);
+  overflow-wrap: anywhere;
+}
+
+ion-footer.chat-footer {
+  background: var(--ink-2);
+  border-top: var(--hairline);
+  box-shadow: none;
+}
+
+.chat-form {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) calc(var(--space-3) + var(--ion-safe-area-bottom, 0px));
+}
+
+ion-input.chat-input {
+  --background: transparent;
+  --color: var(--text-1);
+  --placeholder-color: var(--text-3);
+  --placeholder-opacity: 1;
+  --padding-start: var(--space-3);
+  --padding-end: var(--space-3);
+  --padding-top: 0;
+  --padding-bottom: 0;
+  --highlight-color-focused: var(--accent);
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 2.75rem;
+  border: var(--hairline);
+  border-radius: var(--radius-control);
+  background: var(--ink-3);
+  font-size: var(--fs-body);
+}
+
+ion-input.chat-input.has-focus {
+  border-color: var(--accent);
+}
+
+ion-input.chat-input::part(container)::after {
+  display: none;
+}
+
+.chat-form ion-button {
+  flex-shrink: 0;
+  margin: 0;
 }
 
 /* ===== SETTINGS SHEET ===== */

@@ -1,5 +1,5 @@
 // Seekers track with the compass or a street map
-import { SHOT, createLobby, join, startGame, passGate } from '../lib/helpers.mjs';
+import { SHOT, createLobby, join, startGame, exactPositions, passGate } from '../lib/helpers.mjs';
 import { chromium } from '../lib/playwright.mjs';
 
 const browser = await chromium.launch();
@@ -21,6 +21,7 @@ const page = seeker.page;
 await page.evaluate(() => window.__manhuntSocket.emitWithAck('update-settings', { settings: { geofence: { points: [
   { latitude: 39.1935, longitude: -96.5840 }, { latitude: 39.1935, longitude: -96.5770 },
   { latitude: 39.1870, longitude: -96.5770 }, { latitude: 39.1870, longitude: -96.5840 }] } } }));
+await exactPositions(page); // pins, distances and directions here are the real ones
 await startGame(page, maya.page, priya.page);
 await page.waitForSelector('[data-testid="target-card"]');
 await page.waitForTimeout(1500);

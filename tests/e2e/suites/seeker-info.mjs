@@ -16,7 +16,7 @@ const FAR = { latitude: 39.192, longitude: -96.58 };     // ~222 m
 // Watch what actually reaches a phone, not just what it shows
 const tap = (page) => page.evaluate(() => { window.__states = []; window.__manhuntSocket.on('lobby-state', (s) => window.__states.push(s)); });
 const leaked = (page) => page.evaluate(() => window.__states.filter((s) => s.phase === 'playing')
-  .flatMap((s) => s.players).filter((p) => p.latitude !== null && p.name !== window.__me).length);
+  .flatMap((s) => s.players).filter((p) => p.latitude !== null && p.is_seeker).length);
 
 async function game(name, mode, alert) {
   const id = await createLobby(name);
@@ -52,7 +52,7 @@ async function game(name, mode, alert) {
   check(/stay out of sight/.test(await text(near.page, '[data-testid="seeker-info-caption"]')), 'a close seeker is flagged');
   check(/A seeker is 3\d\sm away/.test(await text(near.page, '[data-testid="found-hint"]')), 'found hint uses the distance', await text(near.page, '[data-testid="found-hint"]'));
   check(await far.page.locator('[data-testid="found-btn"]').evaluate((b) => b.classList.contains('button-disabled') || b.hasAttribute('disabled')), 'out of range: Found is disabled');
-  check(await leaked(near.page) === 0 && await leaked(far.page) === 0, "no one else's coordinates reach a hider's phone");
+  check(await leaked(near.page) === 0 && await leaked(far.page) === 0, "no seeker's coordinates reach a hider's phone");
   check(await host.page.locator('[data-testid="target-card"]').count() >= 2, 'seekers still track the hiders');
   // The seeker walks closer: Priya's number follows
   await host.ctx.setGeolocation({ latitude: 39.1915, longitude: -96.58 });
@@ -81,7 +81,7 @@ async function game(name, mode, alert) {
   // The seeker closes in: Priya is alerted
   await host.ctx.setGeolocation({ latitude: 39.1915, longitude: -96.58 });
   check(await valueIs(far.page, /^Seeker nearby$/), 'the alert comes on as a seeker closes in');
-  check(await leaked(near.page) === 0 && await leaked(far.page) === 0, "no coordinates reach a hider's phone");
+  check(await leaked(near.page) === 0 && await leaked(far.page) === 0, "no seeker's coordinates reach a hider's phone");
   await Promise.all([host, near, far].map((p) => p.ctx.close()));
 }
 
