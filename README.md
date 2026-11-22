@@ -130,6 +130,7 @@ OpenStreetMap streets. To refresh the images after a UI change, run
 - `server/` — Express + Socket.IO backend (merged in from the old ManhuntApi repo)
 - `shared/` — code both sides use (play-area geometry)
 - `tests/` — unit and server tests; `tests/e2e/` holds the browser tests
+- `scripts/` — setting up and deploying a server, the walkthrough screenshots, and the simulator (`npm run simulate`)
 - `docs/vault/` — project notes as an Obsidian vault (open the folder as a vault; start at `Manhunt.md`)
 
 ## Development
@@ -166,6 +167,31 @@ a few are known and harmless (the selected segment's text measured against the
 wrong layer, back buttons' text sitting beside their chevron, the invite's
 cut-off lobby ID). Things the suites can't check, because a desktop browser
 can't do them: real push delivery, iPhone shake-to-undo, and a real compass.
+
+### Simulator
+
+Up to four phones side by side in one browser window, each running the real
+web app, in a game that starts by itself:
+
+```bash
+npm run simulate                  # build the app, start, open http://localhost:3210/simulator
+npm run simulate -- --no-build    # reuse dist/
+npm run simulate -- --no-open     # don't open the browser
+```
+
+The first phone is the host and a seeker; **Phones** and **Seekers** in the
+bar change the numbers, and **New game** starts again in a new lobby. Every
+phone stands, walks or runs at random within 350 m of the middle
+(`?lat=..&lng=..` in the address moves the middle), and the panel on the right
+shows where each one really is, to set against what the phones are shown.
+Each phone can be used like a real one: tap **Jam**, open the map, send a
+chat message. **Reload** under a phone's name reloads just that phone.
+
+It runs its own game server on this computer only, with notifications off.
+Jammers charge in 30 seconds there, not 15 minutes; every other setting is the
+default. The app isn't changed for it: `scripts/simulate.mjs` adds one script
+to the page it serves (`scripts/simulator/phone.mjs`), which stands in for
+each phone's location and compass and keeps their saved data apart.
 
 ## How the protocol works
 

@@ -18,6 +18,7 @@ Repository: `That-Coder-Guy/ManhuntApp` on GitHub. Work goes straight to `main`.
 - [[iOS app]]: the native iPhone shell, sideloaded with xtool
 - [[Android app]]: the native Android shell, built to an APK
 - [[Testing]]: unit tests, browser tests, audits
+- [[Simulator]]: up to four phones in one window, in a game that starts itself
 - [[Conventions]]: how work is done here (commits, design, checks)
 - [[Decisions]]: choices made, and why
 

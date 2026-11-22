@@ -12,6 +12,8 @@ npm run audit:ui            # overflow, legibility, text position (notes, not pa
 ```
 Browser tests need Playwright once: `npm i -D playwright && npx playwright install chromium`.
 
+To watch a game instead of testing one, `npm run simulate`: see [[Simulator]].
+
 ## How the browser tests work
 `tests/e2e/run.mjs` builds the app (`--no-build` reuses `dist/`) and starts the real game server on a free port, with pushes **recorded to `tests/e2e/output/pushes.jsonl` instead of sent** and map tiles stubbed: no internet needed. Each suite drives several browser "phones". Screenshots land in `tests/e2e/output/` (gitignored).
 
