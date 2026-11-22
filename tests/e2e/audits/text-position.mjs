@@ -153,7 +153,11 @@ await audit(host.page, 'settings');
 await host.page.locator('ion-modal.show-modal [data-testid="settings-cancel"]').click();
 await host.page.waitForTimeout(700);
 
-await host.page.locator('[data-testid="share-btn"], [aria-label*="nvite"]').first().click().catch(() => {});
+// Invite is in the toolbar's menu
+await host.page.locator('[data-testid="menu-btn"]').click().catch(() => {});
+await host.page.waitForTimeout(500);
+await audit(host.page, 'menu');
+await host.page.locator('[data-testid="invite-btn"]').click().catch(() => {});
 await host.page.waitForTimeout(900);
 await audit(host.page, 'invite');
 await host.page.locator('ion-modal.show-modal ion-button:has-text("Close")').click().catch(() => {});

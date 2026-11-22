@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     IonPage, IonHeader, IonToolbar, IonTitle, IonContent, IonFooter,
-    IonButtons, IonButton, IonIcon, IonAlert, IonToast
+    IonButtons, IonButton, IonIcon, IonAlert, IonToast, IonPopover, IonList, IonItem, IonLabel
 } from '@ionic/react';
-import { qrCodeOutline, peopleOutline, exitOutline, stopCircleOutline, chatbubbleOutline } from 'ionicons/icons';
+import { qrCodeOutline, peopleOutline, exitOutline, stopCircleOutline, chatbubbleOutline, ellipsisHorizontal } from 'ionicons/icons';
 import ProfileCard from './ProfileCard';
 import RoleSwitcher from './RoleSwitcher';
 import LobbyPlayers from './LobbyPlayers';
@@ -59,6 +59,9 @@ function LobbyFound({ lobbyId, lobby, onLeft })
     const [isPlayersOpen, setIsPlayersOpen] = useState(false);
     const [isShareOpen, setIsShareOpen] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
+    // The toolbar's menu (invite, end the game, leave): the tap that opened it, which is
+    // also where it's shown, or null while it's closed
+    const [menuTap, setMenuTap] = useState(null);
     // The last chat message this player has seen: the button counts what came after
     const [lastRead, setLastRead] = useState(() => loadLastRead(lobbyId));
     const newestMessage = chat.length ? chat[chat.length - 1].id : 0;
@@ -135,7 +138,7 @@ function LobbyFound({ lobbyId, lobby, onLeft })
     return (
         <IonPage data-testid="lobby-page" data-phase={phase}>
             <IonHeader>
-                <IonToolbar className={showEnd ? 'toolbar--five' : 'toolbar--four'}>
+                <IonToolbar>
                     <IonTitle data-testid="lobby-title">{lobbyName}</IonTitle>
                     <IonButtons slot="end">
                         <IonButton
@@ -147,19 +150,19 @@ function LobbyFound({ lobbyId, lobby, onLeft })
                             <IonIcon slot="icon-only" icon={chatbubbleOutline} />
                             {unread > 0 && <span className="toolbar-badge" data-testid="chat-unread">{unread > 9 ? '9+' : unread}</span>}
                         </IonButton>
-                        <IonButton data-testid="invite-btn" onClick={() => setIsShareOpen(true)} aria-label="Invite players">
-                            <IonIcon slot="icon-only" icon={qrCodeOutline} />
-                        </IonButton>
                         <IonButton data-testid="players-btn" onClick={() => setIsPlayersOpen(true)} aria-label="View players">
                             <IonIcon slot="icon-only" icon={peopleOutline} />
                         </IonButton>
-                        {showEnd && (
-                            <IonButton data-testid="end-game-btn" onClick={() => setIsEndConfirmOpen(true)} aria-label="End the game">
-                                <IonIcon slot="icon-only" icon={stopCircleOutline} />
-                            </IonButton>
-                        )}
-                        <IonButton data-testid="leave-btn" onClick={() => setIsLeaveConfirmOpen(true)} aria-label="Leave lobby">
-                            <IonIcon slot="icon-only" icon={exitOutline} />
+                        {/* What's done least shares one button: inviting, leaving, and for
+                            the host during a game, ending it */}
+                        <IonButton
+                            data-testid="menu-btn"
+                            onClick={(event) => setMenuTap(event.nativeEvent)}
+                            aria-label={showEnd ? 'More: invite players, end the game, leave lobby' : 'More: invite players, leave lobby'}
+                            aria-haspopup="menu"
+                            aria-expanded={!!menuTap}
+                        >
+                            <IonIcon slot="icon-only" icon={ellipsisHorizontal} />
                         </IonButton>
                     </IonButtons>
                 </IonToolbar>
@@ -265,6 +268,35 @@ function LobbyFound({ lobbyId, lobby, onLeft })
                 </IonFooter>
             )}
 
+            <IonPopover
+                isOpen={!!menuTap}
+                event={menuTap}
+                onDidDismiss={() => setMenuTap(null)}
+                dismissOnSelect
+                arrow={false}
+                side="bottom"
+                alignment="end"
+                className="lobby-menu"
+                data-testid="lobby-menu"
+            >
+                <IonList lines="full" className="lobby-menu-list">
+                    <IonItem button detail={false} data-testid="invite-btn" onClick={() => setIsShareOpen(true)}>
+                        <IonIcon slot="start" icon={qrCodeOutline} aria-hidden="true" />
+                        <IonLabel>Invite players</IonLabel>
+                    </IonItem>
+                    {showEnd && (
+                        <IonItem button detail={false} data-testid="end-game-btn" onClick={() => setIsEndConfirmOpen(true)}>
+                            <IonIcon slot="start" icon={stopCircleOutline} aria-hidden="true" />
+                            <IonLabel>End game</IonLabel>
+                        </IonItem>
+                    )}
+                    <IonItem button detail={false} lines="none" className="lobby-menu-leave" data-testid="leave-btn" onClick={() => setIsLeaveConfirmOpen(true)}>
+                        <IonIcon slot="start" icon={exitOutline} aria-hidden="true" />
+                        <IonLabel>Leave lobby</IonLabel>
+                    </IonItem>
+                </IonList>
+            </IonPopover>
+
             <IonToast
                 isOpen={!!notice}
                 message={notice}
@@ -314,6 +346,7 @@ function LobbyFound({ lobbyId, lobby, onLeft })
             <ChatModal
                 isOpen={isChatOpen}
                 onClose={() => setIsChatOpen(false)}
+                lobbyId={lobbyId}
                 messages={chat}
                 players={everyone}
                 selfId={selfPlayer?.player_id}
@@ -334,4 +367,3 @@ function LobbyFound({ lobbyId, lobby, onLeft })
 }
 
 export default LobbyFound;
-                lobbyId={lobbyId}

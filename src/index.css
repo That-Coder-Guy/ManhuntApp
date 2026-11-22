@@ -199,21 +199,14 @@ ion-header ion-toolbar {
 }
 
 /* iOS centres titles absolutely; lead-align so a long lobby name can never
-   run under the three icon buttons (3 × 40 + room) */
+   run under the three icon buttons (3 × 40 + the bar's own padding, 142
+   in all): in a lobby, chat, players and the menu */
 ion-toolbar ion-title {
   text-align: start;
   padding-inline-start: var(--space-3);
-  padding-inline-end: 8.5rem;
+  padding-inline-end: 9rem;
   font-size: var(--fs-title);
   font-weight: 500;
-}
-
-ion-toolbar.toolbar--four ion-title {
-  padding-inline-end: 11rem;
-}
-
-ion-toolbar.toolbar--five ion-title {
-  padding-inline-end: 13.5rem;
 }
 
 /* A count on a toolbar button: unread chat messages */
@@ -2395,19 +2388,19 @@ ion-footer.phase-footer-bar {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* The time sits at the right, never closer to the name and side than three
-   spaces (3ch in its own monospace; the row's gap is already part of that).
-   A message is never narrower than its header laid out that tight */
 
 .chat-role,
-  padding-inline-start: calc(3ch - var(--space-2));
 .chat-time {
   flex-shrink: 0;
   font-family: var(--font-mono);
 }
 
+/* The time sits at the right, never closer to the name and side than three
+   spaces (3ch in its own monospace; the row's gap is already part of that).
+   A message is never narrower than its header laid out that tight */
 .chat-time {
   margin-inline-start: auto;
+  padding-inline-start: calc(3ch - var(--space-2));
 }
 
 ion-content.chat-content p.chat-text {
@@ -2456,6 +2449,13 @@ ion-input.chat-input.has-focus {
 
 ion-input.chat-input::part(container)::after {
   display: none;
+}
+
+.chat-form ion-button {
+  flex-shrink: 0;
+  margin: 0;
+}
+
 /* A picture in a message: a button, shown small; tap for the whole of it.
    Its width and height come with the message, so its room is kept before
    it loads */
@@ -2605,13 +2605,6 @@ ion-modal.chat-viewer {
   color: var(--text-1);
   font: 500 var(--fs-body) / 1 var(--font-sans);
   cursor: pointer;
-}
-
-}
-
-.chat-form ion-button {
-  flex-shrink: 0;
-  margin: 0;
 }
 
 /* ===== SETTINGS SHEET ===== */
@@ -2819,6 +2812,52 @@ ion-toolbar ion-buttons ion-button.toolbar-primary {
   --padding-start: var(--space-2);
   --padding-end: var(--space-2);
   font-size: var(--fs-caption);
+}
+
+/* ===== THE LOBBY'S MENU: opens under the toolbar's last button (invite, the
+   host's end game, leave) ===== */
+ion-popover.lobby-menu {
+  --background: var(--ink-2);
+  --width: 14rem;
+  --box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.5);
+  --backdrop-opacity: 0.3;
+}
+
+ion-popover.lobby-menu::part(content) {
+  border: var(--hairline);
+  border-radius: var(--radius-track);
+}
+
+ion-list.lobby-menu-list {
+  padding: 0;
+  background: transparent;
+}
+
+ion-list.lobby-menu-list ion-item {
+  --background: transparent;
+  --background-hover: var(--ink-3);
+  --background-hover-opacity: 1;
+  --background-activated: var(--ink-4);
+  --background-activated-opacity: 1;
+  --color: var(--text-1);
+  --border-color: var(--hairline-color);
+  --padding-start: var(--space-4);
+  --inner-padding-end: var(--space-4);
+  --min-height: var(--control-height);
+  font-size: var(--fs-body);
+}
+
+ion-list.lobby-menu-list ion-item ion-icon {
+  margin-inline-end: var(--space-3);
+  font-size: 1.25rem;
+  color: var(--text-2);
+}
+
+/* Leaving can't be taken back: it's the one in red */
+ion-list.lobby-menu-list ion-item.lobby-menu-leave,
+ion-list.lobby-menu-list ion-item.lobby-menu-leave ion-icon {
+  --color: var(--ion-color-danger-tint);
+  color: var(--ion-color-danger-tint);
 }
 
 /* ===== ACTION SHEETS (photo, player menu, select pickers) ===== */

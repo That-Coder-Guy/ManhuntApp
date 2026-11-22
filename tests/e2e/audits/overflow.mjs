@@ -162,6 +162,8 @@ for (const vp of SIZES) {
   await seeker.ctx.setOffline(false);
   await seeker.page.waitForSelector('[data-testid="offline-banner"]', { state: 'detached', timeout: 15000 }).catch(() => {});
 
+  // Invite is in the toolbar's menu
+  await host.page.locator('[data-testid="menu-btn"]').click();
   await host.page.locator('[data-testid="invite-btn"]').click();
   await host.page.waitForSelector('[data-testid="share-qr-img"]'); await host.page.waitForTimeout(500);
   await audit(host.page, `${tag} invite`);
@@ -170,6 +172,8 @@ for (const vp of SIZES) {
   await audit(host.page, `${tag} players`);
   await host.page.locator('[data-testid="players-close"]').click(); await host.page.waitForTimeout(500);
 
+  // End game is in the toolbar's menu
+  await host.page.locator('[data-testid="menu-btn"]').click();
   await host.page.locator('[data-testid="end-game-btn"]').click();
   await host.page.waitForSelector('.end-alert');
   await host.page.locator('.end-alert button:has-text("End game")').click();

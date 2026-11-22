@@ -30,7 +30,7 @@ real app, captured at phone size (390 × 844) from a scripted game.
   <tr>
     <td valign="top"><b>Create or join.</b> Name the lobby and tap <i>Create lobby</i>. Friends join with the lobby ID, a pasted invite link, or the QR button, which scans an invite with the camera.</td>
     <td valign="top"><b>Before you play.</b> In the browser, entering a lobby asks for what the game uses: location and, on an iPhone, the compass are required; notifications are optional. <b>Leave lobby</b> is the way out for anyone who'd rather not. The installed app also offers the switches once, when it first opens, where they can be put off. They're on the Settings page afterwards too, where one that's on can only be turned off in the phone's own settings.</td>
-    <td valign="top"><b>Invite.</b> The QR button in the top bar shows a code anyone can scan with their phone camera to land straight in the lobby.</td>
+    <td valign="top"><b>Invite.</b> <i>Invite players</i>, in the top bar's <b>···</b> menu, shows a code anyone can scan with their phone camera to land straight in the lobby.</td>
   </tr>
 </table>
 

@@ -39,3 +39,15 @@ See [[Permissions]].
 
 ## Shake to undo: an iframe, not a value reset
 In WebKit, setting a field's value does **not** clear the undo history; closing a frame does. See [[Shake to undo fix]].
+
+## The lobby's toolbar: chat, players, and a menu (2026-11-22)
+The toolbar had grown to five buttons for a host in a game: chat, invite, players, end game, leave. The owner asked for "the exit and invite code menu bar items" to move "into a unified menu button" that opens "a popup menu", and then for "the host's stop game option" to go into it too.
+- The toolbar is now always **chat, players, ···**. The **···** button opens a popover under itself: **Invite players**, **End game** (the host, during a game, only), **Leave lobby** (in red, last).
+- What stays on the bar is what's used during play; what moved is used once or twice a game.
+- Ending and leaving still ask first ("End the game?", "Leave lobby?"). The menu doesn't replace the confirmation: it's one tap further from an accident, not a substitute.
+- A popover, not the action sheet the row menus use: the owner asked for a popup from the button, and a two- or three-line list reads better there than as a sheet across the bottom.
+- The items keep the old buttons' test IDs (`invite-btn`, `end-game-btn`, `leave-btn`); `menu-btn` opens them. Checked by `tests/e2e/suites/lobby-menu.mjs`.
+- The title's room for the buttons was 6 px short of them (a long lobby name could run under the first one's edge); it's 9rem now. The suite checks it.
+- The README's walkthrough screenshots still show the old toolbar until `npm run screenshots` is run.
+
+Code: `LobbyFound.jsx` (`IonPopover`), `.lobby-menu` in `index.css`.

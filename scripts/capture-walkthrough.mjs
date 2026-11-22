@@ -334,6 +334,8 @@ try {
     // 5. Lobby from both sides, the invite and the host's player menu
     await shot(maya.page, '03-lobby-host');
     await shot(theo.page, '05-lobby-guest');
+    // Invite is in the toolbar's menu
+    await maya.page.locator('[data-testid="menu-btn"]').click();
     await maya.page.locator('[data-testid="invite-btn"]').click();
     await maya.page.waitForSelector('[data-testid="share-qr-img"]');
     await shot(maya.page, '06-invite');
