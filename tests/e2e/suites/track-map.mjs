@@ -97,6 +97,37 @@ const back = await page.evaluate(() => {
 check(back, 'Fit frames you and Priya again');
 check(await page.locator('.track-map-fit--active').count() === 0, 'and Fit settles back');
 
+// Centre on me: you in the middle, and the map stays on you as you walk
+const mePressed = () => page.locator('[data-testid="track-map-me"]').getAttribute('aria-pressed');
+const offCentre = () => page.evaluate(() => {
+  const map = document.querySelector('.track-map-wrap').getBoundingClientRect();
+  const you = document.querySelector('.track-you').getBoundingClientRect();
+  return Math.hypot((you.left + you.right) / 2 - (map.left + map.right) / 2, (you.top + you.bottom) / 2 - (map.top + map.bottom) / 2);
+});
+check(await offCentre() > 30 && await mePressed() === 'false', 'framed with a hider, you are off to one side', String(await offCentre()));
+await page.locator('[data-testid="track-map-me"]').click();
+await page.waitForTimeout(900);
+check(await offCentre() < 4, 'Centre on me puts you in the middle', String(await offCentre()));
+check(await mePressed() === 'true' && await page.locator('.track-map-fit--active').count() === 1, 'its button stays lit, and Fit is the way back');
+await shot(page, 'map-centred');
+await seeker.ctx.setGeolocation({ latitude: SEEKER.latitude + 0.0005, longitude: SEEKER.longitude + 0.0004 }); // ~65 m off
+check(await waitFor(page, () => /2[5-9]\d/.test(document.querySelector('[data-testid="target-readout"]')?.innerText || '')), 'you walk on');
+await page.waitForTimeout(1200);
+check(await offCentre() < 6 && await mePressed() === 'true', 'and the map follows you', String(await offCentre()));
+const middle = { x: box.x + box.width / 2, y: box.y + box.height * 0.75 };
+await page.mouse.move(middle.x, middle.y);
+await page.mouse.down();
+for (let i = 1; i <= 8; i++) await page.mouse.move(middle.x - i * 12, middle.y - i * 6);
+await page.mouse.up();
+await page.waitForTimeout(400);
+check(await mePressed() === 'false' && await offCentre() > 60, 'dragging the map lets go of you', String(await offCentre()));
+await page.locator('[data-testid="track-map-me"]').click();
+await page.waitForTimeout(600);
+await page.locator('[data-testid="track-map-fit"]').click();
+await page.waitForTimeout(800);
+check(await mePressed() === 'false' && await page.locator('.track-map-fit--active').count() === 0, 'and so does Fit');
+await seeker.ctx.setGeolocation(SEEKER);
+
 // The choice is remembered: back to the list, then a reload
 await page.locator('[data-testid="compass-back"]').click();
 await page.locator('[data-testid="target-card"]', { hasText: 'Maya' }).click();

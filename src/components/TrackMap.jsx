@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { IonIcon } from '@ionic/react';
-import { scanOutline } from 'ionicons/icons';
+import { scanOutline, locateOutline } from 'ionicons/icons';
 import { createMap, showView, watchSize, dragFollowsRotation, toLatLng, hasPosition, STREET_ZOOM } from '../utils/leafletBase';
 import useCompassHeading from '../hooks/useCompassHeading';
 import useSmoothAngle from '../hooks/useSmoothAngle';
@@ -61,6 +61,11 @@ function hiderIcon(player, { tracked, fresh, label = tracked ? playerName(player
  * while you pan and zoom, reframing only if either of you nears the edge;
  * "Fit" frames you both again.
  *
+ * The button under Fit centres the map on you and lines it up with the way
+ * you face (turning it with the phone again if north was being kept up).
+ * The map then stays centred on you as you walk, until you drag it, press
+ * Fit, or track someone else.
+ *
  * A hider's (`youAre="hider"`, no `target`): you and your fellow hiders, as
  * named pins, and the play area. The others are where the seekers see them,
  * area and all. No seekers: their positions never reach a hider's phone. It
@@ -103,11 +108,40 @@ function TrackMap({ you, youAre = 'seeker', self = null, target = null, hiders, 
     const programmaticTimerRef = useRef(null);
     const framedTargetRef = useRef(null);
     const [userMoved, setUserMoved] = useState(false);
+    // Centred on you and staying there ("centre on me"), until a drag or Fit
+    const followRef = useRef(false);
+    const [following, setFollowing] = useState(false);
 
     const latest = useRef({ onSelect });
     latest.current = { onSelect };
     // The newest frame(), for the size watcher set up with the map
     const frameRef = useRef(null);
+
+    function setFollow(on)
+    {
+        followRef.current = on;
+        setFollowing(on);
+    }
+
+    // The next move is ours, not the player's. Leaflet fires no moveend when
+    // the view doesn't change, so the flag also clears itself
+    function moveIsOurs()
+    {
+        programmaticRef.current = true;
+        clearTimeout(programmaticTimerRef.current);
+        programmaticTimerRef.current = setTimeout(() => { programmaticRef.current = false; }, 600);
+    }
+
+    // Put you in the middle: zoomed to street level the first time, then
+    // just slid along as you walk
+    function centreOnYou({ zoomIn = false } = {})
+    {
+        const map = mapRef.current;
+        if (!map || !hasPosition(you)) return;
+        moveIsOurs();
+        if (zoomIn) showView(map, containerRef.current, pendingViewRef, { center: toLatLng(you), zoom: Math.max(map.getZoom(), STREET_ZOOM) });
+        else map.panTo(toLatLng(you));
+    }
 
     function frame(force = false)
     {
@@ -131,11 +165,7 @@ function TrackMap({ you, youAre = 'seeker', self = null, target = null, hiders, 
         // A square inside that circle, with room around the markers
         const box = Math.max(0, (radius - FRAME_PADDING) * Math.SQRT2);
         const padding = side ? Math.max(FRAME_PADDING, (side - box) / 2) : FRAME_PADDING;
-        // Our move, not the seeker's. Leaflet fires no moveend when the view
-        // doesn't change, so the flag also clears itself
-        programmaticRef.current = true;
-        clearTimeout(programmaticTimerRef.current);
-        programmaticTimerRef.current = setTimeout(() => { programmaticRef.current = false; }, 600);
+        moveIsOurs();
         const view = points.length === 1
             ? { center: points[0], zoom: Math.max(map.getZoom(), STREET_ZOOM - 1) }
             : { bounds: L.latLngBounds(points), padding: [padding, padding] };
@@ -197,7 +227,14 @@ function TrackMap({ you, youAre = 'seeker', self = null, target = null, hiders, 
             setUserMoved(true);
         };
         map.on('movestart zoomstart', () => { if (!programmaticRef.current) takeOver(); });
-        map.on('dragstart', takeOver); // a finger on the map is always the seeker
+        // A finger on the map is always the player, and lets go of "centre on me"
+        // (zooming doesn't: it keeps the middle where it is)
+        map.on('dragstart', () =>
+        {
+            takeOver();
+            followRef.current = false;
+            setFollowing(false);
+        });
         map.on('moveend', () => { programmaticRef.current = false; });
         const stopWatching = watchSize(map, container, pendingViewRef);
         mapRef.current = map;
@@ -334,12 +371,20 @@ function TrackMap({ you, youAre = 'seeker', self = null, target = null, hiders, 
         const framing = target
             ? `track:${target.player_id}`
             : `all:${hiders.filter(hasPosition).map((hider) => hider.player_id).join(',')}`;
-        if (framedTargetRef.current !== framing && hasPosition(target ?? you))
+        const changed = framedTargetRef.current !== framing && hasPosition(target ?? you);
+        if (changed) framedTargetRef.current = framing;
+        // Tracking someone else shows you both, whatever the view was. With
+        // no one tracked, a map kept centred on you stays on you
+        if (changed && !(followRef.current && !target))
         {
-            framedTargetRef.current = framing;
             userMovedRef.current = false;
             setUserMoved(false);
+            setFollow(false);
             frame(true);
+        }
+        else if (followRef.current)
+        {
+            centreOnYou();
         }
         else
         {
@@ -351,7 +396,24 @@ function TrackMap({ you, youAre = 'seeker', self = null, target = null, hiders, 
     {
         userMovedRef.current = false;
         setUserMoved(false);
+        setFollow(false);
         frame(true);
+    }
+
+    // Centre on you, lined up with the way you face, and stay there
+    function centreOnMe()
+    {
+        if (!hasPosition(you)) return;
+        // A view the player chose: Fit is the way back to seeing everyone
+        userMovedRef.current = true;
+        setUserMoved(true);
+        setFollow(true);
+        if (northUp)
+        {
+            saveNorthUp(false);
+            setNorthUp(false);
+        }
+        centreOnYou({ zoomIn: true });
     }
 
     return (
@@ -360,32 +422,46 @@ function TrackMap({ you, youAre = 'seeker', self = null, target = null, hiders, 
             {target && !hasPosition(target) && (
                 <p className="track-map-waiting" data-testid="track-map-waiting">Waiting for {playerName(target)}’s position</p>
             )}
-            <button
-                type="button"
-                className={`track-map-fit${userMoved ? ' track-map-fit--active' : ''}`}
-                data-testid="track-map-fit"
-                onClick={fitBoth}
-                aria-label={target ? 'Show you and the hider' : 'Show everyone'}
-            >
-                <IonIcon icon={scanOutline} aria-hidden="true" />
-                Fit
-            </button>
-            {canTurn && (
+            <div className="track-map-tools">
                 <button
                     type="button"
-                    className={`track-map-north${northUp ? ' track-map-north--locked' : ''}`}
-                    data-testid="track-map-north"
-                    onClick={toggleNorthUp}
-                    aria-pressed={northUp}
-                    aria-label={northUp ? 'Turn the map with you' : 'Keep north up'}
+                    className={`track-map-fit${userMoved ? ' track-map-fit--active' : ''}`}
+                    data-testid="track-map-fit"
+                    onClick={fitBoth}
+                    aria-label={target ? 'Show you and the hider' : 'Show everyone'}
                 >
-                    {/* Points north, turning with the map */}
-                    <svg viewBox="0 0 24 24" aria-hidden="true" className="track-map-north-needle">
-                        <path d="M12 3 L16 12 L8 12 Z" className="track-map-north-tip" />
-                        <path d="M12 21 L16 12 L8 12 Z" className="track-map-north-tail" />
-                    </svg>
+                    <IonIcon icon={scanOutline} aria-hidden="true" />
+                    Fit
                 </button>
-            )}
+                <button
+                    type="button"
+                    className={`track-map-me${following ? ' track-map-me--on' : ''}`}
+                    data-testid="track-map-me"
+                    onClick={centreOnMe}
+                    disabled={!hasPosition(you)}
+                    aria-pressed={following}
+                    aria-label={canTurn ? 'Centre on you, facing the way you face' : 'Centre on you'}
+                    title={canTurn ? 'Centre on you, facing the way you face' : 'Centre on you'}
+                >
+                    <IonIcon icon={locateOutline} aria-hidden="true" />
+                </button>
+                {canTurn && (
+                    <button
+                        type="button"
+                        className={`track-map-north${northUp ? ' track-map-north--locked' : ''}`}
+                        data-testid="track-map-north"
+                        onClick={toggleNorthUp}
+                        aria-pressed={northUp}
+                        aria-label={northUp ? 'Turn the map with you' : 'Keep north up'}
+                    >
+                        {/* Points north, turning with the map */}
+                        <svg viewBox="0 0 24 24" aria-hidden="true" className="track-map-north-needle">
+                            <path d="M12 3 L16 12 L8 12 Z" className="track-map-north-tip" />
+                            <path d="M12 21 L16 12 L8 12 Z" className="track-map-north-tail" />
+                        </svg>
+                    </button>
+                )}
+            </div>
         </div>
     );
 }

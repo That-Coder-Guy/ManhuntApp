@@ -1202,12 +1202,52 @@ ion-segment.hider-mode ion-segment-button {
   transform: rotate(calc(-1 * var(--map-rotation)));
 }
 
-/* Under Fit: which way north is. Tap to keep north up, again to turn with you */
-.track-map-north {
+/* Over the map, top right, one under the other: Fit, centre on me, north */
+.track-map-tools {
   position: absolute;
   z-index: 1000;
-  top: calc(var(--space-3) + 2.25rem + var(--space-2));
+  top: var(--space-3);
   right: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  /* Only the buttons take taps: the map beside the narrow ones still drags */
+  pointer-events: none;
+}
+
+.track-map-tools > button {
+  pointer-events: auto;
+}
+
+/* Centre on you, facing the way you face; lit while the map stays on you */
+.track-map-me {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: var(--hairline);
+  border-radius: var(--radius-control);
+  background: var(--ink-2);
+  color: var(--text-2);
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+
+.track-map-me:disabled {
+  color: var(--text-3);
+  cursor: default;
+}
+
+.track-map-me--on {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Which way north is. Tap to keep north up, again to turn with you */
+.track-map-north {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1239,12 +1279,8 @@ ion-segment.hider-mode ion-segment-button {
   border-color: var(--text-2);
 }
 
-/* Over the map, top right: frame you and the hider again */
+/* Frame you and the hider again */
 .track-map-fit {
-  position: absolute;
-  z-index: 1000;
-  top: var(--space-3);
-  right: var(--space-3);
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);

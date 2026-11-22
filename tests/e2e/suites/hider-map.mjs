@@ -59,6 +59,17 @@ const before = await pinAt();
 await priya.ctx.setGeolocation({ latitude: PRIYA.latitude + 0.003, longitude: PRIYA.longitude });
 check(await waitFor(maya.page, (was) => document.querySelector('[data-testid="track-pin"]')?.style.transform !== was, before, 10000), 'when Priya moves on, her pin moves');
 
+// Centre on me: Maya in the middle of her own map
+await maya.page.locator('[data-testid="track-map-me"]').click();
+await maya.page.waitForTimeout(900);
+const offCentre = await maya.page.evaluate(() => {
+  const map = document.querySelector('.track-map-wrap').getBoundingClientRect();
+  const you = [...document.querySelectorAll('.track-pin')].find((pin) => /You/.test(pin.innerText)).querySelector('.track-pin-disc').getBoundingClientRect();
+  return Math.hypot((you.left + you.right) / 2 - (map.left + map.right) / 2, (you.top + you.bottom) / 2 - (map.top + map.bottom) / 2);
+});
+check(offCentre < 4 && await maya.page.locator('[data-testid="track-map-me"]').getAttribute('aria-pressed') === 'true', 'Centre on me puts her in the middle of her map', String(offCentre));
+await maya.page.screenshot({ path: `${SHOT}/hider-map-centred.png` });
+
 // The choice of map is remembered, and the seekers card is still a tap away
 await maya.page.reload();
 await maya.page.waitForSelector('[data-testid="hider-screen"]');

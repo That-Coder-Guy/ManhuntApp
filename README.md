@@ -87,7 +87,7 @@ real app, captured at phone size (390 × 844) from a scripted game.
   </tr>
   <tr>
     <td width="33%" valign="top"><img src="docs/walkthrough/10b-map.png" alt="The tracking map: the seeker's orange dot, a dashed line to Priya's labelled pin, the other hiders and the play area outline" width="100%"></td>
-    <td colspan="2" valign="top"><b>Or the map.</b> Switch from <i>Compass</i> to <i>Map</i> to track on a street map instead: you, a dashed line to the hider you're after, the other hiders (tap one to track them) and the play area. Like the dial, it turns with your phone so the way you face is up (names and buttons stay upright); the north button under <i>Fit</i> keeps north up instead. It frames you both, stays put while you pan and zoom, and <i>Fit</i> brings you both back into view. Each phone remembers which one its seeker prefers.</td>
+    <td colspan="2" valign="top"><b>Or the map.</b> Switch from <i>Compass</i> to <i>Map</i> to track on a street map instead: you, a dashed line to the hider you're after, the other hiders (tap one to track them) and the play area. Like the dial, it turns with your phone so the way you face is up (names and buttons stay upright); the north button under <i>Fit</i> keeps north up instead. It frames you both, stays put while you pan and zoom, and <i>Fit</i> brings you both back into view. The crosshair button centres the map on you, facing the way you face, and keeps it on you as you walk until you drag it or tap <i>Fit</i>. Each phone remembers which one its seeker prefers.</td>
   </tr>
 </table>
 

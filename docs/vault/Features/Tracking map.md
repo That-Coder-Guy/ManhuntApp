@@ -21,6 +21,14 @@ tags: [manhunt, feature]
 - framing keeps both markers inside the circle that's visible at any angle;
 - a **north button** under Fit keeps north up instead (`manhunt.mapNorthUp`). Without a compass reading (on computers) the map stays north up and the button is hidden.
 
+**Centre on me (2026-11-22).** The owner asked for "a center on me and align button" on all maps. A crosshair button between Fit and the north button, on the seeker's map and the hider's ([[Hider map]]):
+- it puts you in the middle, at street zoom or closer if the map already was, and lines the map up with the way you face: if north was being kept up, that's let go (and remembered as let go);
+- the map then **stays on you** as you walk, and the button stays lit. Zooming keeps it; dragging the map, **Fit**, or tracking another hider lets go. While it's on, Fit is highlighted as the way back to seeing everyone;
+- "align" was read as *facing the way you face*, the map's own default, not as north up, which the north button already does. Without a compass there's nothing to line up with and it only centres;
+- the three buttons are one column (`.track-map-tools`) that takes no taps itself, only its buttons: the first version blocked dragging the map beside the narrow buttons, which the track-map suite caught.
+
+The play-area map in the game settings isn't changed: it already has **Centre on me** under it, and it never turns (corners are placed and dragged on it), so there is nothing to line up.
+
 Why not the `leaflet-rotate` plugin: see [[Decisions]].
 
 Code: `src/components/TrackMap.jsx`, `SeekerView.jsx`, `CompassArrow.jsx`, `src/hooks/useCompassHeading.js`.

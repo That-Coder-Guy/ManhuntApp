@@ -8,7 +8,7 @@ Hiders can see each other on a map, as the seekers see them, and on a seeker's m
 ## The hider's screen
 A **Seekers / Map** switch sits above the hider's main card; the choice is remembered on the phone (`manhunt.hiderMode`).
 - **Seekers** is the card there always was: what the host lets hiders know about the seekers ([[Hider seeker info]]).
-- **Map** shows the hider ("You") and every fellow hider as a named pin, and the play area. It frames everyone, and frames again when a hider appears or leaves. A line under it says "You and 2 other hiders · seekers aren't shown".
+- **Map** shows the hider ("You") and every fellow hider as a named pin, and the play area. It frames everyone, and frames again when a hider appears or leaves. A line under it says "You and 2 other hiders · seekers aren't shown". The crosshair button centres it on you and keeps it there ([[Tracking map]], "Centre on me"); a hider appearing or leaving doesn't take it off you.
 - **No seeker is on a hider's map.** Their positions never reach a hider's phone; that rule ([[Decisions]]) is unchanged.
 
 ## Hiders see each other as the seekers do, and no better

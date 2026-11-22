@@ -108,6 +108,17 @@ await page.locator('[data-testid="track-map-north"]').click();
 await page.waitForTimeout(1500);
 check(Math.abs((await rotation()) + 90) < 1, 'tapping again turns it with you again');
 
+// Centre on me lines the map up with you too: north kept up is let go
+await page.locator('[data-testid="track-map-north"]').click();
+await page.waitForTimeout(1500);
+check(Math.abs(await rotation()) < 1, 'north kept up again');
+await page.locator('[data-testid="track-map-me"]').click();
+await page.waitForTimeout(1500);
+check(Math.abs((await rotation()) + 90) < 1 && await page.locator('[data-testid="track-map-north"]').getAttribute('aria-pressed') === 'false', 'Centre on me turns the map the way you face', String(await rotation()));
+check(await page.evaluate(() => localStorage.getItem('manhunt.mapNorthUp')) === '0', 'and that is remembered');
+const centred = await layout();
+check(Math.hypot(centre(centred.you).x - centre(centred.wrap).x, centre(centred.you).y - centre(centred.wrap).y) < 4, 'with you in the middle', JSON.stringify(centred.you));
+
 // The compass view still works alongside
 await page.locator('[data-testid="track-compass"]').click();
 await page.waitForTimeout(800);
