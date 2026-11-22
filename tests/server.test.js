@@ -834,6 +834,107 @@ test('chat messages are checked, and no one can flood the lobby', { skip }, asyn
     assert.notEqual((await ack(guest.socket, 'chat-send', { text: 'still here?' }).catch(() => ({ status: 'gone' }))).status, 'success');
 });
 
+test('a picture in the chat reaches everyone as a message, and is fetched by its own address', { skip }, async () => {
+    const { lobbyId, host } = await hostedLobby();
+    const maya = await join({ lobby_id: lobbyId });
+    const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(3000, 7)]);
+    const webp = Buffer.concat([Buffer.from('RIFF'), Buffer.from([0x60, 0x02, 0, 0]), Buffer.from('WEBPVP8 '), Buffer.alloc(500, 3)]);
+    const lobby = game.lobbies.get(lobbyId);
+    const fetchImage = (lobbyPart, imagePart) => fetch(`${base}/manhunt-api/chat-image/${lobbyPart}/${imagePart}`);
+
+    // A picture alone: the message says where it is and how big, and carries none of it
+    const heard = new Promise((resolve) => maya.socket.once('chat-message', resolve));
+    const sent = await ack(host.socket, 'chat-send', { image: { data: jpeg, width: 640, height: 480 } });
+    assert.equal(sent.status, 'success');
+    const message = await heard;
+    assert.equal(message.text, '');
+    assert.deepEqual(Object.keys(message.image).sort(), ['height', 'id', 'type', 'width']);
+    assert.deepEqual([message.image.type, message.image.width, message.image.height], ['image/jpeg', 640, 480]);
+
+    // Fetched by anyone who has the lobby's ID and the picture's: the same bytes, as a picture
+    const response = await fetchImage(lobbyId, message.image.id);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('content-type'), 'image/jpeg');
+    assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+    assert.match(response.headers.get('cache-control'), /immutable/);
+    assert.ok(Buffer.from(await response.arrayBuffer()).equals(jpeg));
+
+    // With words, and the other kind
+    const both = await ack(maya.socket, 'chat-send', { text: '  by the fountain ', image: { data: webp, width: 30, height: 40 } });
+    assert.deepEqual([both.message.text, both.message.image.type], ['by the fountain', 'image/webp']);
+    assert.equal((await fetchImage(lobbyId, both.message.image.id)).headers.get('content-type'), 'image/webp');
+
+    // Someone joining late gets the messages, pictures still to fetch
+    const late = connect(base, { path: SOCKET_PATH, auth: { lobby_id: lobbyId }, reconnection: false, transports: ['websocket'] });
+    sockets.push(late);
+    const history = await new Promise((resolve) => late.once('chat-history', resolve));
+    assert.deepEqual(history.messages.map((m) => m.image.id), [message.image.id, both.message.image.id]);
+    assert.ok(JSON.stringify(history).length < 1000, 'the history carries no picture');
+
+    // Nothing answers for a picture that isn't there
+    for (const [lobbyPart, imagePart] of [[lobbyId, 'nope'], ['nope', message.image.id], ['__proto__', 'constructor'], [lobbyId, '__proto__']]) {
+        assert.equal((await fetchImage(lobbyPart, imagePart)).status, 404, `${lobbyPart}/${imagePart}`);
+    }
+
+    // What isn't a picture this server keeps is refused, words and all
+    const tooBig = Buffer.concat([jpeg.subarray(0, 4), Buffer.alloc(72_000)]);
+    const refused = [
+        { image: { data: Buffer.from('<svg onload=alert(1)>'), width: 10, height: 10 } },
+        { image: { data: tooBig, width: 10, height: 10 } },
+        { image: { data: jpeg, width: 0, height: 10 } },
+        { image: { data: jpeg.toString('base64'), width: 10, height: 10 } },
+        { image: 'picture' },
+        { text: 'a caption', image: {} },
+        { text: 'x'.repeat(281), image: { data: jpeg, width: 10, height: 10 } },
+        { text: 7, image: { data: jpeg, width: 10, height: 10 } },
+    ];
+    for (const bad of refused) {
+        assert.equal((await ack(maya.socket, 'chat-send', bad)).status, 'validation_error', JSON.stringify(bad).slice(0, 60));
+    }
+    assert.deepEqual([lobby.chat.length, lobby.chat_images.size], [2, 2], 'nothing refused is kept');
+});
+
+test('a lobby keeps only its newest pictures, and no one can flood it with them', { skip }, async () => {
+    const { lobbyId, host } = await hostedLobby();
+    const lobby = game.lobbies.get(lobbyId);
+    const player = lobby.players.get(host.data.player_token);
+    const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(200, 7)]);
+    const picture = { image: { data: jpeg, width: 4, height: 3 } };
+
+    // Four in a row go through; the fifth has to wait, though words still don't
+    for (let i = 1; i <= 4; i++) assert.equal((await ack(host.socket, 'chat-send', picture)).status, 'success');
+    player.chat_times = [];
+    const fifth = await ack(host.socket, 'chat-send', picture);
+    assert.deepEqual([fifth.status, /pictures/.test(fifth.description)], ['too_fast', true]);
+    assert.equal((await ack(host.socket, 'chat-send', { text: 'words are fine' })).status, 'success');
+    assert.equal(lobby.chat_images.size, 4);
+
+    // The lobby keeps 40 pictures: the next one pushes the oldest out, and its message says so
+    const oldest = lobby.chat[0];
+    for (let i = 5; i <= 40; i++) lobby.chat_images.set(`filler-${i}`, { bytes: jpeg, type: 'image/jpeg' });
+    player.chat_times = [];
+    player.chat_image_times = [];
+    const newest = await ack(host.socket, 'chat-send', picture);
+    assert.equal(newest.status, 'success');
+    assert.equal(lobby.chat_images.size, 40);
+    assert.equal(lobby.chat_images.has(oldest.image.id), false);
+    assert.equal(lobby.chat[0].image.gone, true);
+    assert.equal(oldest.image.gone, undefined, 'the copy already sent to phones is not changed');
+    assert.equal(lobby.chat[1].image.gone, undefined);
+    assert.equal((await fetch(`${base}/manhunt-api/chat-image/${lobbyId}/${oldest.image.id}`)).status, 404);
+    assert.equal((await fetch(`${base}/manhunt-api/chat-image/${lobbyId}/${newest.message.image.id}`)).status, 200);
+
+    // A message that drops off the end of the history takes its picture with it
+    const second = lobby.chat[1];
+    const last = lobby.chat.at(-1).id;
+    lobby.chat = [second, ...Array.from({ length: 199 }, (_, i) => ({ id: last + i + 1, player_id: 1, name: 'Hank', text: `old ${i}`, at: Date.now() }))];
+    lobby.next_message_id = last + 200;
+    player.chat_times = [];
+    assert.equal((await ack(host.socket, 'chat-send', { text: 'one more' })).status, 'success');
+    assert.equal(lobby.chat.length, 200);
+    assert.equal(lobby.chat_images.has(second.image.id), false);
+});
+
 test('the health check reports which update the server runs', { skip }, async () => {
     const health = await (await fetch(`${base}/manhunt-api/health`)).json();
     assert.equal(health.status, 'success');

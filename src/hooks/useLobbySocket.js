@@ -35,6 +35,7 @@ const MAX_INITIAL_CONNECT_ATTEMPTS = 5;
 const LOCATION_SEND_INTERVAL_MS = 2000;
 
 const ACK_TIMEOUT_MS = 8000;
+const IMAGE_ACK_TIMEOUT_MS = 30_000;
 const LEAVE_TIMEOUT_MS = 3000;
 
 const FATAL_STATES = {
@@ -279,7 +280,11 @@ function useLobbySocket(lobbyId, credentials, onJoined)
         : {}), [send]);
 
     // A message to everyone in the lobby; it comes back with the rest of the chat
-    const sendChat = useCallback((text) => send('chat-send', { text }), [send]);
+    // With a picture ({ data: bytes, width, height }, see utils/chatImage.js),
+    // which gets longer to arrive: it's far bigger than anything else sent
+    const sendChat = useCallback((text, image = null) => (image
+        ? emitWithAck(socketRef.current, 'chat-send', { text, image }, IMAGE_ACK_TIMEOUT_MS)
+        : send('chat-send', { text })), [send]);
 
     // A hider's jammer: the server decides (it rejects with 'charging', 'jam_off', …)
     const startJam = useCallback(() => send('jam'), [send]);

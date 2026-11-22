@@ -205,8 +205,9 @@ each phone's location and compass and keeps their saved data apart.
     a dropout restores the same identity.
   - Client → server: `update-location`, `update-player`, `leave-lobby` (all acked).
     `jam` starts a hider's jam, if it is charged; the server answers with
-    why not otherwise. `chat-send` adds a message (up to 280 characters) to
-    the lobby's chat.
+    why not otherwise. `chat-send` adds a message to the lobby's chat: up
+    to 280 characters, a picture (`image: { data, width, height }`, a JPEG
+    or WebP of at most 72 KB as bytes), or both.
     `push-subscribe` hands the server the phone's Web Push subscription (or
     `null`), and `set-visibility` says whether the app is on screen; the
     server pushes "found" notices only to players who aren't looking.
@@ -223,7 +224,9 @@ each phone's location and compass and keeps their saved data apart.
     `uncertainty_m` says how far from the given point they may be (0 when it
     is their real position).
   - The chat: `chat-history` (the lobby's last 200 messages) on every
-    connection, then `chat-message` to everyone as each is sent.
+    connection, then `chat-message` to everyone as each is sent. A message
+    with a picture carries only its ID, type and size; the picture is
+    fetched from `GET /manhunt-api/chat-image/<lobby>/<id>` when it's shown.
 - A player who disconnects is marked offline (not deleted) and kept for
   **5 minutes** before removal. After that, their token is rejected and the
   client offers the rejoin flow.
@@ -536,7 +539,11 @@ name, a small profile picture and a role; the host sets the rules and starts.
   no more exactly: a hider who is caught joins the seekers, and shouldn't
   arrive knowing better than them where the rest are.
 - **Chat**: the speech-bubble button opens one conversation for everyone in
-  the lobby, both sides, before, during and after a game.
+  the lobby, both sides, before, during and after a game. A message can
+  carry a picture: the phone shrinks it to at most 1280 pixels and about
+  60 KB before sending (WebP where the browser can make one, else JPEG),
+  and tapping one in the conversation opens it full screen. A lobby keeps
+  its newest 40 pictures.
 - **Steady hider positions**: GPS indoors scatters tens of metres. A
   hider's phone weighs each fix by the accuracy it reports
   (`src/utils/positionFilter.js`): with poor fixes it averages over many (a

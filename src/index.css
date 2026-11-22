@@ -2395,8 +2395,12 @@ ion-footer.phase-footer-bar {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* The time sits at the right, never closer to the name and side than three
+   spaces (3ch in its own monospace; the row's gap is already part of that).
+   A message is never narrower than its header laid out that tight */
 
 .chat-role,
+  padding-inline-start: calc(3ch - var(--space-2));
 .chat-time {
   flex-shrink: 0;
   font-family: var(--font-mono);
@@ -2452,6 +2456,157 @@ ion-input.chat-input.has-focus {
 
 ion-input.chat-input::part(container)::after {
   display: none;
+/* A picture in a message: a button, shown small; tap for the whole of it.
+   Its width and height come with the message, so its room is kept before
+   it loads */
+/* Round a message's picture: the most it is shown at (--chat-image-width,
+   set on it by ChatModal from the picture's size) is the width it gives a
+   message that also has words */
+.chat-image-fit {
+  --chat-image-height: 18rem;
+  width: var(--chat-image-width);
+  max-width: 100%;
+}
+
+.chat-image {
+  display: block;
+  /* Its shape is set on it (ChatModal); it fills its wrapper, up to that most */
+  width: min(100%, var(--chat-image-width));
+  margin: var(--space-2) 0 var(--space-1);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-track);
+  background: var(--ink-1);
+  overflow: hidden;
+  cursor: zoom-in;
+}
+
+.chat-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* A message with a picture and no words is as narrow as a message can be:
+   its header with three spaces between the two ends. The picture's wrapper
+   takes that width without adding to it (no width of its own, then all of
+   the message's), and the picture fills it */
+.chat-message--picture .chat-image-fit {
+  width: 0;
+  min-width: 100%;
+  max-width: none;
+}
+
+ion-content.chat-content p.chat-image-gone {
+  margin: var(--space-1) 0 0;
+  font-size: var(--fs-caption);
+  line-height: 1.25rem;
+  font-style: italic;
+  color: var(--text-3);
+}
+
+/* Left of the box to write in: add a picture */
+.chat-attach {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-height);
+  height: var(--control-height);
+  padding: 0;
+  border: var(--hairline);
+  border-radius: var(--radius-control);
+  background: var(--ink-3);
+  color: var(--text-2);
+  font-size: 1.375rem;
+  cursor: pointer;
+}
+
+.chat-attach:disabled {
+  color: var(--text-3);
+  cursor: default;
+}
+
+/* The picture chosen for the next message, above the box, until it's sent or removed */
+.chat-attachment {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) 0;
+}
+
+.chat-attachment img {
+  flex: none;
+  width: 3.5rem;
+  height: 3.5rem;
+  border: var(--hairline);
+  border-radius: var(--radius-control);
+  object-fit: cover;
+}
+
+.chat-attachment-note {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--fs-caption);
+  line-height: 1.25rem;
+  color: var(--text-2);
+}
+
+.chat-attachment-remove {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-height);
+  height: var(--control-height);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+/* A picture, full screen: the whole of it, as big as the screen allows */
+ion-modal.chat-viewer {
+  --width: 100%;
+  --height: 100%;
+  --border-radius: 0;
+  --background: #000;
+}
+
+.chat-viewer-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  cursor: zoom-out;
+}
+
+.chat-viewer-stage img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.chat-viewer-close {
+  position: absolute;
+  top: calc(var(--space-3) + var(--ion-safe-area-top, 0px));
+  right: var(--space-3);
+  height: var(--control-height);
+  padding: 0 var(--space-4);
+  border: var(--hairline);
+  border-radius: var(--radius-control);
+  background: rgba(11, 13, 20, 0.85);
+  color: var(--text-1);
+  font: 500 var(--fs-body) / 1 var(--font-sans);
+  cursor: pointer;
+}
+
 }
 
 .chat-form ion-button {

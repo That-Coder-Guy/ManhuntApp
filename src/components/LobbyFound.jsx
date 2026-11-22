@@ -334,3 +334,4 @@ function LobbyFound({ lobbyId, lobby, onLeft })
 }
 
 export default LobbyFound;
+                lobbyId={lobbyId}

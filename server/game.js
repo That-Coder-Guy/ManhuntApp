@@ -32,6 +32,13 @@ const LIMITS = Object.freeze({
     // No more than this many messages from one player in this long
     chatBurst: 5,
     chatBurstMs: 5000,
+    // A picture in the chat: shrunk and compressed on the phone before it's sent
+    chatImageMaxBytes: 72_000,
+    chatImageMaxSide: 4096,
+    chatImagesKept: 40,      // pictures a lobby keeps; older ones are dropped, their messages stay
+    // No more than this many pictures from one player in this long
+    chatImageBurst: 4,
+    chatImageBurstMs: 30_000,
 });
 
 const DEFAULT_SETTINGS = Object.freeze({
@@ -370,6 +377,32 @@ function cleanChatText(text)
     return clean;
 }
 
+/** What kind of picture these bytes are, by how they begin: only the two the app sends */
+function chatImageType(bytes)
+{
+    if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
+    if (bytes.length >= 12 && bytes.toString('latin1', 0, 4) === 'RIFF' && bytes.toString('latin1', 8, 12) === 'WEBP') return 'image/webp';
+    return null;
+}
+
+/**
+ * A picture for the chat, as sent: { data: bytes, width, height }. Returns
+ * { bytes, type, width, height }, or null if it isn't one this server keeps:
+ * a JPEG or WebP no bigger than the limit. The type is read from the bytes,
+ * never taken from the sender; the size is only used to lay the message out.
+ */
+function cleanChatImage(image)
+{
+    if (!image || typeof image !== 'object') return null;
+    const { data, width, height } = image;
+    if (!(data instanceof Uint8Array) || data.length === 0 || data.length > LIMITS.chatImageMaxBytes) return null;
+    const bytes = Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+    const type = chatImageType(bytes);
+    const isSide = (value) => Number.isInteger(value) && value >= 1 && value <= LIMITS.chatImageMaxSide;
+    if (!type || !isSide(width) || !isSide(height)) return null;
+    return { bytes, type, width, height };
+}
+
 /** A small profile picture as a base64 data URL, or null to clear it */
 function isValidAvatar(avatar)
 {
@@ -382,5 +415,5 @@ function isValidAvatar(avatar)
 module.exports = {
     PHASE, LIMITS, DEFAULT_SETTINGS, SEEKER_INFO_MODES, applySettings, isOutOfBounds, isValidAvatar, distanceMeters,
     nearestSeeker, seekerInfoFor, jamStatus, isJamming,
-    BLUR, FIX_HISTORY_MS, hiderSpeed, nextBlurShare, blurredPosition, cleanChatText
+    BLUR, FIX_HISTORY_MS, hiderSpeed, nextBlurShare, blurredPosition, cleanChatText, cleanChatImage
 };

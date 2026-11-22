@@ -34,6 +34,9 @@ export const SOCKET_PATH = "/manhunt-api/socket.io";
 
 const API_BASE = `${API_ORIGIN}/manhunt-api`;
 
+/** Where a picture sent in a lobby's chat is fetched from (`imageId` comes with its message) */
+export const chatImageUrl = (lobbyId, imageId) => `${API_BASE}/chat-image/${encodeURIComponent(lobbyId)}/${encodeURIComponent(imageId)}`;
+
 // How long to wait before giving up on a REST request
 const REQUEST_TIMEOUT_MS = 8000;
 

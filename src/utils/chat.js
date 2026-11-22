@@ -1,6 +1,9 @@
 // The lobby's chat: one conversation for everyone in it. The server keeps
-// the messages ([{ id, player_id, name, text, at }], oldest first) and sends
-// the lot on joining and each new one as it's sent (server/server.js).
+// the messages ([{ id, player_id, name, text, at, image? }], oldest first) and
+// sends the lot on joining and each new one as it's sent (server/server.js).
+// A message with a picture carries only where it is and its size
+// (`image: { id, type, width, height }`, or `gone` once the server has let
+// it go); the picture itself is fetched when it's shown (utils/chatImage.js).
 
 // Mirrors the server's limits (server/game.js)
 export const CHAT_MAX_CHARS = 280;

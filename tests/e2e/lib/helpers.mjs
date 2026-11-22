@@ -116,6 +116,32 @@ export async function startGame(hostPage, ...others) {
   for (const p of [hostPage, ...others]) await p.waitForSelector('[data-phase="playing"]', { timeout: 8000 });
 }
 
+// A big, busy picture, like a photo off a phone: 1600×1200 and far too large
+// to send as it is (thousands of overlapping shapes don't compress well)
+export async function detailedPhoto(browser) {
+  const page = await browser.newPage({ viewport: { width: 1600, height: 1200 } });
+  await page.setContent('<canvas width="1600" height="1200" style="display:block"></canvas><style>body{margin:0}</style>');
+  await page.evaluate(() => {
+    const context = document.querySelector('canvas').getContext('2d');
+    let seed = 7;
+    const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const sky = context.createLinearGradient(0, 0, 0, 1200);
+    sky.addColorStop(0, '#7fb2e5');
+    sky.addColorStop(1, '#3a5a34');
+    context.fillStyle = sky;
+    context.fillRect(0, 0, 1600, 1200);
+    for (let i = 0; i < 6000; i++) {
+      context.fillStyle = `hsl(${random() * 360} ${40 + random() * 40}% ${20 + random() * 60}%)`;
+      context.beginPath();
+      context.arc(random() * 1600, random() * 1200, 2 + random() * 22, 0, Math.PI * 2);
+      context.fill();
+    }
+  });
+  const buffer = await page.screenshot({ type: 'png' });
+  await page.close();
+  return { name: 'photo.png', mimeType: 'image/png', buffer };
+}
+
 // A fake photo: render something photo-like and screenshot it as a PNG
 export async function fakePhoto(browser, hue = 20) {
   const page = await browser.newPage({ viewport: { width: 400, height: 300 } });

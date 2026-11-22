@@ -11,7 +11,7 @@ const { v4: uuidv4 } = require('uuid');
 const { isAllowedOrigin } = require('./origins');
 const {
     PHASE, LIMITS, DEFAULT_SETTINGS, applySettings, isOutOfBounds, isValidAvatar, nearestSeeker, seekerInfoFor, jamStatus, isJamming,
-    FIX_HISTORY_MS, hiderSpeed, nextBlurShare, blurredPosition, cleanChatText
+    FIX_HISTORY_MS, hiderSpeed, nextBlurShare, blurredPosition, cleanChatText, cleanChatImage
 } = require('./game');
 const { cleanSubscription, createPushSender } = require('./push');
 
@@ -495,6 +495,25 @@ function createGameServer(options = {})
             }
         }
     }
+    // Keep the chat within its limits: the newest messages, and the newest
+    // pictures. A picture can go while its message stays; the message then
+    // says so (`image.gone`), for anyone who gets the history later
+    function forgetOldChat(lobby)
+    {
+        const dropped = lobby.chat.length > LIMITS.chatHistory ? lobby.chat.splice(0, lobby.chat.length - LIMITS.chatHistory) : [];
+        for (const message of dropped) if (message.image) lobby.chat_images.delete(message.image.id);
+
+        // A Map keeps the order things were added in: the first are the oldest
+        for (const imageId of lobby.chat_images.keys())
+        {
+            if (lobby.chat_images.size <= LIMITS.chatImagesKept) break;
+            lobby.chat_images.delete(imageId);
+            const index = lobby.chat.findIndex((message) => message.image?.id === imageId);
+            // A new object: the one already sent to phones is left as it was
+            if (index !== -1) lobby.chat[index] = { ...lobby.chat[index], image: { ...lobby.chat[index].image, gone: true } };
+        }
+    }
+
     const cleanupTimer = setInterval(cleanupExpired, config.cleanupIntervalMs);
     cleanupTimer.unref();
 
@@ -525,12 +544,29 @@ function createGameServer(options = {})
             endTimer: null,
             blurTimer: null,
             jamTimers: new Set(),
-            // The lobby's chat: [{ id, player_id, name, text, at }], oldest first
+            // The lobby's chat: [{ id, player_id, name, text, at, image? }], oldest first
             chat: [],
             next_message_id: 1,
+            // Pictures sent in the chat, by ID: { bytes, type }. Fetched one
+            // at a time (below), never sent with the messages
+            chat_images: new Map(),
         });
         // The host key goes only to the creator; whoever presents it is host
         res.json({ status: 'success', lobby_id: lobbyId, host_key: hostKey });
+    });
+
+    // A picture from a lobby's chat. Whoever has the lobby's ID (the invite)
+    // and the picture's own random ID may fetch it; it never changes, so
+    // phones keep their copy
+    app.get(`${API_PREFIX}/chat-image/:lobbyId/:imageId`, (req, res) =>
+    {
+        const image = lobbies.get(req.params.lobbyId)?.chat_images.get(req.params.imageId);
+        if (!image) return res.status(404).json({ status: 'not_found', description: 'That picture is no longer kept.' });
+        res.set({
+            'Content-Type': image.type,
+            'Cache-Control': 'private, max-age=86400, immutable',
+            'X-Content-Type-Options': 'nosniff',
+        }).send(image.bytes);
     });
 
     // The version lets the landing page spot an app and server out of step
@@ -712,25 +748,46 @@ function createGameServer(options = {})
 
         // The lobby's chat: one conversation for everyone in it, seekers and
         // hiders alike, before, during and after a game. A message carries
-        // the name its sender had when it was sent
-        on('chat-send', ({ text } = {}, ack, currentLobby, p) =>
+        // the name its sender had when it was sent. It is words, a picture
+        // ({ data: bytes, width, height }, compressed on the phone), or both
+        on('chat-send', ({ text, image } = {}, ack, currentLobby, p) =>
         {
-            const clean = cleanChatText(text);
-            if (!clean)
+            const hasImage = image !== undefined && image !== null;
+            const picture = hasImage ? cleanChatImage(image) : null;
+            if (hasImage && !picture)
+            {
+                return reply(ack, { status: 'validation_error', description: 'That picture can’t be sent. Try another one.' });
+            }
+            // With a picture the words are optional, but still checked if given
+            const wordless = picture && (text === undefined || text === null || (typeof text === 'string' && !text.trim()));
+            const clean = wordless ? '' : cleanChatText(text);
+            if (clean === null)
             {
                 return reply(ack, { status: 'validation_error', description: `A message is 1 to ${LIMITS.chatMaxChars} characters.` });
             }
             const now = Date.now();
             p.chat_times = (p.chat_times ?? []).filter((at) => now - at < LIMITS.chatBurstMs);
+            p.chat_image_times = (p.chat_image_times ?? []).filter((at) => now - at < LIMITS.chatImageBurstMs);
             if (p.chat_times.length >= LIMITS.chatBurst)
             {
                 return reply(ack, { status: 'too_fast', description: 'You’re sending messages too quickly. Wait a moment.' });
             }
+            if (picture && p.chat_image_times.length >= LIMITS.chatImageBurst)
+            {
+                return reply(ack, { status: 'too_fast', description: 'You’re sending pictures too quickly. Wait a moment.' });
+            }
             p.chat_times.push(now);
 
             const message = { id: currentLobby.next_message_id++, player_id: p.player_id, name: p.name, text: clean, at: now };
+            if (picture)
+            {
+                p.chat_image_times.push(now);
+                const imageId = crypto.randomBytes(9).toString('base64url');
+                currentLobby.chat_images.set(imageId, { bytes: picture.bytes, type: picture.type });
+                message.image = { id: imageId, type: picture.type, width: picture.width, height: picture.height };
+            }
             currentLobby.chat.push(message);
-            if (currentLobby.chat.length > LIMITS.chatHistory) currentLobby.chat.splice(0, currentLobby.chat.length - LIMITS.chatHistory);
+            forgetOldChat(currentLobby);
             io.to(lobbyId).emit('chat-message', message);
             reply(ack, { status: 'success', message });
         });
