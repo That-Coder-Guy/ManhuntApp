@@ -135,7 +135,7 @@ function main()
     if (!deployed.ok) die('The deploy didn’t finish. `fly logs` shows what the server said.');
 
     const rule = '─'.repeat(52);
-    console.log(`\n${rule}\n  Manhunt is live at:\n  https://${app}.fly.dev\n  The iPhone and Android apps take this address once;\n  it stays the same from now on.\n${rule}\n`);
+    console.log(`\n${rule}\n  Manhunt is live at:\n  https://${app}.fly.dev\n  The address stays the same from now on. The iPhone\n  and Android apps have the game’s address built in.\n${rule}\n`);
 }
 
 main();
