@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { withMessage, unreadCount, CHAT_MAX_CHARS, CHAT_HISTORY } from '../src/utils/chat.js';
+import { withMessage, unreadCount, inChannel, sideChannel, EVERYONE, CHAT_MAX_CHARS, CHAT_HISTORY } from '../src/utils/chat.js';
 import { fitWithin, formatBytes, CHAT_IMAGE_MAX_BYTES, CHAT_IMAGE_MAX_SIDE } from '../src/utils/chatImage.js';
 
 const require = createRequire(import.meta.url);
-const { LIMITS, cleanChatText, cleanChatImage } = require('../server/game.js');
+const { LIMITS, cleanChatText, cleanChatImage, CHAT_CHANNELS, chatSide, cleanChatChannel, seesChatMessage } = require('../server/game.js');
 
 // The first bytes of each kind of file, with something after them
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(600, 7)]);
@@ -19,6 +19,48 @@ test('the phone and the server agree on the limits', () => {
     assert.equal(CHAT_HISTORY, LIMITS.chatHistory);
     assert.equal(CHAT_IMAGE_MAX_BYTES, LIMITS.chatImageMaxBytes);
     assert.ok(CHAT_IMAGE_MAX_SIDE <= LIMITS.chatImageMaxSide, 'what the phone makes is never bigger than the server takes');
+});
+
+test('there is a chat for everyone and one for each side', () => {
+    assert.deepEqual(CHAT_CHANNELS, ['all', 'seekers', 'hiders']);
+    assert.equal(cleanChatChannel(undefined), 'all', 'none named means everyone');
+    assert.equal(cleanChatChannel(null), 'all');
+    for (const channel of CHAT_CHANNELS) assert.equal(cleanChatChannel(channel), channel);
+    for (const bad of ['', 'spies', 'ALL', 'Seekers', 7, {}, ['all'], true]) assert.equal(cleanChatChannel(bad), null, JSON.stringify(bad));
+    assert.equal(chatSide({ is_seeker: true }), 'seekers');
+    assert.equal(chatSide({ is_seeker: false }), 'hiders');
+    // The phone names the two sides' chats the same way, and reads a message with no channel as everyone's
+    assert.deepEqual([sideChannel(true), sideChannel(false), EVERYONE], ['seekers', 'hiders', 'all']);
+});
+
+test('a side\'s chat goes to that side, and only from when a player came onto it', () => {
+    // (told by the message's number, not its time: see seesChatMessage)
+    const said = (channel, id) => ({ id, player_id: 1, name: 'Maya', channel, text: 'x', at: 5 });
+    const hider = { is_seeker: false, side_from: 1000 };
+    const seeker = { is_seeker: true, side_from: 1000 };
+
+    assert.ok(seesChatMessage(said('all', 5), hider) && seesChatMessage(said('all', 5), seeker), 'everyone gets everyone\'s, whenever it was said');
+    assert.ok(seesChatMessage({ id: 1, text: 'old', at: 5 }, seeker), 'a message from before the sides had chats is everyone\'s');
+    assert.equal(seesChatMessage(said('hiders', 2000), hider), true);
+    assert.equal(seesChatMessage(said('hiders', 2000), seeker), false, 'never the other side');
+    assert.equal(seesChatMessage(said('seekers', 2000), seeker), true);
+    assert.equal(seesChatMessage(said('seekers', 2000), hider), false);
+
+    // Said before they were on the side: not theirs, though it's their side now
+    assert.equal(seesChatMessage(said('hiders', 999), hider), false);
+    assert.equal(seesChatMessage(said('hiders', 1000), hider), true);
+    // A hider who is caught: the hiders' chat is gone, and the seekers' starts now
+    const caught = { is_seeker: true, side_from: 3000 };
+    assert.equal(seesChatMessage(said('hiders', 2000), caught), false);
+    assert.equal(seesChatMessage(said('hiders', 3500), caught), false);
+    assert.equal(seesChatMessage(said('seekers', 2000), caught), false);
+    assert.equal(seesChatMessage(said('seekers', 3500), caught), true);
+
+    // On the phone, the list is split by chat
+    const list = [said('all', 1), said('hiders', 2), { id: 3, text: 'old', at: 3 }, said('seekers', 4)];
+    assert.deepEqual(inChannel(list, 'all').map((m) => m.id), [1, 3]);
+    assert.deepEqual(inChannel(list, 'hiders').map((m) => m.id), [2]);
+    assert.deepEqual(inChannel(list, 'seekers').map((m) => m.id), [4]);
 });
 
 test('a picture for the chat is a small JPEG or WebP, told by its bytes', () => {

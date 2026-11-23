@@ -42,7 +42,7 @@ In WebKit, setting a field's value does **not** clear the undo history; closing 
 
 ## The lobby's toolbar: chat, players, and a menu (2026-11-22)
 The toolbar had grown to five buttons for a host in a game: chat, invite, players, end game, leave. The owner asked for "the exit and invite code menu bar items" to move "into a unified menu button" that opens "a popup menu", and then for "the host's stop game option" to go into it too.
-- The toolbar is now always **chat, players, ···**. The **···** button opens a popover under itself: **Invite players**, **End game** (the host, during a game, only), **Leave lobby** (in red, last).
+- The toolbar is now always **chat, players, ···**. (A hider's Abilities button was tried there and moved to the game screen at the owner's word: [[Jamming]].) The **···** button opens a popover under itself: **Invite players**, **End game** (the host, during a game, only), **Leave lobby** (in red, last).
 - What stays on the bar is what's used during play; what moved is used once or twice a game.
 - Ending and leaving still ask first ("End the game?", "Leave lobby?"). The menu doesn't replace the confirmation: it's one tap further from an accident, not a substitute.
 - A popover, not the action sheet the row menus use: the owner asked for a popup from the button, and a two- or three-line list reads better there than as a sheet across the bottom.

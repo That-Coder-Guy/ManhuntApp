@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-    IonModal, IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonContent, IonFooter, IonInput, IonToast, IonIcon
+    IonModal, IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonContent, IonFooter, IonInput, IonToast, IonIcon,
+    IonSegment, IonSegmentButton, IonLabel
 } from '@ionic/react';
 import { imageOutline, closeOutline } from 'ionicons/icons';
 import { CHAT_MAX_CHARS, messageTime } from '../utils/chat';
@@ -47,15 +48,25 @@ function ChatPicture({ lobbyId, image, from, onOpen })
     );
 }
 
+// What each chat is called, and who reads it
+const SIDES = {
+    seekers: { name: 'Seekers', them: 'the seekers', only: 'Only the seekers see what’s written here.' },
+    hiders: { name: 'Hiders', them: 'the hiders', only: 'Only the hiders see what’s written here.' }
+};
+
 /**
- * The lobby's chat: one conversation everyone in the lobby shares, seekers
- * and hiders alike, before, during and after a game. Newest at the bottom,
- * with the box to write in under it. A message is words, a picture, or both;
- * a picture is compressed on this phone before it's sent (utils/chatImage.js)
- * and opens full screen when tapped.
+ * The lobby's chats: one conversation everyone in the lobby shares, seekers
+ * and hiders alike, and one for this player's own side that the other side
+ * never gets. A switch at the top goes between them (`tab`: 'all' or
+ * 'side'), with a count on the one not showing. Before, during and after a
+ * game. Newest at the bottom, with the box to write in under it. A message
+ * is words, a picture, or both; a picture is compressed on this phone before
+ * it's sent (utils/chatImage.js) and opens full screen when tapped.
  */
-function ChatModal({ isOpen, onClose, lobbyId, messages, players, selfId, showRoles = false, sendChat })
+function ChatModal({ isOpen, onClose, lobbyId, tab = 'all', onTab, side, messages, unreadElsewhere = 0, players, selfId, showRoles = false, sendChat })
 {
+    const own = SIDES[side] ?? SIDES.hiders;
+    const onSide = tab === 'side';
     const contentRef = useRef(null);
     const fileRef = useRef(null);
     const [text, setText] = useState('');
@@ -73,6 +84,19 @@ function ChatModal({ isOpen, onClose, lobbyId, messages, players, selfId, showRo
     {
         if (isOpen) contentRef.current?.scrollToBottom(200);
     }, [isOpen, lastId]);
+    // The other chat: straight to its end
+    useEffect(() => { contentRef.current?.scrollToBottom(0); }, [tab]);
+    // On changing sides, what was being written is dropped: words meant for
+    // the hiders must not be one tap from the seekers' chat
+    useEffect(() =>
+    {
+        setText('');
+        setPicture(null);
+    }, [side]);
+
+    const count = (number) => (
+        <span className="chat-tab-count" data-testid="chat-tab-unread" aria-label={`${number} new`}>{number > 9 ? '9+' : number}</span>
+    );
 
     // The preview's address holds the picture in memory until it's let go
     const pictureUrl = picture?.url;
@@ -131,11 +155,30 @@ function ChatModal({ isOpen, onClose, lobbyId, messages, players, selfId, showRo
                         <IonButton data-testid="chat-close" onClick={onClose}>Close</IonButton>
                     </IonButtons>
                 </IonToolbar>
+                <div className="chat-tabs">
+                    <IonSegment
+                        className={`role-segment chat-tab-switch${onSide ? ' chat-tab-switch--side' : ''}`}
+                        value={tab}
+                        onIonChange={(e) => onTab(e.detail.value)}
+                        aria-label="Chat with"
+                        data-testid="chat-tabs"
+                        data-side={side}
+                    >
+                        <IonSegmentButton value="all" data-testid="chat-tab-all">
+                            <IonLabel>Everyone{onSide && unreadElsewhere > 0 && count(unreadElsewhere)}</IonLabel>
+                        </IonSegmentButton>
+                        <IonSegmentButton value="side" data-testid="chat-tab-side">
+                            <IonLabel>{own.name}{!onSide && unreadElsewhere > 0 && count(unreadElsewhere)}</IonLabel>
+                        </IonSegmentButton>
+                    </IonSegment>
+                </div>
             </IonHeader>
 
             <IonContent ref={contentRef} className="ion-padding chat-content">
                 {messages.length === 0 ? (
-                    <p className="chat-empty" data-testid="chat-empty">No messages yet. Everyone in the lobby sees what’s written here.</p>
+                    <p className="chat-empty" data-testid="chat-empty">
+                        No messages yet. {onSide ? own.only : 'Everyone in the lobby sees what’s written here.'}
+                    </p>
                 ) : (
                     <ol className="chat-list" data-testid="chat-list">
                         {messages.map((message) =>
@@ -193,7 +236,7 @@ function ChatModal({ isOpen, onClose, lobbyId, messages, players, selfId, showRo
                         className="chat-input"
                         data-testid="chat-input"
                         aria-label="Message"
-                        placeholder={picture ? 'Add a few words' : 'Message everyone'}
+                        placeholder={picture ? 'Add a few words' : onSide ? `Message ${own.them}` : 'Message everyone'}
                         value={text}
                         maxlength={CHAT_MAX_CHARS}
                         enterkeyhint="send"

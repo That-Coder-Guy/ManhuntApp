@@ -5,8 +5,8 @@ tags: [manhunt, testing]
 
 ```bash
 npm run lint
-npm test                    # unit tests + socket-level server tests (112)
-npm run test:e2e            # 18 browser suites, about 10 minutes
+npm test                    # unit tests + socket-level server tests (121)
+npm run test:e2e            # 19 browser suites, about 11 minutes
 npm run test:e2e -- found   # just some (names from tests/e2e/suites/)
 npm run audit:ui            # overflow, legibility, text position (notes, not pass/fail)
 ```
@@ -17,7 +17,7 @@ To watch a game instead of testing one, `npm run simulate`: see [[Simulator]].
 ## How the browser tests work
 `tests/e2e/run.mjs` builds the app (`--no-build` reuses `dist/`) and starts the real game server on a free port, with pushes **recorded to `tests/e2e/output/pushes.jsonl` instead of sent** and map tiles stubbed: no internet needed. Each suite drives several browser "phones". Screenshots land in `tests/e2e/output/` (gitignored).
 
-Suites: found, seeker-info, jam, hider-blur, hider-map, chat, lobby-menu, track-map, map-rotation, permissions, camera, settings-paint, install-offer, notifications, steady-position, shake-undo, popup-fit, tag-alignment.
+Suites: found, seeker-info, jam, hider-blur, hider-map, chat, team-chat, lobby-menu, track-map, map-rotation, permissions, camera, settings-paint, install-offer, notifications, steady-position, shake-undo, popup-fit, tag-alignment.
 
 ## Known audit notes (harmless)
 - Legibility: the selected segment's label ("Seeker"/"Hider", "Compass"/"Map") measured against the wrong layer.

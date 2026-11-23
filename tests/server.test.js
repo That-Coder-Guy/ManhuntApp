@@ -253,7 +253,7 @@ test('host settings are validated and only change before the game', { skip }, as
         settings: { geofence: { points: square.map((p) => ({ ...p, junk: 'dropped' })) }, time_limit_s: 1800, head_start_s: 60 }
     });
     assert.equal(ok.status, 'success');
-    assert.deepEqual(ok.settings, { geofence: { points: square }, time_limit_s: 1800, head_start_s: 60, found_range_m: 50, seeker_info: 'distance', seeker_alert_m: 100, jam_enabled: true, jam_duration_s: 60, jam_charge_s: 900, hider_blur_m: 100 }, 'only coordinates are kept');
+    assert.deepEqual(ok.settings, { geofence: { points: square }, time_limit_s: 1800, head_start_s: 60, found_range_m: 50, seeker_info: 'distance', seeker_alert_m: 100, jam_enabled: true, jam_duration_s: 60, jam_charge_s: 900, hider_blur_m: 25 }, 'only coordinates are kept');
 
     const bowtie = [square[0], square[2], square[1], square[3]];
     for (const bad of [{ geofence: { points: square.slice(0, 2) } }, { geofence: { points: bowtie } },
@@ -271,7 +271,8 @@ test('host settings are validated and only change before the game', { skip }, as
 
     // Partial update keeps the rest
     await ack(host.socket, 'update-settings', { settings: { geofence: null, found_range_m: 100, seeker_info: 'nearby', seeker_alert_m: 250, jam_duration_s: 30 } });
-    assert.deepEqual(game.lobbies.get(lobbyId).settings, { geofence: null, time_limit_s: 1800, head_start_s: 60, found_range_m: 100, seeker_info: 'nearby', seeker_alert_m: 250, jam_enabled: true, jam_duration_s: 30, jam_charge_s: 900, hider_blur_m: 100 });
+    // (the alert was asked for at 250 m: where an alert is all hiders get, it is brought down to the found range)
+    assert.deepEqual(game.lobbies.get(lobbyId).settings, { geofence: null, time_limit_s: 1800, head_start_s: 60, found_range_m: 100, seeker_info: 'nearby', seeker_alert_m: 100, jam_enabled: true, jam_duration_s: 30, jam_charge_s: 900, hider_blur_m: 25 });
 });
 
 test('starting needs both roles, then locks self role changes', { skip }, async () => {
@@ -457,16 +458,22 @@ test('hiders never receive a seeker\'s position during a game, only the seeker i
 
 test('the nearby alert says only whether a seeker is within the alert distance', { skip }, async () => {
     const { host, near, far } = await foundGame();
-    await ack(host.socket, 'update-settings', { settings: { seeker_info: 'nearby', seeker_alert_m: 100 } });
+    // Asked for at 100 m, with the found range at 50: the alert can't reach further than that
+    const saved = await ack(host.socket, 'update-settings', { settings: { seeker_info: 'nearby', seeker_alert_m: 100 } });
+    assert.deepEqual([saved.status, saved.settings.seeker_alert_m, saved.settings.found_range_m], ['success', 50, 50]);
     const nearState = hiderState(near.socket);
     const farState = hiderState(far.socket);
     await ack(host.socket, 'start-game');
-    assert.deepEqual((await nearState).seeker_info, { mode: 'nearby', alert_m: 100, nearby: true }, '33 m away');
-    assert.deepEqual((await farState).seeker_info, { mode: 'nearby', alert_m: 100, nearby: false }, '222 m away');
+    assert.deepEqual((await nearState).seeker_info, { mode: 'nearby', alert_m: 50, nearby: true }, '33 m away');
+    assert.deepEqual((await farState).seeker_info, { mode: 'nearby', alert_m: 50, nearby: false }, '222 m away');
 
-    // The seeker closes in: the far hider is alerted
-    const alerted = nextState(far.socket, (s) => s.seeker_info?.nearby === true);
+    // The seeker closes in. At 55 m, inside the 100 m that was asked for, nothing yet
     await ack(host.socket, 'update-location', { latitude: 39.1915, longitude: -96.58 });
+    const stillClear = await nextState(far.socket, (s) => s.seeker_info?.mode === 'nearby');
+    assert.equal(stillClear.seeker_info.nearby, false, '55 m: outside the found range, so no alert');
+    // At 33 m the far hider is alerted, and could be found
+    const alerted = nextState(far.socket, (s) => s.seeker_info?.nearby === true);
+    await ack(host.socket, 'update-location', { latitude: 39.1917, longitude: -96.58 });
     assert.ok(await alerted);
 });
 
@@ -562,7 +569,7 @@ test('a game with no hiders left ends: moved by the host, or gone', { skip }, as
 
 const entry = (state, joined) => state.players.find((p) => p.player_id === joined.data.player_id);
 
-test('a hider jams: seekers keep the position from when it started, then get the real one back', { skip }, async () => {
+test('a hider jams: they vanish for the seekers, who then get the real position back', { skip }, async () => {
     const { lobbyId, host, near, far } = await foundGame();
     const lobby = game.lobbies.get(lobbyId);
     const firstHiderState = hiderState(near.socket);
@@ -595,15 +602,18 @@ test('a hider jams: seekers keep the position from when it started, then get the
     await ack(far.socket, 'update-location', PRIYA_MOVED);
 
     const during = await seekerSees;
-    assert.equal(entry(during, near).latitude, NEAR.latitude, 'the seeker still has where Maya was');
-    assert.equal(entry(during, near).jammed_until, started.jam.until, 'flagged as jammed');
+    const gone = entry(during, near);
+    assert.deepEqual([gone.latitude, gone.longitude, gone.location_last_updated, gone.uncertainty_m, gone.out_of_bounds], [null, null, null, null, false],
+        'the seeker has nothing of where Maya is, or was');
+    assert.equal(gone.jammed_until, started.jam.until, 'only that she is jamming, and until when');
+    assert.ok(!JSON.stringify(during).includes(String(NEAR.latitude)) && !JSON.stringify(during).includes(String(MAYA_MOVED.latitude)), 'neither position is anywhere in what the seeker was sent');
     assert.equal(entry(during, far).jammed_until, null, 'Priya is tracked as ever');
+    assert.equal(entry(during, far).latitude, PRIYA_MOVED.latitude);
     assert.equal(entry(await mayaSees, near).jammed_until, started.jam.until, 'Maya\'s own phone keeps her real position');
 
     // It runs out by itself: the seeker gets her real position without her doing anything
     const after = await nextState(host.socket, (s) => entry(s, near).jammed_until === null, 4000);
     assert.equal(entry(after, near).latitude, MAYA_MOVED.latitude);
-    assert.equal(maya.jam_fix, undefined);
     // And it has to charge again, for the whole charge time from the end of the jam
     assert.equal((await ack(near.socket, 'jam')).status, 'charging');
     assert.equal(maya.jam_ready_at, maya.jam_until + 15 * 60 * 1000);
@@ -661,35 +671,37 @@ test('a still hider is shown as an area, a moving one exactly, and a stopped one
 
     // Standing still: the seeker gets a point that isn't hers, and how far off she may be
     const still = entry(await first, hider);
-    assert.equal(still.uncertainty_m, 100);
+    assert.equal(still.uncertainty_m, 25);
     const off = distanceMeters(still, NEAR);
-    assert.ok(off > 1 && off <= 100, `a point within 100 m of her, not her own: ${off}`);
+    assert.ok(off > 0.01 && off <= 25, `a point within 25 m of her, not her own: ${off}`);
     // Her own phone has her real position, and is told how she is seen
-    assert.deepEqual([entry(await own, hider).latitude, entry(await own, hider).uncertainty_m], [NEAR.latitude, 100]);
+    assert.deepEqual([entry(await own, hider).latitude, entry(await own, hider).uncertainty_m], [NEAR.latitude, 25]);
 
-    // Her position wobbles a few metres: the seeker's point doesn't move
-    for (const wobble of [0.00002, -0.00003, 0.00001, 0.00004]) {
+    // Her position wobbles a couple of metres: the seeker's point doesn't move
+    // (less than the margin a new circle is put down with, so she can't have left it)
+    for (const wobble of [0.00001, -0.000015, 0.000005, 0.00002]) {
         const next = nextState(host.socket, (s) => s.server_time > still.location_last_updated);
         await ack(hider.socket, 'update-location', { latitude: NEAR.latitude + wobble, longitude: NEAR.longitude - wobble });
         const seen = entry(await next, hider);
-        assert.deepEqual([seen.latitude, seen.longitude, seen.uncertainty_m], [still.latitude, still.longitude, 100]);
+        assert.deepEqual([seen.latitude, seen.longitude, seen.uncertainty_m], [still.latitude, still.longitude, 25]);
     }
 
-    // She has been walking north at 1.5 m/s for the last minute (what her phone would have sent)
-    const walked = (secondsAgo) => ({ latitude: NEAR.latitude + ((60 - secondsAgo) * 1.5) / 111_195, longitude: NEAR.longitude });
+    // She has been running north at 3 m/s for the last minute (what her phone would have sent):
+    // faster than an 11-minute mile
+    const walked = (secondsAgo) => ({ latitude: NEAR.latitude + ((60 - secondsAgo) * 3) / 111_195, longitude: NEAR.longitude });
     const now = Date.now();
     maya.fixes = [60, 50, 40, 30, 20, 10].map((ago) => ({ ...walked(ago), at: now - ago * 1000 }));
     const moving = nextState(host.socket, (s) => entry(s, hider).uncertainty_m === 0);
     await ack(hider.socket, 'update-location', walked(0));
-    assert.deepEqual([entry(await moving, hider).latitude, entry(await moving, hider).longitude], [walked(0).latitude, walked(0).longitude], 'exact while she walks');
+    assert.deepEqual([entry(await moving, hider).latitude, entry(await moving, hider).longitude], [walked(0).latitude, walked(0).longitude], 'exact while she runs');
 
     // She stopped there eleven seconds ago, and her phone has sent nothing
     // since (a phone standing still may not). Nobody else does anything
     // either: the server looks again by itself, and she is an area again
     const later = Date.now();
     maya.fixes = [60, 50, 40, 30, 20, 11].map((ago) => ({ ...walked(ago - 11), at: later - ago * 1000 }));
-    const stopped = entry(await nextState(host.socket, (s) => entry(s, hider).uncertainty_m === 100), hider);
-    assert.ok(distanceMeters(stopped, walked(0)) <= 100);
+    const stopped = entry(await nextState(host.socket, (s) => entry(s, hider).uncertainty_m === 25), hider);
+    assert.ok(distanceMeters(stopped, walked(0)) <= 25);
     assert.notEqual(stopped.latitude, walked(0).latitude);
     // And once she is, the server stops looking
     await new Promise((resolve) => setTimeout(resolve, 250));
@@ -700,7 +712,7 @@ test('a still hider is shown as an area, a moving one exactly, and a stopped one
     assert.equal((await ack(hider.socket, 'found', NEAR)).status, 'success');
 });
 
-test('a jam keeps the vague position, and exact mode is still exact', { skip }, async () => {
+test('a jam hides even the vague position, and exact mode is still exact', { skip }, async () => {
     const { lobbyId, host } = await hostedLobby();
     const hider = await join({ lobby_id: lobbyId });
     const lobby = game.lobbies.get(lobbyId);
@@ -712,13 +724,14 @@ test('a jam keeps the vague position, and exact mode is still exact', { skip }, 
     await ack(host.socket, 'start-game');
     const still = entry(await first, hider);
 
-    // She jams and runs 500 m: the seeker keeps the area she was in
+    // She jams and runs 500 m: the seeker loses the area she was in, too
+    assert.equal(still.uncertainty_m, 25);
     maya.jam_ready_at = Date.now() - 1;
     assert.equal((await ack(hider.socket, 'jam')).status, 'success');
-    const during = nextState(host.socket, (s) => entry(s, hider).jammed_until !== null && s.server_time > still.location_last_updated);
+    const during = nextState(host.socket, (s) => entry(s, hider).jammed_until !== null);
     await ack(hider.socket, 'update-location', { latitude: NEAR.latitude + 0.0045, longitude: NEAR.longitude });
     const jammed = entry(await during, hider);
-    assert.deepEqual([jammed.latitude, jammed.longitude, jammed.uncertainty_m], [still.latitude, still.longitude, 100]);
+    assert.deepEqual([jammed.latitude, jammed.longitude, jammed.uncertainty_m], [null, null, null]);
 
     // A lobby set to exact gives the real position, standing still or not
     const exact = await foundGame();
@@ -750,20 +763,20 @@ test('hiders see each other as the seekers see them, and no better', { skip }, a
     const seekerLater = nextState(host.socket, (s) => entry(s, priya).latitude !== null, 3000);
     const mayaLater = nextState(maya.socket, (s) => entry(s, priya).latitude !== null, 3000);
     assert.deepEqual(where(await mayaLater), where(await seekerLater));
-    assert.equal(entry(await mayaLater, priya).uncertainty_m, 100);
+    assert.equal(entry(await mayaLater, priya).uncertainty_m, 25);
     assert.notEqual(entry(await mayaLater, priya).latitude, FAR.latitude);
     assert.ok((await mayaLater).players.filter((p) => p.is_seeker).every((p) => p.latitude === null), 'and still no seeker');
 
-    // Priya jams and runs: frozen for Maya exactly as for the seeker
+    // Priya jams and runs: gone for Maya exactly as for the seeker
     lobby.players.get(priya.data.player_token).jam_ready_at = Date.now() - 1;
     assert.equal((await ack(priya.socket, 'jam')).status, 'success');
-    const after = (s) => entry(s, priya).jammed_until !== null && s.server_time > entry(s, priya).location_last_updated + 1;
+    const after = (s) => entry(s, priya).jammed_until !== null;
     const mayaSees = nextState(maya.socket, after);
     const seekerSees = nextState(host.socket, after);
     await new Promise((resolve) => setTimeout(resolve, 5));
     await ack(priya.socket, 'update-location', { latitude: 39.196, longitude: -96.58 });
     assert.deepEqual(where(await mayaSees), where(await seekerSees));
-    assert.deepEqual(where(await mayaSees).slice(0, 2), where(await seekerLater).slice(0, 2), 'the point from before the jam');
+    assert.deepEqual(where(await mayaSees).slice(0, 3), [null, null, null], 'no position, for a fellow hider either');
 
     // So when Maya is found and joins the seekers, she has learned nothing they didn't have
     const asSeeker = nextState(maya.socket, (s) => entry(s, maya).is_seeker);
@@ -832,6 +845,91 @@ test('chat messages are checked, and no one can flood the lobby', { skip }, asyn
     // Someone no longer in the lobby can't write to it
     await ack(host.socket, 'kick-player', { player_id: guest.data.player_id });
     assert.notEqual((await ack(guest.socket, 'chat-send', { text: 'still here?' }).catch(() => ({ status: 'gone' }))).status, 'success');
+});
+
+test('each side has a chat of its own, which the other side is never sent', { skip }, async () => {
+    const { lobbyId, host, near: maya, far: priya } = await foundGame();
+    const lobby = game.lobbies.get(lobbyId);
+    // Everything each phone is ever sent of the chat
+    const got = new Map([host, maya, priya].map((p) => [p, []]));
+    for (const [p, list] of got) p.socket.on('chat-message', (m) => list.push(m.text));
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 120));
+    const history = (socket) => new Promise((resolve) => socket.once('chat-history', (h) => resolve(h.messages.map((m) => m.text))));
+
+    // A hider to the hiders: both hiders, not the seeker
+    const sent = await ack(maya.socket, 'chat-send', { text: 'by the bins', channel: 'hiders' });
+    assert.deepEqual([sent.status, sent.message.channel], ['success', 'hiders']);
+    await ack(host.socket, 'chat-send', { text: 'closing in', channel: 'seekers' });
+    await ack(priya.socket, 'chat-send', { text: 'hello all' });
+    await settle();
+    assert.deepEqual(got.get(maya), ['by the bins', 'hello all']);
+    assert.deepEqual(got.get(priya), ['by the bins', 'hello all']);
+    assert.deepEqual(got.get(host), ['closing in', 'hello all'], 'the seeker never gets the hiders\' message');
+    assert.equal(lobby.chat.find((m) => m.text === 'hello all').channel, 'all');
+
+    // Only a side's own players write to it, and only to a chat that exists
+    assert.equal((await ack(host.socket, 'chat-send', { text: 'let me in', channel: 'hiders' })).status, 'wrong_side');
+    assert.equal((await ack(maya.socket, 'chat-send', { text: 'let me in', channel: 'seekers' })).status, 'wrong_side');
+    for (const channel of ['spies', '', 7, {}]) {
+        assert.equal((await ack(maya.socket, 'chat-send', { text: 'hello', channel })).status, 'validation_error', JSON.stringify(channel));
+    }
+    assert.equal(lobby.chat.length, 3, 'nothing refused is kept');
+
+    // Coming back (a reload, a dropped connection): the same chats as before
+    const again = connect(base, { path: SOCKET_PATH, auth: { lobby_id: lobbyId, player_token: priya.data.player_token }, reconnection: false, transports: ['websocket'] });
+    sockets.push(again);
+    assert.deepEqual(await history(again), ['by the bins', 'hello all']);
+    again.on('chat-message', (m) => got.get(priya).push(m.text));
+
+    // Turning hider for a look, before the game: the seeker is sent the chat
+    // afresh, with nothing the hiders said before, and what they'd said to
+    // the seekers is gone too when they turn back
+    let fresh = history(host.socket);
+    await ack(host.socket, 'update-player', { is_seeker: false });
+    assert.deepEqual(await fresh, ['hello all']);
+    await ack(maya.socket, 'chat-send', { text: 'who is this?', channel: 'hiders' });
+    await settle();
+    assert.equal(got.get(host).at(-1), 'who is this?', 'while on the side, they are sent what is said on it');
+    fresh = history(host.socket);
+    await ack(host.socket, 'update-player', { is_seeker: true });
+    assert.deepEqual(await fresh, ['hello all']);
+
+    // In a game, a hider who is caught: the hiders' chat goes from their
+    // phone, and the seekers' starts from now
+    lobby.players.get(host.data.player_token).chat_times = [];
+    lobby.players.get(maya.data.player_token).chat_times = [];
+    await ack(host.socket, 'start-game');
+    await ack(host.socket, 'chat-send', { text: 'she is near the library', channel: 'seekers' });
+    fresh = history(maya.socket);
+    assert.equal((await ack(maya.socket, 'found', NEAR)).status, 'success');
+    assert.deepEqual(await fresh, ['hello all']);
+    got.get(maya).length = 0;
+    await ack(priya.socket, 'chat-send', { text: 'they got Maya', channel: 'hiders' });
+    await ack(host.socket, 'chat-send', { text: 'one to go', channel: 'seekers' });
+    await settle();
+    assert.deepEqual(got.get(maya), ['one to go']);
+    assert.equal((await ack(maya.socket, 'chat-send', { text: 'run!', channel: 'hiders' })).status, 'wrong_side', 'and they can\'t write to the hiders any more');
+    assert.equal((await ack(maya.socket, 'chat-send', { text: 'where next?', channel: 'seekers' })).status, 'success');
+
+    // Back to the lobby: she is a hider again, and the hiders' chat starts over for her
+    fresh = history(maya.socket);
+    await ack(host.socket, 'reset-game');
+    assert.deepEqual(await fresh, ['hello all']);
+});
+
+test('someone who joins late is given everyone\'s chat, not what a side said before they came', { skip }, async () => {
+    const { lobbyId, host } = await hostedLobby();
+    await ack(host.socket, 'chat-send', { text: 'welcome' });
+    await ack(host.socket, 'chat-send', { text: 'just us hiders', channel: 'hiders' });
+    // (the host is a hider too until they choose otherwise, like everyone who joins)
+    const late = connect(base, { path: SOCKET_PATH, auth: { lobby_id: lobbyId }, reconnection: false, transports: ['websocket'] });
+    sockets.push(late);
+    const history = await new Promise((resolve) => late.once('chat-history', resolve));
+    assert.deepEqual(history.messages.map((m) => m.text), ['welcome']);
+    // From now on they're one of the hiders
+    const heard = new Promise((resolve) => late.once('chat-message', resolve));
+    await ack(host.socket, 'chat-send', { text: 'and now you', channel: 'hiders' });
+    assert.equal((await heard).text, 'and now you');
 });
 
 test('a picture in the chat reaches everyone as a message, and is fetched by its own address', { skip }, async () => {
@@ -1023,12 +1121,14 @@ test('a player away from the app is reminded shortly before being removed', { sk
     game.cleanupExpired();
     assert.equal(sent().length, 0, 'not yet');
 
-    awayPlayer.disconnected_at = quietPlayer.disconnected_at = Date.now() - 3.5 * 60_000; // 1.5 min left
+    // (1.4 min left, not 1.5: exactly a minute and a half is where the reminder starts, and
+    // reads as "1 minute" or "2 minutes" by the millisecond)
+    awayPlayer.disconnected_at = quietPlayer.disconnected_at = Date.now() - 3.6 * 60_000;
     game.cleanupExpired();
     assert.equal(sent().length, 1, 'reminded once the end is near');
     assert.deepEqual(sent()[0].payload, {
         title: 'Still playing in Hosted?',
-        body: "Open Manhunt within 2 minutes or you'll be taken out of the lobby.",
+        body: "Open Manhunt within 1 minute or you'll be taken out of the lobby.",
         url: `/lobby/${lobbyId}`,
         tag: `manhunt-${lobbyId}-away`
     });

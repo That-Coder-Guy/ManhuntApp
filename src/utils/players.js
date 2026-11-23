@@ -7,7 +7,8 @@ export const playerName = (player) => player.name || `Player ${player.player_id}
  * Everything the UI shows about how current a player's position is:
  * whether it is fresh, whether they're offline or jamming, and the meta line.
  * A hider who is jamming (`jammed_until`, from the server) is never fresh:
- * the position is the one from when the jam started.
+ * there is no position for them at all while it lasts. Seekers' lists and
+ * maps leave them out; the lobby's list of players says "Jamming".
  */
 export function playerFreshness(player, now = Date.now())
 {
@@ -19,6 +20,6 @@ export function playerFreshness(player, now = Date.now())
 
     let label = updated;
     if (offline) label = `Offline · ${updated}`;
-    else if (jammed) label = seen ? `Jammed · last seen ${seen}` : 'Jammed';
+    else if (jammed) label = 'Jamming';
     return { offline, jammed, fresh: !stale, label };
 }

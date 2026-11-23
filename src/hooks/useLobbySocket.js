@@ -282,9 +282,11 @@ function useLobbySocket(lobbyId, credentials, onJoined)
     // A message to everyone in the lobby; it comes back with the rest of the chat
     // With a picture ({ data: bytes, width, height }, see utils/chatImage.js),
     // which gets longer to arrive: it's far bigger than anything else sent
-    const sendChat = useCallback((text, image = null) => (image
-        ? emitWithAck(socketRef.current, 'chat-send', { text, image }, IMAGE_ACK_TIMEOUT_MS)
-        : send('chat-send', { text })), [send]);
+    // `channel` is who it's for: 'all', or the sender's own side ('seekers',
+    // 'hiders'), which the server checks
+    const sendChat = useCallback((text, image = null, channel = 'all') => (image
+        ? emitWithAck(socketRef.current, 'chat-send', { text, image, channel }, IMAGE_ACK_TIMEOUT_MS)
+        : send('chat-send', { text, channel })), [send]);
 
     // A hider's jammer: the server decides (it rejects with 'charging', 'jam_off', …)
     const startJam = useCallback(() => send('jam'), [send]);

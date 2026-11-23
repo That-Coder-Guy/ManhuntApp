@@ -28,7 +28,7 @@ npm run simulate -- --port 4000   # another port (a free one is taken if 3210 is
 - **Frames on one origin, not one origin per phone.** `sim1.localhost`-style origins would keep storage apart for free, but a browser set to block third-party storage refuses it to those frames. One origin and a storage stand-in works everywhere.
 - **Movement lives in the page, not the phones.** One clock for all of them, a pause button, the true-position picture, and a reloaded phone is still where it was.
 - **Jammers charge in 30 seconds** (`SETTINGS` in `page.mjs`), not 15 minutes, so a jam can be tried. Every other setting is the game's default. The panel says so.
-- **Movement:** still 30% (20–60 s), walking 55% (1.0–1.7 m/s, 20–60 s), running 15% (2.6–3.6 m/s, 8–25 s); everyone sets off moving. Seekers start within 25 m of the middle, hiders 130–260 m out, so nobody starts in found range. At 350 m a phone turns back. Standing still long enough is what shows the [[Hider position blur]] at its widest.
+- **Movement:** still 30% (20–60 s), walking 45% (1.2–1.7 m/s, 20–60 s), running 25% (2.8–3.8 m/s, 20–45 s: faster than the 11-minute mile at which a hider is shown exactly); everyone sets off moving. They turn only a little each second (8° walking, 4° running): the game goes by net ground covered, and a walk that wanders reads as slow. Fixes are reported with 5 m accuracy. Seekers start within 25 m of the middle, hiders 130–260 m out, so nobody starts in found range. At 350 m a phone turns back. Standing still long enough is what shows the [[Hider position blur]] at its widest.
 - **One phone** joins and waits in the lobby: a game needs a seeker and a hider.
 
 ## Checked (2026-11-22, in the app's browser pane)

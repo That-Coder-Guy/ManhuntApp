@@ -3,6 +3,7 @@ import { IonCard, IonCardHeader, IonCardTitle, IonCardContent, IonSegment, IonSe
 import TrackMap from './TrackMap';
 import useNow from '../hooks/useNow';
 import { formatDistance } from '../utils/geo';
+import { formatClock } from '../utils/game';
 
 // Each hider's choice of the seekers card or the map is remembered on their phone
 const HIDER_MODE_KEY = 'manhunt.hiderMode';
@@ -58,7 +59,7 @@ function describe(info)
  * How exactly the seekers are seeing this hider right now, which is theirs
  * to change: stay still to stay vague. `seenWithin` is the radius the server
  * is giving the seekers (0: the exact position; null: not shown at all, or
- * jamming, which the jammer card covers).
+ * jamming, which has a line of its own with the time left).
  */
 function seenLine(seenWithin)
 {
@@ -77,12 +78,13 @@ function seenLine(seenWithin)
  *             joins the seekers knowing no more than they do. No seeker is
  *             on it
  */
-function HiderView({ seekerInfo, seenWithin = null, self = null, players = [], currentLocation = null, playArea = null })
+function HiderView({ seekerInfo, seenWithin = null, jammedUntil = null, clockOffset = 0, self = null, players = [], currentLocation = null, playArea = null })
 {
     const now = useNow();
     const [mode, setMode] = useState(loadMode);
     const view = describe(seekerInfo);
-    const seen = seenLine(seenWithin);
+    const jamLeft = jammedUntil == null ? 0 : jammedUntil - (now + clockOffset);
+    const seen = jamLeft > 0 ? `Jamming · hidden from seekers for ${formatClock(jamLeft)}` : seenLine(seenWithin);
     const fellows = players.filter((player) => !player.is_seeker);
 
     function chooseMode(next)
@@ -151,7 +153,7 @@ function HiderView({ seekerInfo, seenWithin = null, self = null, players = [], c
                     </span>
                 )}
                 {seen && (
-                    <p className={`hider-seen${seenWithin > 0 ? '' : ' hider-seen--exact'}`} data-testid="hider-seen">{seen}</p>
+                    <p className={`hider-seen${jamLeft > 0 || !(seenWithin > 0) ? ' hider-seen--exact' : ''}`} data-testid="hider-seen" data-jamming={jamLeft > 0}>{seen}</p>
                 )}
             </IonCardContent>
         </IonCard>

@@ -95,9 +95,9 @@ test('the settings summary and the player lines say what jamming is doing', () =
     assert.equal(describeSettings({ jam_enabled: false }).jamming, 'No jamming');
 
     const now = 1_000_000_000;
-    // Seen 12 seconds ago is fresh for anyone else; a jammed hider never is
-    assert.deepEqual(playerFreshness({ location_last_updated: now - 12_000, connected: true, jammed_until: now + 40_000 }, now),
-        { offline: false, jammed: true, fresh: false, label: 'Jammed · last seen 12s ago' });
-    assert.equal(playerFreshness({ location_last_updated: null, jammed_until: now + 1 }, now).label, 'Jammed');
+    // A jamming hider has no position for anyone else: never fresh, and the list of players just says so
+    assert.deepEqual(playerFreshness({ location_last_updated: null, connected: true, jammed_until: now + 40_000 }, now),
+        { offline: false, jammed: true, fresh: false, label: 'Jamming' });
+    assert.equal(playerFreshness({ location_last_updated: now - 12_000, jammed_until: now + 1 }, now).label, 'Jamming', 'no "last seen": there is nothing to have seen');
     assert.equal(playerFreshness({ location_last_updated: now, jammed_until: null }, now).jammed, false);
 });

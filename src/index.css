@@ -1195,7 +1195,7 @@ ion-segment.hider-mode ion-segment-button {
   transform: rotate(calc(-1 * var(--map-rotation)));
 }
 
-/* Over the map, top right, one under the other: Fit, centre on me, north */
+/* Over the map, top right, one under the other: Fit, centre on me, align */
 .track-map-tools {
   position: absolute;
   z-index: 1000;
@@ -1239,8 +1239,9 @@ ion-segment.hider-mode ion-segment-button {
   border-color: var(--accent);
 }
 
-/* Which way north is. Tap to keep north up, again to turn with you */
-.track-map-north {
+/* Align: turn the map the way the phone faces, and back to north up. Off, a
+   compass; on, a needle that shows where north has gone */
+.track-map-align {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1267,9 +1268,14 @@ ion-segment.hider-mode ion-segment-button {
   fill: var(--text-3);
 }
 
-/* North kept up: the needle stays still, and the button says it's on */
-.track-map-north--locked {
-  border-color: var(--text-2);
+.track-map-align {
+  color: var(--text-2);
+  font-size: 1.25rem;
+}
+
+/* Turning with the phone: lit */
+.track-map-align--on {
+  border-color: var(--accent);
 }
 
 /* Frame you and the hider again */
@@ -2167,12 +2173,6 @@ ion-content .name-card.settings-row {
 }
 
 /* ===== IN GAME: the hider's jammer, under the status card ===== */
-ion-content .name-card.jam-card {
-  --min-height: calc(var(--row-height) + var(--space-2) - 2px);
-  height: calc(var(--row-height) + var(--space-2));
-  margin-top: var(--space-3);
-}
-
 .jam-row {
   display: flex;
   align-items: center;
@@ -2340,6 +2340,41 @@ ion-footer.phase-footer-bar {
 }
 
 /* ===== CHAT SHEET: the conversation, with the box to write in under it ===== */
+/* Under the title: everyone's chat, or your side's own */
+.chat-tabs {
+  padding: var(--space-2) var(--space-4) var(--space-3);
+  background: var(--ion-toolbar-background, var(--ink-1));
+}
+
+ion-segment.chat-tab-switch {
+  width: 100%;
+  height: 2.5rem;
+}
+
+ion-segment.chat-tab-switch ion-segment-button {
+  font-size: var(--fs-caption);
+}
+
+ion-segment.chat-tab-switch--side::before {
+  transform: translateX(100%);
+}
+
+/* New messages in the chat that isn't showing */
+.chat-tab-count {
+  display: inline-block;
+  box-sizing: border-box;
+  min-width: 1rem;
+  height: 1rem;
+  margin-inline-start: var(--space-2);
+  padding: 0 0.25rem;
+  border-radius: 0.5rem;
+  background: var(--accent);
+  color: var(--on-accent);
+  font: 600 0.625rem / 1rem var(--font-mono);
+  text-align: center;
+  vertical-align: middle;
+}
+
 .chat-empty {
   margin: var(--space-6) var(--space-4);
   text-align: center;
@@ -2858,6 +2893,94 @@ ion-list.lobby-menu-list ion-item.lobby-menu-leave,
 ion-list.lobby-menu-list ion-item.lobby-menu-leave ion-icon {
   --color: var(--ion-color-danger-tint);
   color: var(--ion-color-danger-tint);
+}
+
+/* ===== ABILITIES: a button on the game screen, under the clock, and the menu it opens ===== */
+.abilities-btn {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  box-sizing: border-box;
+  width: 100%;
+  height: 3rem;
+  margin-top: var(--space-3);
+  padding: 0 var(--space-3) 0 var(--space-4);
+  border: var(--hairline);
+  border-radius: var(--radius-card);
+  background: var(--ink-2);
+  color: var(--text-2);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.abilities-btn > ion-icon {
+  flex: none;
+  font-size: 1.125rem;
+}
+
+.abilities-btn-title {
+  flex: none;
+  font-size: var(--fs-body);
+  font-weight: 500;
+  color: var(--text-1);
+}
+
+/* How the jammer stands, at the right: one line, whatever it says */
+.abilities-btn-status {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--fs-meta);
+  font-family: var(--font-mono);
+  text-align: end;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.abilities-btn > ion-icon.abilities-btn-more {
+  font-size: 1rem;
+  color: var(--text-3);
+}
+
+/* Something is ready to use, or in use: lit */
+.abilities-btn--ready > ion-icon:first-child,
+.abilities-btn--ready .abilities-btn-status,
+.abilities-btn--active > ion-icon:first-child,
+.abilities-btn--active .abilities-btn-status {
+  color: var(--accent);
+}
+
+/* The menu: as wide as its button, straight under it */
+ion-popover.abilities-menu {
+  --width: calc(100vw - 2 * var(--space-4));
+  --max-width: 26rem;
+}
+
+.abilities {
+  padding: var(--space-3);
+}
+
+.abilities-title {
+  margin: 0 var(--space-1) var(--space-2);
+  font-size: var(--fs-caption);
+  line-height: 1.25rem;
+  font-weight: 500;
+  color: var(--text-3);
+}
+
+/* The jammer, as a row of the menu (on the page it was a card) */
+.abilities ion-item.jam-card {
+  --background: var(--ink-3);
+  --inner-border-width: 0;
+  --padding-start: 0;
+  --inner-padding-end: 0;
+  --min-height: calc(var(--row-height) + var(--space-2) - 2px);
+  height: calc(var(--row-height) + var(--space-2));
+  border: var(--hairline);
+  border-radius: var(--radius-track);
+  overflow: hidden;
 }
 
 /* ===== ACTION SHEETS (photo, player menu, select pickers) ===== */

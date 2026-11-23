@@ -1,6 +1,9 @@
-// The lobby's chat: one conversation for everyone in it. The server keeps
-// the messages ([{ id, player_id, name, text, at, image? }], oldest first) and
-// sends the lot on joining and each new one as it's sent (server/server.js).
+// The lobby's chats: one conversation for everyone in it, and one for each
+// side that only that side is sent. The server keeps the messages
+// ([{ id, player_id, name, channel, text, at, image? }], oldest first), and
+// sends a phone the ones it may have on joining, each new one as it's sent,
+// and the lot again whenever its player changes sides (server/server.js).
+// `channel` is 'all', 'seekers' or 'hiders'.
 // A message with a picture carries only where it is and its size
 // (`image: { id, type, width, height }`, or `gone` once the server has let
 // it go); the picture itself is fetched when it's shown (utils/chatImage.js).
@@ -8,6 +11,17 @@
 // Mirrors the server's limits (server/game.js)
 export const CHAT_MAX_CHARS = 280;
 export const CHAT_HISTORY = 200;
+
+export const EVERYONE = 'all';
+
+/** The chat a side has to itself: 'seekers' or 'hiders' */
+export const sideChannel = (isSeeker) => (isSeeker ? 'seekers' : 'hiders');
+
+/** The messages of one chat ('all', 'seekers' or 'hiders'), in order */
+export function inChannel(messages, channel)
+{
+    return messages.filter((m) => (m.channel ?? EVERYONE) === channel);
+}
 
 /**
  * The list with a newly arrived message on the end. One already there (the
@@ -33,15 +47,18 @@ export function messageTime(at)
 }
 
 // Where the last message this player saw is remembered, per lobby, so a
-// reload doesn't mark the whole conversation unread again
-const readKey = (lobbyId) => `manhunt.chatRead.${lobbyId}`;
+// reload doesn't mark the whole conversation unread again. Everyone's chat
+// and the player's side's are kept apart (`side`): one can be read and the
+// other not. (Message IDs only ever go up, across all the chats, so one
+// number does for the side's chat whichever side that is.)
+const readKey = (lobbyId, side) => `manhunt.chatRead.${lobbyId}${side ? '.side' : ''}`;
 
-export function loadLastRead(lobbyId)
+export function loadLastRead(lobbyId, side = false)
 {
-    try { return Number(localStorage.getItem(readKey(lobbyId))) || 0; } catch { return 0; }
+    try { return Number(localStorage.getItem(readKey(lobbyId, side))) || 0; } catch { return 0; }
 }
 
-export function saveLastRead(lobbyId, id)
+export function saveLastRead(lobbyId, id, side = false)
 {
-    try { localStorage.setItem(readKey(lobbyId), String(id)); } catch { /* not remembered */ }
+    try { localStorage.setItem(readKey(lobbyId, side), String(id)); } catch { /* not remembered */ }
 }

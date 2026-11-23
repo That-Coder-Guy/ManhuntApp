@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { IonButton, IonIcon, IonSegment, IonSegmentButton, IonLabel } from '@ionic/react';
 import { chevronBackOutline } from 'ionicons/icons';
 import CompassArrow from './CompassArrow';
@@ -35,13 +35,23 @@ function SeekerView({ players, avatars = {}, currentLocation, playArea = null })
         try { localStorage.setItem(TRACK_MODE_KEY, next); } catch { /* not remembered */ }
     }
 
-    const hiders = players.filter((player) => !player.is_seeker);
+    // A hider who is jamming has vanished: off the list, off the map, and
+    // if they were being tracked, back to the list. (The server sends no
+    // position for them either, so there is nothing to show)
+    const everyHider = players.filter((player) => !player.is_seeker);
+    const hiders = everyHider.filter((player) => !player.jammed_until);
     const seekers = players.filter((player) => player.is_seeker);
     const distanceTo = (player) =>
         calculateDistance(currentLocation.latitude, currentLocation.longitude, player.latitude, player.longitude);
 
-    // A selected hider who left or switched roles simply drops back to the list
+    // A selected hider who left, switched roles or jams simply drops back to the list
     const selected = hiders.find((h) => h.player_id === selectedId);
+    // And stays there: when a hider who jammed comes back, the seeker picks
+    // them again from the list, not thrown back onto their compass
+    useEffect(() =>
+    {
+        if (selectedId !== null && !selected) setSelectedId(null);
+    }, [selectedId, selected]);
 
     if (selected)
     {
@@ -92,7 +102,7 @@ function SeekerView({ players, avatars = {}, currentLocation, playArea = null })
                             onSelect={setSelectedId}
                             now={now}
                         />
-                        {/* The map is north-up, so the direction in words helps */}
+                        {/* North is up unless the map is turned with the phone, so the direction in words helps */}
                         <TargetReadout
                             target={selected}
                             name={playerName(selected)}
@@ -106,7 +116,12 @@ function SeekerView({ players, avatars = {}, currentLocation, playArea = null })
     }
 
     return (
-        <PlayerListCard title="Hiders" count={hiders.length} emptyText="No hiders in this lobby yet" testIds={TEST_IDS}>
+        <PlayerListCard
+            title="Hiders"
+            count={hiders.length}
+            emptyText={everyHider.length ? 'No hider can be tracked right now' : 'No hiders in this lobby yet'}
+            testIds={TEST_IDS}
+        >
             {hiders.map((hider) => (
                 <PlayerRow
                     key={hider.player_id}

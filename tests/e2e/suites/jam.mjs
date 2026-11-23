@@ -9,13 +9,16 @@ const text = (page, sel) => page.locator(sel).first().innerText().catch(() => ''
 const waitFor = (page, fn, arg, timeout = 8000) => page.waitForFunction(fn, arg, { timeout }).then(() => true, () => false);
 const sheet = (id) => `ion-modal.show-modal [data-testid="${id}"]`;
 const pick = async (page, id, label) => {
+  // One list at a time: the last one takes a moment to close
+  await page.waitForFunction(() => !document.querySelector('ion-action-sheet:not(.overlay-hidden)'), null, { timeout: 5000 }).catch(() => {});
   await page.locator(sheet(id)).click();
   // (the whole label: "5 min" is also in "15 min")
   await page.locator('ion-action-sheet:not(.overlay-hidden) button').filter({ hasText: new RegExp(`^${label}$`) }).click();
   await page.waitForTimeout(400);
 };
-const jamState = (page) => page.locator('[data-testid="jam-card"]').getAttribute('data-state').catch(() => null);
-const jamIs = (page, state, timeout) => waitFor(page, (s) => document.querySelector('[data-testid="jam-card"]')?.dataset.state === s, state, timeout);
+// The jammer is in the Abilities menu, under a button on the game screen; the button says how it stands without being opened
+const jamState = (page) => page.locator('[data-testid="abilities-btn"]').getAttribute('data-state').catch(() => null);
+const jamIs = (page, state, timeout) => waitFor(page, (s) => document.querySelector('[data-testid="abilities-btn"]')?.dataset.state === s, state, timeout);
 // What the server holds for the lobby, through the host's socket
 const send = (page, event, payload) => page.evaluate(([e, p]) => window.__manhuntSocket.timeout(4000).emitWithAck(e, p), [event, payload]);
 
@@ -75,40 +78,78 @@ const seekerDistance = (page) => text(page, '[data-testid="target-distance"]');
   check(saved.status === 'success', 'ten-second times are within the limits', JSON.stringify(saved));
   await startGame(host.page, maya.page);
 
-  check(await jamIs(maya.page, 'charging'), 'the hider gets a jammer, charging', await jamState(maya.page));
+  check(await jamIs(maya.page, 'charging'), 'the hider gets an Abilities button, its jammer charging', await jamState(maya.page));
+  const button = await maya.page.evaluate(() => {
+    const b = document.querySelector('[data-testid="abilities-btn"]');
+    const r = b.getBoundingClientRect();
+    const clock = document.querySelector('[data-testid="game-role"]').closest('ion-card, ion-item, .name-card, div').getBoundingClientRect();
+    return { text: b.innerText.replace(/\s+/g, ' ').trim(), inContent: !!b.closest('ion-content'), inToolbar: !!b.closest('ion-header'),
+      top: r.top, left: r.left, right: r.right, view: window.innerWidth, clockTop: clock.top };
+  });
+  check(/^Abilities Jammer charging · 0:\d\d$/.test(button.text), 'it reads Abilities, and says how the jammer stands', button.text);
+  check(button.inContent && !button.inToolbar && button.top > button.clockTop && button.left >= 0 && button.right <= button.view, 'on the game screen itself, under the clock, not in the toolbar', JSON.stringify(button));
+  const bar = await maya.page.locator('ion-header ion-buttons ion-button').evaluateAll((buttons) => buttons.map((b) => b.dataset.testid));
+  check(JSON.stringify(bar) === JSON.stringify(['chat-btn', 'players-btn', 'menu-btn']), 'the toolbar stays chat, players, menu', JSON.stringify(bar));
+  check(await maya.page.locator('[data-testid="jam-card"]').count() === 0, 'the jammer itself is not on the screen until the menu is opened');
+  await maya.page.locator('[data-testid="abilities-btn"]').click();
+  await maya.page.waitForSelector('ion-popover.abilities-menu [data-testid="jam-card"]');
+  await maya.page.waitForTimeout(400);
+  check(/Hider abilities/.test(await text(maya.page, 'ion-popover.abilities-menu .abilities-title')), 'pressing it opens the Abilities menu, with the jammer in it', await text(maya.page, 'ion-popover.abilities-menu .abilities'));
   check(/Charging · ready in 0:\d\d/.test(await text(maya.page, '[data-testid="jam-status"]')), 'with a countdown', await text(maya.page, '[data-testid="jam-status"]'));
   check(await maya.page.locator('[data-testid="jam-btn"]').evaluate((b) => b.classList.contains('button-disabled') || b.hasAttribute('disabled')), 'and a Jam button that waits');
-  check(await host.page.locator('[data-testid="jam-card"]').count() === 0, 'seekers have no jammer');
+  check(await host.page.locator('[data-testid="abilities-btn"], [data-testid="jam-card"]').count() === 0, 'seekers have no abilities yet, so no button');
   await maya.page.screenshot({ path: `${SHOT}/jam-hider-charging.png` });
   check(await waitFor(host.page, () => /^1\d\d\s?m$/.test(document.querySelector('[data-testid="target-distance"]')?.innerText || '')), 'the seeker tracks Maya, ~100 m off', await seekerDistance(host.page));
 
+  // The seeker is on her, compass open, when she jams
+  await host.page.evaluate(() => { window.__states = []; window.__manhuntSocket.on('lobby-state', (s) => window.__states.push(s)); });
+  await host.page.locator('[data-testid="target-card"]').first().click();
+  await host.page.waitForSelector('[data-testid="compass-screen"]');
+
   check(await jamIs(maya.page, 'ready', 15000), 'ten seconds on, it is ready');
   check(/Ready · hides you for 10 s/.test(await text(maya.page, '[data-testid="jam-status"]')), 'and says what it does', await text(maya.page, '[data-testid="jam-status"]'));
+  check(await text(maya.page, '[data-testid="abilities-status"]') === 'Jammer ready', 'and the Abilities button says it is ready', await text(maya.page, '[data-testid="abilities-status"]'));
   await maya.page.screenshot({ path: `${SHOT}/jam-hider-ready.png` });
 
   await maya.page.locator('[data-testid="jam-btn"]').click();
   check(await jamIs(maya.page, 'active'), 'one tap starts the jam');
+  check(await maya.page.locator('ion-popover.abilities-menu [data-testid="jam-card"]').count() === 1, 'the menu stays open, so she sees it take');
   check(/Hidden from seekers · 0:\d\d left/.test(await text(maya.page, '[data-testid="jam-status"]')), 'with the time left', await text(maya.page, '[data-testid="jam-status"]'));
+  check(/^Jamming · 0:\d\d left$/.test(await text(maya.page, '[data-testid="abilities-status"]')), 'and the Abilities button says so too', await text(maya.page, '[data-testid="abilities-status"]'));
   await maya.page.screenshot({ path: `${SHOT}/jam-hider-active.png` });
 
-  // The seeker is told, and the row says jammed
-  check(await waitFor(host.page, () => [...document.querySelectorAll('ion-toast')].some((t) => /Maya is jamming your tracking/.test(t.message))), 'the seeker is told Maya is jamming');
-  check(await waitFor(host.page, () => !!document.querySelector('[data-testid="row-jammed"]')), 'and her row is marked Jammed');
-  // Maya runs 400 m: the seeker's number doesn't follow
+  // With the menu closed, her own screen still says she is hidden, and for how long
+  await maya.page.mouse.click(60, 700);
+  check(await waitFor(maya.page, () => !document.querySelector('ion-popover.abilities-menu [data-testid="jam-card"]')), 'tapping away closes the menu');
+  check(/Jamming · hidden from seekers for 0:\d\d/.test(await text(maya.page, '[data-testid="hider-seen"]')), 'and her screen says she is hidden, with the time left', await text(maya.page, '[data-testid="hider-seen"]'));
+  await maya.page.screenshot({ path: `${SHOT}/jam-hider-screen.png` });
+
+  // The seeker, who was tracking her on the compass, is told, and she is gone:
+  // back to the list, with her not on it
+  check(await waitFor(host.page, () => [...document.querySelectorAll('ion-toast')].some((t) => /Maya is jamming: gone from your tracking/.test(t.message))), 'the seeker is told Maya is jamming');
+  check(await waitFor(host.page, () => !document.querySelector('[data-testid="compass-screen"]')), 'the seeker\'s compass, which was on her, closes');
+  check(await waitFor(host.page, () => document.querySelectorAll('[data-testid="target-card"]').length === 0), 'and she is gone from the seeker\'s list of hiders');
+  check(/No hider can be tracked right now/.test(await text(host.page, '[data-testid="no-targets"]')), 'which says there is no one to track', await text(host.page, '[data-testid="no-targets"]'));
+  await host.page.screenshot({ path: `${SHOT}/jam-seeker-list.png` });
+  // Maya runs 400 m. Nothing about where she is, or was, reaches the seeker's phone
   await maya.ctx.setGeolocation(HIDER_MOVED);
   await host.page.waitForTimeout(3500);
-  check(/^1\d\d\s?m$/.test(await seekerDistance(host.page)), 'while jammed, the seeker keeps the old distance', await seekerDistance(host.page));
-  check(/Jammed ·\s+seen/.test((await text(host.page, '[data-testid="target-card"] .player-freshness')).replace(/\n/g, ' ')), 'with when she was last seen', await text(host.page, '[data-testid="target-card"] .player-freshness'));
-  await host.page.screenshot({ path: `${SHOT}/jam-seeker-list.png` });
-  await host.page.locator('[data-testid="target-card"]').first().click();
-  await host.page.waitForSelector('[data-testid="target-readout"]');
-  check(/Jammed · last seen/.test(await text(host.page, '[data-testid="target-jammed"]')), 'the compass screen says so too', await text(host.page, '[data-testid="target-jammed"]'));
-  await host.page.waitForTimeout(500);
-  await host.page.screenshot({ path: `${SHOT}/jam-seeker-compass.png` });
-  await host.page.locator('[data-testid="compass-back"]').click();
+  const during = await host.page.evaluate(() => window.__states.at(-1).players.find((p) => p.name === 'Maya'));
+  check(during.jammed_until > 0 && during.latitude === null && during.longitude === null && during.location_last_updated === null && during.uncertainty_m === null,
+    'the seeker\'s phone is sent no position for her at all', JSON.stringify(during));
+  const leaked = await host.page.evaluate((after) => window.__states.filter((s) => s.server_time >= after).some((s) => s.players.some((p) => p.name === 'Maya' && p.latitude !== null)), during.jammed_until - 10_000);
+  check(!leaked, 'at no point during the jam');
+  check(await host.page.locator('[data-testid="target-card"]').count() === 0, 'and she stays off the list');
+  // The list of everyone in the lobby still has her: she hasn't left the game
+  await host.page.locator('[data-testid="players-btn"]').click();
+  await host.page.waitForSelector('ion-modal.show-modal');
+  await host.page.waitForTimeout(400);
+  check(/Maya[\s\S]*Jamming/.test(await text(host.page, 'ion-modal.show-modal')), 'the lobby\'s list of players still has her, as jamming', (await text(host.page, 'ion-modal.show-modal')).replace(/\s+/g, ' ').slice(0, 120));
+  await host.page.locator('ion-modal.show-modal ion-button', { hasText: 'Close' }).click();
+  await host.page.waitForSelector('ion-modal.show-modal', { state: 'detached', timeout: 5000 }).catch(() => {});
 
-  // It runs out: the seeker gets the real position, the hider charges again
-  check(await waitFor(host.page, () => !document.querySelector('[data-testid="row-jammed"]'), null, 15000), 'when the jam ends the mark goes');
+  // It runs out: she is back on the list, where she really is now, and the hider charges again
+  check(await waitFor(host.page, () => document.querySelectorAll('[data-testid="target-card"]').length === 1, null, 15000), 'when the jam ends she is back on the seeker\'s list');
   check(await waitFor(host.page, () => /^[345]\d\d\s?m$/.test(document.querySelector('[data-testid="target-distance"]')?.innerText || '')), 'and the seeker sees where Maya really is now (hundreds of metres on; her fixes are steadied)', await seekerDistance(host.page));
   check(await jamIs(maya.page, 'charging'), 'the jammer charges again');
   const refused = await send(maya.page, 'jam', {});
@@ -125,7 +166,7 @@ const seekerDistance = (page) => text(page, '[data-testid="target-distance"]');
   await startGame(host.page, maya.page);
   await maya.page.waitForSelector('[data-testid="seeker-info"]');
   await maya.page.waitForTimeout(800);
-  check(await maya.page.locator('[data-testid="jam-card"]').count() === 0, 'with jamming off, the hider has no jammer');
+  check(await maya.page.locator('[data-testid="abilities-btn"], [data-testid="jam-card"]').count() === 0, 'with jamming off, the hider has no jammer, and no Abilities button');
   check((await send(maya.page, 'jam', {})).status === 'jam_off', 'and the server refuses one');
   await maya.page.screenshot({ path: `${SHOT}/jam-hider-off.png` });
   await Promise.all([host, maya].map((p) => p.ctx.close()));

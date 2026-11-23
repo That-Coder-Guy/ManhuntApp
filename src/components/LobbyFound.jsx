@@ -16,7 +16,7 @@ import ShareModal from './ShareModal';
 import ChatModal from './ChatModal';
 import ConnectionBanner from './ConnectionBanner';
 import { PlayerListCard } from './PlayerList';
-import { SettingsRow, GameStatusCard, JamCard, GameOverCard, PhaseFooter, FoundFooter } from './GamePanels';
+import { SettingsRow, GameStatusCard, AbilitiesMenu, GameOverCard, PhaseFooter, FoundFooter } from './GamePanels';
 import { PHASE } from '../hooks/useLobbySocket';
 import useGeolocation from '../hooks/useGeolocation';
 import useWakeLock from '../hooks/useWakeLock';
@@ -24,7 +24,7 @@ import { useLocationPermission, useKeepScreenOn } from '../hooks/usePermissions'
 import { withDummyPlayers } from '../utils/dummyPlayers';
 import { playerName } from '../utils/players';
 import { useUpdateReady, applyAppUpdate } from '../utils/appUpdate';
-import { unreadCount, loadLastRead, saveLastRead } from '../utils/chat';
+import { unreadCount, loadLastRead, saveLastRead, inChannel, sideChannel, EVERYONE } from '../utils/chat';
 
 const LOBBY_LIST_IDS = { card: 'lobby-players-card', title: 'lobby-players-title', list: 'lobby-players-list', empty: 'no-players' };
 
@@ -62,16 +62,28 @@ function LobbyFound({ lobbyId, lobby, onLeft })
     // The toolbar's menu (invite, end the game, leave): the tap that opened it, which is
     // also where it's shown, or null while it's closed
     const [menuTap, setMenuTap] = useState(null);
-    // The last chat message this player has seen: the button counts what came after
-    const [lastRead, setLastRead] = useState(() => loadLastRead(lobbyId));
-    const newestMessage = chat.length ? chat[chat.length - 1].id : 0;
+    // Two chats: everyone's, and this player's side's. Which one the sheet
+    // is showing ('all' or 'side'), and the last message seen in each: the
+    // button counts what came after, in both
+    const [chatTab, setChatTab] = useState('all');
+    const side = sideChannel(!!selfPlayer?.is_seeker);
+    const chats = { all: inChannel(chat, EVERYONE), side: inChannel(chat, side) };
+    // On changing sides (caught, or moved by the host) the sheet goes back to
+    // everyone's chat: nobody finds themselves writing to a side they
+    // didn't choose to write to
+    useEffect(() => { setChatTab('all'); }, [side]);
+    const [lastRead, setLastRead] = useState(() => ({ all: loadLastRead(lobbyId), side: loadLastRead(lobbyId, true) }));
+    const shownChat = chats[chatTab];
+    const newestShown = shownChat.length ? shownChat[shownChat.length - 1].id : 0;
     useEffect(() =>
     {
-        if (!isChatOpen || newestMessage <= lastRead) return;
-        setLastRead(newestMessage);
-        saveLastRead(lobbyId, newestMessage);
-    }, [isChatOpen, newestMessage, lastRead, lobbyId]);
-    const unread = isChatOpen ? 0 : unreadCount(chat, lastRead, selfPlayer?.player_id);
+        // Only the chat on screen is read: the other keeps its count
+        if (!isChatOpen || newestShown <= lastRead[chatTab]) return;
+        setLastRead((current) => ({ ...current, [chatTab]: newestShown }));
+        saveLastRead(lobbyId, newestShown, chatTab === 'side');
+    }, [isChatOpen, chatTab, newestShown, lastRead, lobbyId]);
+    const unreadIn = (tab) => (isChatOpen && chatTab === tab ? 0 : unreadCount(chats[tab], lastRead[tab], selfPlayer?.player_id));
+    const unread = unreadIn('all') + unreadIn('side');
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isLeaveConfirmOpen, setIsLeaveConfirmOpen] = useState(false);
     const [isEndConfirmOpen, setIsEndConfirmOpen] = useState(false);
@@ -86,6 +98,9 @@ function LobbyFound({ lobbyId, lobby, onLeft })
     const host = everyone.find((p) => p.player_id === hostId);
     const canStart = everyone.some((p) => p.is_seeker) && everyone.some((p) => !p.is_seeker);
     const showEnd = isHost && phase === PHASE.PLAYING;
+    // What this player's side can do in a game, kept in the Abilities menu
+    // (a button under the clock): for now, a hider's jammer where the host allows it
+    const hasAbilities = phase === PHASE.PLAYING && !isSeeker && !!jam?.enabled;
 
     const listProps = {
         players: everyone,
@@ -117,7 +132,7 @@ function LobbyFound({ lobbyId, lobby, onLeft })
     {
         if (!jamNotice || !isSeeker || jamNotice.player_id === selfPlayer?.player_id) return;
         const who = everyone.find((p) => p.player_id === jamNotice.player_id);
-        setNotice(`${who ? playerName(who) : jamNotice.name || 'A hider'} is jamming your tracking`);
+        setNotice(`${who ? playerName(who) : jamNotice.name || 'A hider'} is jamming: gone from your tracking`);
         // Only a new notice should trigger this, not every lobby update
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [jamNotice]);
@@ -209,7 +224,7 @@ function LobbyFound({ lobbyId, lobby, onLeft })
                                     clockOffset={clockOffset}
                                     onOpenMap={settings?.geofence ? () => setIsSettingsOpen(true) : undefined}
                                 />
-                                {!isSeeker && <JamCard jam={jam} clockOffset={clockOffset} startJam={startJam} />}
+                                {hasAbilities && <AbilitiesMenu jam={jam} clockOffset={clockOffset} startJam={startJam} />}
                             </div>
                             <div className="lobby-body-main">
                                 {isSeeker ? (
@@ -224,6 +239,9 @@ function LobbyFound({ lobbyId, lobby, onLeft })
                                         seekerInfo={seekerInfo}
                                         // (only where the host has hiders shown vaguely; a jam says its own piece)
                                         seenWithin={settings?.hider_blur_m === 0 || selfPlayer?.jammed_until ? null : selfPlayer?.uncertainty_m ?? null}
+                                        // While their jam runs: until when, by the server's clock
+                                        jammedUntil={selfPlayer?.jammed_until ?? null}
+                                        clockOffset={clockOffset}
                                         // For the map of the hiders' own side
                                         self={selfPlayer}
                                         players={players}
@@ -347,11 +365,16 @@ function LobbyFound({ lobbyId, lobby, onLeft })
                 isOpen={isChatOpen}
                 onClose={() => setIsChatOpen(false)}
                 lobbyId={lobbyId}
-                messages={chat}
+                tab={chatTab}
+                onTab={setChatTab}
+                side={side}
+                messages={shownChat}
+                unreadElsewhere={unreadIn(chatTab === 'all' ? 'side' : 'all')}
                 players={everyone}
                 selfId={selfPlayer?.player_id}
-                showRoles={phase === PHASE.PLAYING}
-                sendChat={sendChat}
+                // In a side's own chat everyone is on the one side
+                showRoles={phase === PHASE.PLAYING && chatTab === 'all'}
+                sendChat={(text, image) => sendChat(text, image, chatTab === 'side' ? side : EVERYONE)}
             />
 
             <PlayerTableModal

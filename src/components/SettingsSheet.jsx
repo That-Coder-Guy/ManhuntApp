@@ -5,7 +5,7 @@ import {
 } from '@ionic/react';
 import PlayAreaMap from './PlayAreaMap';
 import {
-    formatDuration, formatArea, jamSettings, FOUND_RANGE_DEFAULT_M, SEEKER_INFO_DEFAULT, SEEKER_ALERT_DEFAULT_M, HIDER_BLUR_DEFAULT_M
+    formatDuration, formatArea, jamSettings, alertDistance, FOUND_RANGE_DEFAULT_M, SEEKER_INFO_DEFAULT, HIDER_BLUR_DEFAULT_M
 } from '../utils/game';
 import { polygonArea, polygonProblem, POLYGON_LIMITS } from '../../shared/geofence.js';
 
@@ -14,7 +14,7 @@ const HEAD_STARTS_S = [0, 30, 60, 120, 180, 300];
 const FOUND_RANGES_M = [10, 25, 50, 75, 100, 150, 200, 300];
 const ALERT_DISTANCES_M = [25, 50, 75, 100, 150, 200, 300, 500];
 // How far off a still hider is shown to seekers; 0 is always exact
-const HIDER_BLURS_M = [0, 50, 100, 150, 200, 300];
+const HIDER_BLURS_M = [0, 25, 50, 100, 150, 200, 300];
 const JAM_DURATIONS_S = [15, 30, 45, 60, 120, 180, 300];
 const JAM_CHARGES_MIN = [1, 2, 5, 10, 15, 20, 30, 45, 60];
 
@@ -26,7 +26,7 @@ const SEEKER_INFO_OPTIONS = [
 ];
 const SEEKER_INFO_NOTES = {
     distance: 'Hiders see how far away the nearest seeker is, but not which way.',
-    nearby: 'Hiders are only told when a seeker is within the alert distance, not how close or which way.',
+    nearby: 'Hiders are only told when a seeker is within the alert distance, not how close or which way. The alert distance is never more than the found range.',
     none: 'Hiders get no information about the seekers.',
 };
 
@@ -68,6 +68,12 @@ function SettingsSheet({ isOpen, onClose, settings, isHost, canEdit, currentLoca
     }
     const problem = fenceOn ? polygonProblem(points) : null;
     const seekerInfo = draft?.seeker_info ?? SEEKER_INFO_DEFAULT;
+    // The alert distance, and the distances on offer for it: none past the found range
+    const foundRange = draft?.found_range_m ?? FOUND_RANGE_DEFAULT_M;
+    const alertM = alertDistance(draft);
+    const alertChoices = [...new Set([...FOUND_RANGES_M, ...ALERT_DISTANCES_M, foundRange, alertM])]
+        .filter((m) => m <= foundRange)
+        .sort((a, b) => a - b);
     const jam = jamSettings(draft);
     const hiderBlur = draft?.hider_blur_m ?? HIDER_BLUR_DEFAULT_M;
 
@@ -268,11 +274,12 @@ function SettingsSheet({ isOpen, onClose, settings, isHost, canEdit, currentLoca
                                 label="Alert within"
                                 data-testid="seeker-alert"
                                 interface="action-sheet"
-                                value={draft?.seeker_alert_m ?? SEEKER_ALERT_DEFAULT_M}
+                                // Never more than the found range: a longer one is shown, and saved, as the range
+                                value={alertM}
                                 disabled={!editable}
                                 onIonChange={(e) => setDraft((d) => ({ ...d, seeker_alert_m: e.detail.value }))}
                             >
-                                {ALERT_DISTANCES_M.map((m) => (
+                                {alertChoices.map((m) => (
                                     <IonSelectOption key={m} value={m}>{`${m}\u202Fm`}</IonSelectOption>
                                 ))}
                             </IonSelect>
@@ -300,7 +307,7 @@ function SettingsSheet({ isOpen, onClose, settings, isHost, canEdit, currentLoca
                 </IonList>
                 <p className="settings-note" data-testid="hider-blur-note">
                     {hiderBlur
-                        ? 'The slower a hider moves, the less exactly seekers see where they are. From walking pace up, seekers see the exact spot.'
+                        ? 'The slower a hider moves, the less exactly seekers see where they are. Anyone going faster than an 11-minute mile is seen exactly.'
                         : 'Seekers always see exactly where each hider is.'}
                 </p>
 
@@ -356,7 +363,7 @@ function SettingsSheet({ isOpen, onClose, settings, isHost, canEdit, currentLoca
                 </IonList>
                 <p className="settings-note" data-testid="jam-note">
                     {jam.enabled
-                        ? 'While a hider jams, seekers only see where that hider was when it started. A jam charges from the moment the seekers set off, and again after each one.'
+                        ? 'While a hider jams, they vanish from the seekers’ list and map. A jam charges from the moment the seekers set off, and again after each one.'
                         : 'Seekers can track every hider for the whole game.'}
                 </p>
 

@@ -1,4 +1,4 @@
-// How exactly seekers see a hider: an area while still, the exact spot at walking pace
+// How exactly seekers see a hider: a circle while still, smaller as she moves, the exact spot at a run
 import { SHOT, createLobby, join, startGame } from '../lib/helpers.mjs';
 import { chromium } from '../lib/playwright.mjs';
 
@@ -29,7 +29,7 @@ const metresBetween = (a, b) => Math.hypot((a.latitude - b.latitude) * METRES, (
   await host.page.waitForSelector(sheet('hider-blur'));
   await host.page.locator(sheet('hider-blur-note')).scrollIntoViewIfNeeded();
   await host.page.waitForTimeout(400);
-  check(await host.page.locator(sheet('hider-blur')).evaluate((s) => s.value) === 100, 'a still hider is shown within 100 m by default');
+  check(await host.page.locator(sheet('hider-blur')).evaluate((s) => s.value) === 25, 'a still hider is shown within 25 m by default');
   check(/slower a hider moves/.test(await text(host.page, sheet('hider-blur-note'))), 'and the note says how it works', await text(host.page, sheet('hider-blur-note')));
   await host.page.screenshot({ path: `${SHOT}/blur-settings.png` });
   await host.page.locator(sheet('hider-blur')).click();
@@ -52,46 +52,54 @@ const metresBetween = (a, b) => Math.hypot((a.latitude - b.latitude) * METRES, (
 
   // Still: an area, on the seeker's phone and on the wire
   check(await waitFor(host.page, () => !!document.querySelector('[data-testid="row-vague"]')), 'a still hider\'s row is marked as an area');
-  check(/^±100\sm ·/.test(await text(host.page, '[data-testid="row-vague"]')), 'of 100 m', await text(host.page, '[data-testid="row-vague"]'));
+  check(/^±25\sm ·/.test(await text(host.page, '[data-testid="row-vague"]')), 'of 25 m', await text(host.page, '[data-testid="row-vague"]'));
   check(/^≈\s?\d+\s?m$/.test(await text(host.page, '[data-testid="target-distance"]')), 'and the distance is approximate', await text(host.page, '[data-testid="target-distance"]'));
   const still = await lastSeen(host.page, 'Maya');
   const off = metresBetween(still, HIDER);
-  check(still.uncertainty_m === 100 && off > 1 && off <= 100, 'the seeker\'s phone is given a point within 100 m of her, not her position', `${off.toFixed(1)} m off, ±${still.uncertainty_m}`);
-  check(/Seekers see you within 100\sm/.test(await text(maya.page, '[data-testid="hider-seen"]')), 'the hider is told how she is seen', await text(maya.page, '[data-testid="hider-seen"]'));
+  check(still.uncertainty_m === 25 && off > 0.01 && off <= 25, 'the seeker\'s phone is given a point within 25 m of her, not her position', `${off.toFixed(1)} m off, ±${still.uncertainty_m}`);
+  check(/Seekers see you within 25\sm/.test(await text(maya.page, '[data-testid="hider-seen"]')), 'the hider is told how she is seen', await text(maya.page, '[data-testid="hider-seen"]'));
   await host.page.screenshot({ path: `${SHOT}/blur-seeker-list.png` });
   await maya.page.screenshot({ path: `${SHOT}/blur-hider-still.png` });
 
   // The map draws the area
   await host.page.locator('[data-testid="target-card"]').first().click();
   await host.page.waitForSelector('[data-testid="target-readout"]');
-  check(/^±100\sm ·/.test(await text(host.page, '[data-testid="target-vague"]')), 'the compass readout says ±100 m', await text(host.page, '[data-testid="target-vague"]'));
+  check(/^±25\sm ·/.test(await text(host.page, '[data-testid="target-vague"]')), 'the compass readout says ±25 m', await text(host.page, '[data-testid="target-vague"]'));
   await host.page.locator('[data-testid="track-map-btn"]').click();
   check(await waitFor(host.page, () => !!document.querySelector('[data-testid="track-area"]')), 'the map draws the area she is in');
   await host.page.waitForTimeout(1200);
   await host.page.screenshot({ path: `${SHOT}/blur-seeker-map.png` });
 
-  // She wobbles on the spot for a while: the seeker's point never moves
+  // She wobbles on the spot for a while (a couple of metres: less than the
+  // margin her circle was put down with): the seeker's point never moves
   for (let i = 0; i < 6; i++) {
-    await maya.ctx.setGeolocation({ latitude: HIDER.latitude + (i % 2 ? 0.00003 : -0.00002), longitude: HIDER.longitude + (i % 3 ? 0.00002 : -0.00003) });
+    await maya.ctx.setGeolocation({ latitude: HIDER.latitude + (i % 2 ? 0.000015 : -0.00001), longitude: HIDER.longitude + (i % 3 ? 0.00001 : -0.000015) });
     await maya.page.waitForTimeout(1500);
   }
   const points = new Set((await allSeen(host.page, 'Maya')).map((p) => `${p.latitude},${p.longitude}`));
   check(points.size === 1, 'wobbling on the spot, she is one unmoving point to the seeker', `${points.size} points`);
 
-  // She walks north at about 2 m/s. After half a minute of it the seeker has her exact position
+  // She walks north at 1.5 m/s: the circle shrinks, but a walk is never exact.
+  // Then she runs at 3 m/s (faster than an 11-minute mile), and within
+  // seconds the seeker has her exact position
   let at = HIDER;
-  const walk = async (seconds) => {
+  const walk = async (seconds, speed) => {
     for (let t = 0; t < seconds; t += 2) {
-      at = { latitude: at.latitude + (2 * 2) / METRES, longitude: at.longitude };
+      at = { latitude: at.latitude + (speed * 2) / METRES, longitude: at.longitude };
       await maya.ctx.setGeolocation(at);
       await maya.page.waitForTimeout(2000);
     }
   };
-  await walk(20);
+  await walk(24, 1.5);
   const partway = await lastSeen(host.page, 'Maya');
-  check(partway.uncertainty_m > 0, 'twenty seconds of walking is not yet enough to be shown exactly', `±${partway.uncertainty_m}`);
-  await walk(26);
-  check(await waitFor(host.page, () => !document.querySelector('[data-testid="track-area"]'), null, 12000), 'walking on, the area goes from the map');
+  check(partway.uncertainty_m > 0 && partway.uncertainty_m < 25, 'walking: a smaller circle, never her exact position', `±${partway.uncertainty_m}`);
+  check(metresBetween(partway, at) <= partway.uncertainty_m + 12, 'which still holds her', `${metresBetween(partway, at).toFixed(1)} m from its middle, ±${partway.uncertainty_m}`);
+  const startedRunning = Date.now();
+  const running = walk(20, 3);
+  check(await waitFor(host.page, () => !document.querySelector('[data-testid="track-area"]'), null, 16000), 'she breaks into a run, and the area goes from the map');
+  const tookS = (Date.now() - startedRunning) / 1000;
+  check(tookS < 14, 'within seconds, not half a minute', `${tookS.toFixed(1)} s`);
+  await running;
   const moving = await lastSeen(host.page, 'Maya');
   // (her phone steadies its fixes, so "exact" is where it says she is, a little behind the test's own figure)
   check(moving.uncertainty_m === 0 && metresBetween(moving, at) < 25, 'and the seeker is given where she really is', `±${moving.uncertainty_m}, ${metresBetween(moving, at).toFixed(1)} m from her`);

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { IonItem, IonLabel, IonCard, IonCardHeader, IonCardTitle, IonCardContent, IonButton, IonIcon, IonToast, IonAlert } from '@ionic/react';
-import { warningOutline } from 'ionicons/icons';
+import { IonItem, IonLabel, IonCard, IonCardHeader, IonCardTitle, IonCardContent, IonButton, IonIcon, IonToast, IonAlert, IonPopover } from '@ionic/react';
+import { warningOutline, flash, flashOutline, chevronDown } from 'ionicons/icons';
 import useNow from '../hooks/useNow';
 import { formatDistance } from '../utils/geo';
 import {
@@ -155,6 +155,66 @@ export function JamCard({ jam, clockOffset, startJam })
             </div>
             <IonToast isOpen={!!error} message={error} duration={4000} onDidDismiss={() => setError('')} />
         </IonItem>
+    );
+}
+
+/**
+ * The Abilities button on the game screen, under the clock, and the menu it
+ * opens: what this player's side can do during a game. For a hider that is
+ * the jammer; seekers have none yet, and get no button (nor does a hider in
+ * a lobby with jamming off). The button says how the jammer stands without
+ * being opened. The menu stays open after Jam is pressed, so the hider sees
+ * it take.
+ */
+export function AbilitiesMenu({ jam, clockOffset, startJam })
+{
+    const now = useNow(500);
+    const view = jamView(jam, now + clockOffset);
+    // The tap that opened the menu, which is also where it's shown
+    const [tap, setTap] = useState(null);
+    if (!view) return null;
+
+    const standing = {
+        charging: `Jammer charging · ${formatClock(view.remainingMs)}`,
+        ready: 'Jammer ready',
+        active: `Jamming · ${formatClock(view.remainingMs)} left`
+    }[view.state];
+    return (
+        <>
+            {/* (the menu first: the button must be the last thing here, for the
+                space the page leaves under this part of the screen. It is placed
+                by its button, whichever part of the button was tapped) */}
+            <IonPopover
+                isOpen={!!tap}
+                event={tap}
+                onDidDismiss={() => setTap(null)}
+                arrow={false}
+                side="bottom"
+                alignment="center"
+                size="cover"
+                className="lobby-menu abilities-menu"
+                data-testid="abilities-menu"
+            >
+                <div className="abilities">
+                    <h2 className="abilities-title">Hider abilities</h2>
+                    <JamCard jam={jam} clockOffset={clockOffset} startJam={startJam} />
+                </div>
+            </IonPopover>
+            <button
+                type="button"
+                className={`abilities-btn abilities-btn--${view.state}`}
+                data-testid="abilities-btn"
+                data-state={view.state}
+                onClick={(event) => setTap(new CustomEvent('abilities', { detail: { ionShadowTarget: event.currentTarget } }))}
+                aria-haspopup="dialog"
+                aria-expanded={!!tap}
+            >
+                <IonIcon icon={view.state === 'charging' ? flashOutline : flash} aria-hidden="true" />
+                <span className="abilities-btn-title">Abilities</span>
+                <span className="abilities-btn-status" data-testid="abilities-status">{standing}</span>
+                <IonIcon className="abilities-btn-more" icon={chevronDown} aria-hidden="true" />
+            </button>
+        </>
     );
 }
 

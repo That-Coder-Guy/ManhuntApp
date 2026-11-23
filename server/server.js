@@ -10,8 +10,9 @@ const { v4: uuidv4 } = require('uuid');
 
 const { isAllowedOrigin } = require('./origins');
 const {
-    PHASE, LIMITS, DEFAULT_SETTINGS, applySettings, isOutOfBounds, isValidAvatar, nearestSeeker, seekerInfoFor, jamStatus, isJamming,
-    FIX_HISTORY_MS, hiderSpeed, nextBlurShare, blurredPosition, cleanChatText, cleanChatImage
+    PHASE, LIMITS, DEFAULT_SETTINGS, applySettings, isOutOfBounds, isValidAvatar, distanceMeters, nearestSeeker, seekerInfoFor, jamStatus, isJamming,
+    BLUR, FIX_HISTORY_MS, hiderSpeed, nextBlurShare, blurredPosition, cleanChatText, cleanChatImage,
+    chatSide, cleanChatChannel, seesChatMessage
 } = require('./game');
 const { cleanSubscription, createPushSender } = require('./push');
 
@@ -90,7 +91,8 @@ function createGameServer(options = {})
      * position is exact. A hider's is only as exact as they are fast
      * (game.js, "How exactly seekers see a hider"): `uncertainty_m` is how
      * far from the given point they may be, 0 when it is their real one.
-     * Keeps the hider's grid and current square on the player (`blur`).
+     * Keeps the hider's circles on the player (`blur`): the one being shown,
+     * and the last one of each size, shown again while they are still in it.
      */
     function seenPosition(lobby, player, now)
     {
@@ -103,23 +105,27 @@ function createGameServer(options = {})
         const radius = lobby.settings.hider_blur_m ?? DEFAULT_SETTINGS.hider_blur_m;
         if (player.is_seeker || !radius || player.latitude == null || player.longitude == null) return exact;
 
-        const blur = player.blur ?? (player.blur = { origin: null, share: null, cell: null });
-        blur.share = nextBlurShare(blur.share, hiderSpeed(player.fixes ?? [], now));
+        const blur = player.blur ?? (player.blur = { share: null, shown: null, circles: new Map() });
+        const fixes = player.fixes ?? [];
+        blur.share = nextBlurShare(blur.share, hiderSpeed(fixes, now), hiderSpeed(fixes, now, [BLUR.exact_window_ms]));
         if (blur.share === 0)
         {
-            blur.cell = null;
+            blur.shown = null;
             return exact;
         }
-        // Where this hider's grid lies: set off from a random point a couple
-        // of hundred metres around where they first were, theirs alone
-        blur.origin ??= {
-            latitude: player.latitude + (Math.random() - 0.5) * 0.004,
-            longitude: player.longitude + (Math.random() - 0.5) * 0.004,
-        };
         const uncertainty = radius * blur.share;
-        const spot = blurredPosition(player, uncertainty, blur.origin, blur.cell);
-        blur.cell = spot.cell;
-        return { ...exact, latitude: spot.latitude, longitude: spot.longitude, uncertainty_m: Math.round(uncertainty) };
+        // The circle of this size shown before, if they're still in it: a
+        // speed that goes back and forth must not get a fresh circle each
+        // time, or laying them over each other would close in on the hider
+        let circle = blur.circles.get(uncertainty);
+        if (!circle || distanceMeters(player, circle) > uncertainty)
+        {
+            circle = blurredPosition(player, uncertainty, blur.shown);
+            blur.circles.set(uncertainty, circle);
+        }
+        blur.shown = circle;
+        // (rounded up: "within 7 m" must be true of a 6.25 m circle)
+        return { ...exact, latitude: circle.latitude, longitude: circle.longitude, uncertainty_m: Math.ceil(uncertainty) };
     }
 
     // That, with which side of the play area's edge they are really on
@@ -150,11 +156,14 @@ function createGameServer(options = {})
         // until the head start is over: the server, not the client, decides
         const shownToOthers = playing && (player.is_seeker || !game || now >= game.head_start_ends_at);
         const showPosition = own ? playing : shownToOthers;
-        // A hider who is jamming: everyone else keeps what they were being
-        // told when it started (position, its age, in or out of bounds)
+        // A hider who is jamming has vanished for everyone else: no position,
+        // vague or old, and nothing that goes with one (its age, how vague,
+        // which side of the play area's edge). Only that they are jamming,
+        // and until when
         const jamming = playing && isJamming(player, now);
-        const seen = jamming && player.jam_fix ? player.jam_fix : seenNow(lobby, player, now);
-        const at = own ? { ...seenNow(lobby, player, now), latitude: player.latitude, longitude: player.longitude } : seen;
+        const hidden = jamming && !own;
+        const seen = seenNow(lobby, player, now);
+        const at = own ? { ...seen, latitude: player.latitude, longitude: player.longitude } : seen;
 
         return {
             player_id: player.player_id,
@@ -163,13 +172,13 @@ function createGameServer(options = {})
             is_host: token === lobby.host_token,
             connected: player.connected,
             avatar_rev: player.avatar_rev,
-            latitude: showPosition ? at.latitude : null,
-            longitude: showPosition ? at.longitude : null,
-            location_last_updated: at.location_last_updated,
-            out_of_bounds: playing && at.out_of_bounds,
+            latitude: showPosition && !hidden ? at.latitude : null,
+            longitude: showPosition && !hidden ? at.longitude : null,
+            location_last_updated: hidden ? null : at.location_last_updated,
+            out_of_bounds: playing && !hidden && at.out_of_bounds,
             // How vaguely everyone else is being told where this player is.
             // (Their own copy says it too, so they know how they are seen)
-            uncertainty_m: shownToOthers ? seen.uncertainty_m : null,
+            uncertainty_m: shownToOthers && !hidden ? seen.uncertainty_m : null,
             jammed_until: jamming ? player.jam_until : null,
         };
     }
@@ -291,13 +300,12 @@ function createGameServer(options = {})
 
     // ---- Jamming ----
 
-    // Forget a player's jammer, and the grid their position was being
-    // reported on: back in the lobby, or no longer a hider
+    // Forget a player's jammer, and the circles their position was being
+    // reported in: back in the lobby, or no longer a hider
     function clearJam(player)
     {
         delete player.jam_until;
         delete player.jam_ready_at;
-        delete player.jam_fix;
         delete player.blur;
     }
 
@@ -316,17 +324,12 @@ function createGameServer(options = {})
         const { jam_duration_s: durationS, jam_charge_s: chargeS } = lobby.settings;
         player.jam_until = now + durationS * 1000;
         player.jam_ready_at = player.jam_until + chargeS * 1000;
-        // What the seekers keep seeing until it's over: what they were
-        // being told just now, which for a slow hider is already vague
-        player.jam_fix = seenNow(lobby, player, now);
 
-        // The moment it ends, the seekers get the hider's position back
-        const until = player.jam_until;
+        // The moment it ends, the seekers get the hider back (what they are
+        // told of a player is worked out as each state goes out)
         const timer = setTimeout(() =>
         {
             lobby.jamTimers.delete(timer);
-            // (unless this jam was cut short and a later one is running)
-            if (player.jam_until === until) delete player.jam_fix;
             scheduleBroadcast(lobbyId);
         }, durationS * 1000);
         lobby.jamTimers.add(timer);
@@ -495,6 +498,26 @@ function createGameServer(options = {})
             }
         }
     }
+    // The chat as one player is given it: everyone's, and their own side's
+    // since they came onto it (game.js seesChatMessage)
+    const chatFor = (lobby, player) => lobby.chat.filter((message) => seesChatMessage(message, player));
+
+    /**
+     * Put a player on a side. Their side's chat starts again from now, and
+     * their phone is sent the chat afresh: the side they left goes from it,
+     * and nothing the side they join said before is in it. Returns whether
+     * anything changed.
+     */
+    function changeSide(lobby, player, isSeeker)
+    {
+        if (player.is_seeker === isSeeker) return false;
+        player.is_seeker = isSeeker;
+        player.side_from = lobby.next_message_id;
+        const socket = player.socket_id && io.sockets.sockets.get(player.socket_id);
+        if (socket) socket.emit('chat-history', { messages: chatFor(lobby, player) });
+        return true;
+    }
+
     // Keep the chat within its limits: the newest messages, and the newest
     // pictures. A picture can go while its message stays; the message then
     // says so (`image.gone`), for anyone who gets the history later
@@ -544,7 +567,9 @@ function createGameServer(options = {})
             endTimer: null,
             blurTimer: null,
             jamTimers: new Set(),
-            // The lobby's chat: [{ id, player_id, name, text, at, image? }], oldest first
+            // The lobby's chats, in one list: [{ id, player_id, name, channel,
+            // text, at, image? }], oldest first. `channel` is 'all', or the
+            // side a message is for ('seekers', 'hiders')
             chat: [],
             next_message_id: 1,
             // Pictures sent in the chat, by ID: { bytes, type }. Fetched one
@@ -612,6 +637,9 @@ function createGameServer(options = {})
                 player_id: playerId,
                 name: `Player ${playerId}`,
                 is_seeker: false,
+                // The first message that could be theirs in their side's chat:
+                // none sent before they came onto it
+                side_from: lobby.next_message_id,
                 avatar: null,
                 avatar_rev: 0,
                 latitude: null,
@@ -651,7 +679,7 @@ function createGameServer(options = {})
         socket.emit('avatars', { avatars });
         // The chat so far, on every (re)connection: what was said while this
         // phone was away is there when it comes back
-        socket.emit('chat-history', { messages: lobby.chat });
+        socket.emit('chat-history', { messages: chatFor(lobby, player) });
         scheduleBroadcast(lobbyId);
 
         // The player can be removed (left elsewhere, grace expired, kicked)
@@ -718,7 +746,7 @@ function createGameServer(options = {})
             }
 
             if (hasName) p.name = name.trim().slice(0, config.maxNameLength);
-            if (hasRole) p.is_seeker = isSeeker;
+            if (hasRole) changeSide(currentLobby, p, isSeeker);
             scheduleBroadcast(lobbyId);
             reply(ack, { status: 'success', player_data: publicPlayerData(currentLobby, token, p, Date.now(), { own: true }) });
         });
@@ -749,9 +777,20 @@ function createGameServer(options = {})
         // The lobby's chat: one conversation for everyone in it, seekers and
         // hiders alike, before, during and after a game. A message carries
         // the name its sender had when it was sent. It is words, a picture
-        // ({ data: bytes, width, height }, compressed on the phone), or both
-        on('chat-send', ({ text, image } = {}, ack, currentLobby, p) =>
+        // ({ data: bytes, width, height }, compressed on the phone), or both.
+        // Each side also has a chat of its own: `channel` 'seekers' or
+        // 'hiders' reaches only who is on that side, and only its own
+        // players may write to it
+        on('chat-send', ({ text, image, channel } = {}, ack, currentLobby, p) =>
         {
+            const to = cleanChatChannel(channel);
+            if (!to) return reply(ack, { status: 'validation_error', description: 'There is no such chat.' });
+            // Named, never worked out from the sender's side: a hider caught
+            // while writing must not have their message land with the seekers
+            if (to !== 'all' && to !== chatSide(p))
+            {
+                return reply(ack, { status: 'wrong_side', description: `You’re not one of the ${to} now, so that wasn’t sent.` });
+            }
             const hasImage = image !== undefined && image !== null;
             const picture = hasImage ? cleanChatImage(image) : null;
             if (hasImage && !picture)
@@ -778,7 +817,7 @@ function createGameServer(options = {})
             }
             p.chat_times.push(now);
 
-            const message = { id: currentLobby.next_message_id++, player_id: p.player_id, name: p.name, text: clean, at: now };
+            const message = { id: currentLobby.next_message_id++, player_id: p.player_id, name: p.name, channel: to, text: clean, at: now };
             if (picture)
             {
                 p.chat_image_times.push(now);
@@ -788,7 +827,15 @@ function createGameServer(options = {})
             }
             currentLobby.chat.push(message);
             forgetOldChat(currentLobby);
-            io.to(lobbyId).emit('chat-message', message);
+            if (to === 'all') io.to(lobbyId).emit('chat-message', message);
+            else
+            {
+                // One side's: to each of its players' own phones, the sender's included
+                for (const other of currentLobby.players.values())
+                {
+                    if (other.socket_id && seesChatMessage(message, other)) io.to(other.socket_id).emit('chat-message', message);
+                }
+            }
             reply(ack, { status: 'success', message });
         });
 
@@ -825,7 +872,7 @@ function createGameServer(options = {})
                 return reply(ack, { status: 'too_far', description: `No seeker is within ${range} m of you.` });
             }
 
-            p.is_seeker = true;
+            changeSide(currentLobby, p, true);
             clearJam(p);
             game.found = [...(game.found || []), { player_id: p.player_id, at: now }];
             const hidersLeft = [...currentLobby.players.values()].filter((q) => !q.is_seeker).length;
@@ -906,7 +953,7 @@ function createGameServer(options = {})
             // Everyone goes back to the role they started the round with
             for (const p of currentLobby.players.values())
             {
-                if (typeof p.role_at_start === 'boolean') p.is_seeker = p.role_at_start;
+                if (typeof p.role_at_start === 'boolean') changeSide(currentLobby, p, p.role_at_start);
                 delete p.role_at_start;
                 clearJam(p);
             }
@@ -918,11 +965,7 @@ function createGameServer(options = {})
         {
             const [, target] = findPlayer(currentLobby, playerId);
             if (!target || typeof isSeeker !== 'boolean') return reply(ack, { status: 'validation_error' });
-            if (target.is_seeker !== isSeeker)
-            {
-                target.is_seeker = isSeeker;
-                armJam(currentLobby, target, Date.now());
-            }
+            if (changeSide(currentLobby, target, isSeeker)) armJam(currentLobby, target, Date.now());
             endIfNoHiders(lobbyId, currentLobby, { reason: 'all_found', winner: 'seekers' });
             scheduleBroadcast(lobbyId);
             reply(ack, { status: 'success' });

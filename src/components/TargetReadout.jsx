@@ -14,7 +14,7 @@ import FixDot from './FixDot';
 function TargetReadout({ target, name, distance, direction = null })
 {
     const now = useNow();
-    const { fresh, offline, jammed, label: freshness } = playerFreshness(target, now);
+    const { fresh, offline, label: freshness } = playerFreshness(target, now);
     const vague = target.uncertainty_m > 0;
 
     return (
@@ -25,11 +25,9 @@ function TargetReadout({ target, name, distance, direction = null })
             </div>
             <div className="compass-distance-display" data-testid="target-readout-distance">{formatHiderDistance(distance, target.uncertainty_m)}</div>
             <div className="compass-freshness">
-                {/* Jammed: the arrow points at where they were, and the line says so instead */}
-                {direction && !jammed && <span className="compass-cardinal-direction">Head {direction} · </span>}
-                {vague && !jammed && <span data-testid="target-vague">±{formatDistance(target.uncertainty_m)} · </span>}
-                {jammed ? <span className="meta-warning" data-testid="target-jammed">{freshness}</span>
-                    : vague ? freshness.replace('updated ', '') : freshness}
+                {direction && <span className="compass-cardinal-direction">Head {direction} · </span>}
+                {vague && <span data-testid="target-vague">±{formatDistance(target.uncertainty_m)} · </span>}
+                {vague ? freshness.replace('updated ', '') : freshness}
             </div>
         </div>
     );

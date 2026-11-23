@@ -3,12 +3,12 @@ tags: [manhunt, feature]
 ---
 # Chat
 
-One conversation for everyone in a lobby: seekers and hiders alike, before, during and after a game. Added 2026-11-21: the owner asked for "a global chat feature".
+One conversation for everyone in a lobby: seekers and hiders alike, before, during and after a game. Added 2026-11-21: the owner asked for "a global chat feature". Since 2026-11-22 each side also has a chat of its own: see "A chat for each side" below.
 
 ## How it works
 - **A chat button** (speech bubble) leads the lobby's toolbar. It carries a count of messages from other players since this player last had the chat open ("9+" past nine).
 - **The sheet**: the conversation, newest at the bottom, your own messages on the right as "You". Under it, a box (280 characters) and **Send**; Enter sends too. During a game each message says which side its sender is on *now*.
-- **Global means everyone.** "Global" was read as the whole lobby, as opposed to one side. There is no hiders-only or seekers-only chat. Nothing stops a player giving their side away in it: that is theirs to judge.
+- **Global means everyone.** "Global" was read as the whole lobby, as opposed to one side. Nothing stops a player giving their side away in it: that is theirs to judge. (Each side's own chat came the day after.)
 - A message keeps the name it was sent under; while its sender is still in the lobby the sheet shows their current name.
 
 ## On the server
@@ -17,6 +17,22 @@ One conversation for everyone in a lobby: seekers and hiders alike, before, duri
 - `chat-history` is sent on every connection, so a player who joins late, reloads or drops out and back has the conversation.
 - **No flooding:** five messages in five seconds from one player, then `too_fast` until the oldest of those is five seconds old.
 - Messages are shown with React text nodes, never as HTML.
+
+## A chat for each side (2026-11-22)
+The owner asked for "a seekers only and hiders only chat".
+
+- **The sheet has a switch**: **Everyone**, and **Seekers** or **Hiders**, whichever the player is. It opens on Everyone. The box says who it writes to ("Message the hiders"), an empty side chat says who sees it, and the tab not showing carries a count of what's new in it. The toolbar's count is both together. Each chat is read separately (`manhunt.chatRead.<lobby>` and `manhunt.chatRead.<lobby>.side`).
+- **The other side is never sent it.** A message has a `channel`: `all`, `seekers` or `hiders`. One for a side is emitted only to the sockets of players on that side, never to the lobby's room, and the history a phone is given leaves the other side's out (`seesChatMessage` in `server/game.js`, `chatFor` in `server.js`). The browser suite listens on each phone's socket and checks nothing of the other side's ever arrives.
+- **A side's chat is yours only from when you came onto it.** Each player has `side_from`: the number the next message had when they joined that side. They're given their side's messages from that number on. So:
+  - a seeker can't turn hider in the lobby, read the hiders' plans and turn back: they'd see only what was said while they were visibly a hider;
+  - a hider who is caught gets none of the seekers' earlier talk, and the hiders' chat goes from their phone (the same reasoning as the [[Hider map]]: nobody crosses over knowing more than they did);
+  - someone who joins late gets everyone's chat, and their side's from then on;
+  - going back to the lobby after a game puts found hiders back among the hiders, starting again.
+  A message *number*, not a time: the first version compared times, and a message sent in the same millisecond as a hider being caught reached them. The server test caught it.
+- **On changing sides the server sends that phone `chat-history` again**, which replaces its list. The sheet goes back to Everyone, and anything half-written is dropped: words meant for the hiders must not be one tap from the seekers' chat.
+- **The channel is named by the sender, never worked out from their side.** `chat-send` with `channel: 'hiders'` from someone who has just become a seeker is refused (`wrong_side`), not delivered to the seekers.
+- All three chats share the lobby's 200 messages and 40 pictures. A picture sent to one side is fetched by its random ID like any other; the other side is never told the ID.
+- Not done: no way to message one player; the host sees only their own side's chat, like anyone.
 
 ## Pictures (2026-11-22)
 The owner asked to "send images in the chat", for others to "click on these image to Fullscreen them", with the image "highly compressed using something like JPEG XL or something smaller".
@@ -38,6 +54,6 @@ The id of the last message seen is kept per lobby in `localStorage` (`manhunt.ch
 ## Not done
 - No notification, sound or buzz for a new message: only the count on the button. A phone in a pocket won't know.
 - No push to a locked phone, no muting, no deleting, no reporting. The host can still remove a player from the lobby.
-- Untested on real phones (the keyboard over the box in particular, and choosing a picture from the camera or library in the browser and in both native apps); checked by `tests/chat.test.js`, four tests in `tests/server.test.js` and `tests/e2e/suites/chat.mjs`.
+- Untested on real phones (the keyboard over the box in particular, and choosing a picture from the camera or library in the browser and in both native apps); checked by `tests/chat.test.js`, six tests in `tests/server.test.js`, and `tests/e2e/suites/chat.mjs` and `team-chat.mjs`.
 
 Code: `ChatModal.jsx`, `src/utils/chat.js`, `src/utils/chatImage.js`, the `chat-send` handler and the `chat-image` route in `server/server.js`, `useLobbySocket.js` (`chat`, `sendChat`).

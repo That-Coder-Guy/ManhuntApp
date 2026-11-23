@@ -59,9 +59,9 @@ const DEFAULT_SETTINGS = Object.freeze({
     jam_charge_s: 15 * 60,    // how long a jam takes to charge: from the seekers' release, and after each jam
     // How exactly seekers see a hider depends on how fast the hider moves. A
     // still hider is only shown as somewhere within this many metres; the
-    // radius halves as their speed doubles, and from walking pace up the
+    // radius halves as their speed doubles, and faster than an 11-minute mile the
     // position is exact. 0 = always exact.
-    hider_blur_m: 100,
+    hider_blur_m: 25,
 });
 
 const SEEKER_INFO_MODES = ['distance', 'nearby', 'none'];
@@ -150,6 +150,12 @@ function applySettings(current, update)
         next.hider_blur_m = blur;
     }
 
+    // Where the alert is all a hider is told of the seekers, it never
+    // reaches further than the found range: whichever of the two the host
+    // changed, the alert distance is brought down to fit. (In the other
+    // modes it isn't used, and is left as it was.)
+    if (next.seeker_info === 'nearby') next.seeker_alert_m = Math.min(next.seeker_alert_m, next.found_range_m);
+
     return { settings: next };
 }
 
@@ -232,43 +238,57 @@ function seekerInfoFor(settings, hider, players, now)
     const nearest = hasPosition(hider) ? nearestSeeker(hider, players, now) : null;
     if (mode === 'nearby')
     {
-        const alertM = settings.seeker_alert_m ?? DEFAULT_SETTINGS.seeker_alert_m;
+        // (never further than the found range: applySettings sees to that, and so does this)
+        const alertM = Math.min(settings.seeker_alert_m ?? DEFAULT_SETTINGS.seeker_alert_m, settings.found_range_m ?? DEFAULT_SETTINGS.found_range_m);
         return { mode, alert_m: alertM, nearby: hasPosition(hider) ? Boolean(nearest && nearest.distance <= alertM) : null };
     }
     return { mode: 'distance', distance_m: nearest ? Math.round(nearest.distance) : null };
 }
 
+const MILE_M = 1609.344;
+
 // ---- How exactly seekers see a hider: the slower, the vaguer ----
 //
 // The radius is inversely related to the hider's speed: the lobby's full
-// radius standing still, half of it at 0.3 m/s, a quarter at 0.6 m/s, and
-// the exact position from walking pace (1.2 m/s). It moves in those steps,
-// not smoothly, and what seekers get is the centre of a fixed square on a
-// grid, not a point near the hider, because anything that shifted with the
-// hider's true position could be averaged or extrapolated back to it:
-//   - while a hider stays in their square, its centre is all seekers ever see;
-//   - the grids are nested (each step's squares split the last one's in
-//     four), so a change of step never narrows it further than the finest
-//     square already shown;
-//   - where each hider's grid lies is random, and theirs alone.
+// radius standing still, half of it at a stroll, a quarter at a walk, and
+// the exact position for anyone going faster than an 11-minute mile (a
+// jog). It moves in those steps, not smoothly, and what seekers get is the centre of a circle that
+// stays where it is, not a point near the hider, because anything that
+// shifted with the hider's true position could be averaged or extrapolated
+// back to it:
+//   - the circle is put down at random around the hider, so they may be
+//     anywhere in it, and while they stay in it its centre is all seekers
+//     ever see;
+//   - when the step changes, the new circle lies inside the old one (or
+//     round it), and a circle shown before is shown again if the hider is
+//     still in it, so going back and forth between steps tells no more
+//     than the smallest circle already shown;
+//   - only walking out of a circle gets a new one.
 const BLUR = Object.freeze({
     // Speed is the net distance covered over each of these, and the lower of
     // the two counts: sustained movement to become exact, a short stop to
     // become vague again. GPS wobble on the spot covers almost no net distance
-    windows_ms: [30_000, 10_000],
-    exact_mps: 1.2,
-    // [at or above this speed, share of the lobby's radius], fastest first
-    steps: [[0.6, 1 / 4], [0.3, 1 / 2], [0, 1]],
-    // A step only changes once the speed is this far past its threshold, so
-    // a speed hovering at one doesn't flip the square back and forth
+    windows_ms: [15_000, 5_000],
+    // An 11-minute mile, in metres a second (2.44): the owner's line. Anyone
+    // going faster is shown exactly
+    exact_mps: MILE_M / (11 * 60),
+    // That pace is judged over this alone, so a hider who breaks into a run
+    // is exact within seconds, not after the longer window above. Nothing
+    // standing still reads as a run: wobble can pass for a stroll over a
+    // few seconds (which is why the smaller steps wait), never for this
+    exact_window_ms: 6_000,
+    // [at or above this speed, share of the lobby's radius], fastest first:
+    // the radius halves each time the speed doubles (1.22 and 0.61 m/s)
+    steps: [[MILE_M / (11 * 60) / 2, 1 / 4], [MILE_M / (11 * 60) / 4, 1 / 2], [0, 1]],
+    // Reaching a threshold counts at once. Going back needs the speed to
+    // fall this far under it, so a speed hovering at one doesn't flip the
+    // circle back and forth
     hysteresis: 0.15,
-    // A hider stays in their square until this far (a share of its side)
-    // outside it, so standing on an edge doesn't give the edge away
+    // A new circle is put down so the hider starts at least this share of
+    // the radius inside it: standing where it was put down, a little GPS
+    // wobble doesn't carry them straight out of it again
     margin: 0.15,
 });
-// The square's side, for a circle of the reported radius to hold the square
-// and the margin around it: (side / 2 + margin * side) * sqrt(2) = radius
-const BLUR_SIDE_PER_RADIUS = Math.SQRT2 / (1 + 2 * BLUR.margin);
 // How long a hider's past positions are kept, to work their speed out
 const FIX_HISTORY_MS = Math.max(...BLUR.windows_ms) + 15_000;
 
@@ -289,16 +309,19 @@ function positionAt(fixes, time)
  * ([{ latitude, longitude, at }], oldest first). Someone with no history yet,
  * or who has stopped reporting, counts as standing still.
  */
-function hiderSpeed(fixes, now)
+function hiderSpeed(fixes, now, windows = BLUR.windows_ms)
 {
     const latest = fixes[fixes.length - 1];
     if (!latest) return 0;
     let slowest = Infinity;
-    for (const windowMs of BLUR.windows_ms)
+    for (const windowMs of windows)
     {
         const before = positionAt(fixes, now - windowMs);
         if (!before) return 0;
-        slowest = Math.min(slowest, distanceMeters(before, latest) / (windowMs / 1000));
+        // Over the time since that fix, not the window's length: fixes come
+        // every couple of seconds, and the one found may be older than the
+        // window is long
+        slowest = Math.min(slowest, distanceMeters(before, latest) / ((now - before.at) / 1000));
     }
     return slowest;
 }
@@ -312,47 +335,72 @@ function blurShareAt(speed)
 
 /**
  * The share to use now, given the one in use (null: none yet). It moves to a
- * more exact step only once the speed is clearly past the threshold, and to
- * a vaguer one only once it is clearly under.
+ * more exact step as soon as the speed reaches the threshold (faster than an
+ * 11-minute mile is exact, without a margin on top), and back to a vaguer
+ * one only once the speed is clearly under it. `quick` is the speed over
+ * the last few seconds alone (BLUR.exact_window_ms): at the exact pace it
+ * is enough by itself, and keeps a hider exact while they hold it.
  */
-function nextBlurShare(previous, speed)
+function nextBlurShare(previous, speed, quick = speed)
 {
-    if (previous == null) return blurShareAt(speed);
-    const ifSlower = blurShareAt(speed * (1 - BLUR.hysteresis));
+    if (quick >= BLUR.exact_mps) return 0;
+    if (previous === 0 && quick * (1 + BLUR.hysteresis) >= BLUR.exact_mps) return 0;
+    const reached = blurShareAt(speed);
+    if (previous == null || reached < previous) return reached;
     const ifFaster = blurShareAt(speed * (1 + BLUR.hysteresis));
-    if (ifSlower < previous) return ifSlower;
-    if (ifFaster > previous) return ifFaster;
-    return previous;
+    return ifFaster > previous ? ifFaster : previous;
 }
 
 const METRES_PER_DEGREE = (Math.PI / 180) * EARTH_RADIUS_M;
 
-/**
- * The centre of the grid square a position falls in, for a reported radius.
- * `origin` ({ latitude, longitude }) fixes where the grid lies; `previous`
- * is the square reported last time ({ side, column, row }), kept while the
- * position is within the margin of it. Returns { latitude, longitude, cell }:
- * the position is always within `radiusM` of the centre.
- */
-function blurredPosition(position, radiusM, origin, previous = null)
+// A point `east` and `north` metres from another
+function offsetBy(point, east, north)
 {
-    const side = radiusM * BLUR_SIDE_PER_RADIUS;
-    const metresPerDegreeLon = METRES_PER_DEGREE * Math.cos(toRad(origin.latitude));
-    const x = (position.longitude - origin.longitude) * metresPerDegreeLon;
-    const y = (position.latitude - origin.latitude) * METRES_PER_DEGREE;
-
-    let column = Math.floor(x / side);
-    let row = Math.floor(y / side);
-    if (previous && previous.side === side)
-    {
-        const slack = BLUR.margin * side;
-        const inside = (value, index) => value >= index * side - slack && value < (index + 1) * side + slack;
-        if (inside(x, previous.column) && inside(y, previous.row)) ({ column, row } = previous);
-    }
     return {
-        latitude: origin.latitude + ((row + 0.5) * side) / METRES_PER_DEGREE,
-        longitude: origin.longitude + ((column + 0.5) * side) / metresPerDegreeLon,
-        cell: { side, column, row }
+        latitude: point.latitude + north / METRES_PER_DEGREE,
+        longitude: point.longitude + east / (METRES_PER_DEGREE * Math.cos(toRad(point.latitude))),
+    };
+}
+
+/**
+ * The circle a hider is shown in: { latitude, longitude, radius }, its
+ * centre and how far from it they may be. `shown` is the circle shown last
+ * (null: none). `random` gives numbers in [0, 1), like Math.random.
+ *
+ * While the hider is inside a circle of this radius, it stays. Otherwise a
+ * new one is put down at random around them: evenly, so that they are as
+ * likely to be in one part of it as another, anywhere up to its edge less
+ * the margin. If the radius has changed and they are still inside the old
+ * circle, the new one lies wholly inside it (smaller) or holds all of it
+ * (larger), so seekers learn nothing from laying one over the other. The
+ * hider is always within `radiusM` of the centre returned.
+ */
+function blurredPosition(position, radiusM, shown = null, random = Math.random)
+{
+    const inside = shown ? distanceMeters(position, shown) <= shown.radius : false;
+    if (inside && shown.radius === radiusM) return shown;
+
+    const reach = radiusM / (1 + BLUR.margin);
+    // How far the new centre may be from the old for one circle to lie inside the other
+    const leeway = inside ? Math.abs(shown.radius - radiusM) : Infinity;
+    for (let attempt = 0; attempt < 60; attempt++)
+    {
+        // Evenly over the disc: the square root spreads points by area
+        const distance = reach * Math.sqrt(random());
+        const bearing = 2 * Math.PI * random();
+        const centre = offsetBy(position, Math.sin(bearing) * distance, Math.cos(bearing) * distance);
+        if (leeway === Infinity || distanceMeters(centre, shown) <= leeway) return { ...centre, radius: radiusM };
+    }
+    // No room found at random (the hider is at the old circle's very edge).
+    // Larger: centred where the old one was. Smaller: as near the hider as
+    // staying inside the old one allows, which still holds them
+    if (radiusM > shown.radius) return { latitude: shown.latitude, longitude: shown.longitude, radius: radiusM };
+    const out = distanceMeters(position, shown);
+    const along = out > 0 ? Math.min(1, leeway / out) : 0;
+    return {
+        latitude: shown.latitude + (position.latitude - shown.latitude) * along,
+        longitude: shown.longitude + (position.longitude - shown.longitude) * along,
+        radius: radiusM,
     };
 }
 
@@ -375,6 +423,36 @@ function cleanChatText(text)
     const clean = text.replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, ' ').replace(/\s+/g, ' ').trim();
     if (!clean || [...clean].length > LIMITS.chatMaxChars) return null;
     return clean;
+}
+
+// The chats a lobby has: one for everyone, and one for each side
+const CHAT_CHANNELS = Object.freeze(['all', 'seekers', 'hiders']);
+
+/** The side's chat a player is in: 'seekers' or 'hiders' */
+const chatSide = (player) => (player.is_seeker ? 'seekers' : 'hiders');
+
+/** The chat a message is meant for: 'all' when none is named, null if it names one that doesn't exist */
+function cleanChatChannel(channel)
+{
+    if (channel === undefined || channel === null) return 'all';
+    return CHAT_CHANNELS.includes(channel) ? channel : null;
+}
+
+/**
+ * Whether a player is given a chat message. Everyone gets what's said to
+ * everyone. What's said to one side goes to who is on that side, and only
+ * what was said since they came onto it: `side_from` is the number the next
+ * message had at that moment (numbers, not times: two things in the same
+ * millisecond still have an order). Changing sides, or joining late, never
+ * hands over what a side said before. So a seeker can't
+ * read the hiders' plans by turning hider for a moment in the lobby, and a
+ * hider who is caught joins the seekers with none of their talk either.
+ */
+function seesChatMessage(message, player)
+{
+    const channel = message.channel ?? 'all';
+    if (channel === 'all') return true;
+    return channel === chatSide(player) && message.id >= (player.side_from ?? 0);
 }
 
 /** What kind of picture these bytes are, by how they begin: only the two the app sends */
@@ -415,5 +493,6 @@ function isValidAvatar(avatar)
 module.exports = {
     PHASE, LIMITS, DEFAULT_SETTINGS, SEEKER_INFO_MODES, applySettings, isOutOfBounds, isValidAvatar, distanceMeters,
     nearestSeeker, seekerInfoFor, jamStatus, isJamming,
-    BLUR, FIX_HISTORY_MS, hiderSpeed, nextBlurShare, blurredPosition, cleanChatText, cleanChatImage
+    BLUR, FIX_HISTORY_MS, hiderSpeed, nextBlurShare, blurredPosition, cleanChatText, cleanChatImage,
+    CHAT_CHANNELS, chatSide, cleanChatChannel, seesChatMessage
 };

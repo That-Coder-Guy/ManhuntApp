@@ -1,4 +1,4 @@
-// The seeker's map turns with the phone, like the compass dial
+// The seeker's map: north up, until the align button turns it with the phone like the compass dial
 import { BASE, SHOT, createLobby, join, startGame, exactPositions, makePlayer, passGate, hostKeyFor } from '../lib/helpers.mjs';
 import { chromium } from '../lib/playwright.mjs';
 const browser = await chromium.launch();
@@ -46,15 +46,27 @@ const layout = () => page.evaluate(() => {
 });
 const relative = (l) => { const p = centre(l.pin), y = centre(l.you); return { dx: p.x - y.x, dy: p.y - y.y }; };
 
-// No compass reading yet (as on a computer): north up, no north button
-check(Math.abs(await rotation()) < 0.5 && await page.locator('[data-testid="track-map-north"]').count() === 0, 'without a compass: north up, no north button');
+// No compass reading yet (as on a computer): north up, no align button
+const align = page.locator('[data-testid="track-map-align"]');
+check(Math.abs(await rotation()) < 0.5 && await align.count() === 0, 'without a compass: north up, no align button');
 let rel = relative(await layout());
 check(rel.dx > 40 && Math.abs(rel.dy) < 15, 'north up: the hider due east shows to the right', JSON.stringify(rel));
 
-// Facing east: the map turns so east is up, smoothly
+// The phone faces east. The map stays north up until it's asked to turn
 await page.evaluate(() => { window.__heading = 90; });
 await page.waitForTimeout(1500);
-check(Math.abs((await rotation()) + 90) < 1, `facing east: the map turns -90° (${(await rotation()).toFixed(1)}°)`);
+check(await align.count() === 1 && await align.getAttribute('aria-pressed') === 'false', 'with a compass there is an align button, off');
+check(Math.abs(await rotation()) < 0.5, `and the map is still north up (${(await rotation()).toFixed(1)}°)`);
+rel = relative(await layout());
+check(rel.dx > 40 && Math.abs(rel.dy) < 15, 'the hider due east still to the right', JSON.stringify(rel));
+check(/way you face/.test(await align.getAttribute('aria-label')), 'the button says what it will do', await align.getAttribute('aria-label'));
+await page.screenshot({ path: `${SHOT}/maprotate-north.png` });
+
+// Align: the map turns to the phone's heading, so east is up, smoothly
+await align.click();
+await page.waitForTimeout(1500);
+check(Math.abs((await rotation()) + 90) < 1 && await align.getAttribute('aria-pressed') === 'true', `the align button turns the map the way the phone faces: -90° (${(await rotation()).toFixed(1)}°)`);
+check(await page.evaluate(() => localStorage.getItem('manhunt.mapTurns')) === '1', 'and that is remembered');
 let l = await layout();
 rel = relative(l);
 check(rel.dy < -40 && Math.abs(rel.dx) < 15, 'and the hider ahead of you shows above you', JSON.stringify(rel));
@@ -98,24 +110,25 @@ const after = centre((await layout()).pin);
 const moved = { dx: after.x - before.x, dy: after.y - before.y };
 check(Math.abs(moved.dx - 80) < 12 && Math.abs(moved.dy - 30) < 12, 'a drag on the turned map moves it with the finger (80, 30)', JSON.stringify(moved));
 
-// North button: keep north up, remembered
-await page.locator('[data-testid="track-map-north"]').click();
+// It follows the phone as it turns, and survives a reload
+await page.evaluate(() => { window.__heading = 180; });
 await page.waitForTimeout(1500);
-check(Math.abs(await rotation()) < 1 && await page.locator('[data-testid="track-map-north"]').getAttribute('aria-pressed') === 'true', 'the north button keeps north up');
-await page.screenshot({ path: `${SHOT}/maprotate-north.png` });
-check(await page.evaluate(() => localStorage.getItem('manhunt.mapNorthUp')) === '1', 'and is remembered');
-await page.locator('[data-testid="track-map-north"]').click();
+check(Math.abs(Math.abs(await rotation()) - 180) < 1, `turning to face south, the map follows (${(await rotation()).toFixed(1)}°)`);
+await page.evaluate(() => { window.__heading = 90; });
 await page.waitForTimeout(1500);
-check(Math.abs((await rotation()) + 90) < 1, 'tapping again turns it with you again');
 
-// Centre on me lines the map up with you too: north kept up is let go
-await page.locator('[data-testid="track-map-north"]').click();
+// Align again: north back up, remembered
+await align.click();
 await page.waitForTimeout(1500);
-check(Math.abs(await rotation()) < 1, 'north kept up again');
+check(Math.abs(await rotation()) < 1 && await align.getAttribute('aria-pressed') === 'false', 'pressed again, north is back up');
+check(await page.evaluate(() => localStorage.getItem('manhunt.mapTurns')) === '0', 'and that is remembered too');
+check(/north/i.test(await align.getAttribute('aria-label')) === false, 'and the button offers to turn it again', await align.getAttribute('aria-label'));
+
+// Centre on me lines the map up with the phone too
 await page.locator('[data-testid="track-map-me"]').click();
 await page.waitForTimeout(1500);
-check(Math.abs((await rotation()) + 90) < 1 && await page.locator('[data-testid="track-map-north"]').getAttribute('aria-pressed') === 'false', 'Centre on me turns the map the way you face', String(await rotation()));
-check(await page.evaluate(() => localStorage.getItem('manhunt.mapNorthUp')) === '0', 'and that is remembered');
+check(Math.abs((await rotation()) + 90) < 1 && await align.getAttribute('aria-pressed') === 'true', 'Centre on me turns the map the way you face', String(await rotation()));
+check(await page.evaluate(() => localStorage.getItem('manhunt.mapTurns')) === '1', 'and that is remembered');
 const centred = await layout();
 check(Math.hypot(centre(centred.you).x - centre(centred.wrap).x, centre(centred.you).y - centre(centred.wrap).y) < 4, 'with you in the middle', JSON.stringify(centred.you));
 

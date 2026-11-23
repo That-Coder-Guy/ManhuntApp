@@ -12,7 +12,7 @@ A **Seekers / Map** switch sits above the hider's main card; the choice is remem
 - **No seeker is on a hider's map.** Their positions never reach a hider's phone; that rule ([[Decisions]]) is unchanged.
 
 ## Hiders see each other as the seekers do, and no better
-- During a game a hider's copy of the lobby state carries, for each other hider, **exactly what the seekers' copy carries** (`viewFor` in `server/server.js`): the vague point and its radius while they are still ([[Hider position blur]]), the frozen point while they jam ([[Jamming]]), nothing during the head start. Their own position is the only real one a hider has.
+- During a game a hider's copy of the lobby state carries, for each other hider, **exactly what the seekers' copy carries** (`viewFor` in `server/server.js`): the vague point and its radius while they are still ([[Hider position blur]]), nothing at all while they jam ([[Jamming]]), nothing during the head start. Their own position is the only real one a hider has.
 - **Why not their real positions.** A hider who is caught joins the seekers. The first version sent hiders each other's exact positions, and the owner saw the problem the same day: "in case they get caught". With the seekers' copy, a caught hider arrives knowing nothing the seekers didn't already have. Don't make it exact again without that being asked for.
 - The owner was offered three options (the seekers' view, exact, no hider map) and chose the seekers' view.
 

@@ -93,7 +93,7 @@ const square = [
 
 test('settings summary', () => {
     assert.deepEqual(describeSettings({ geofence: null, time_limit_s: 0, head_start_s: 60 }),
-        { playArea: 'Anywhere', timeLimit: 'No limit', headStart: '1 min', foundRange: '50\u202Fm', seekerInfo: 'Distance to nearest seeker', jamming: '1 min jam, 15 min charge', hiderBlur: 'Still hiders ±100\u202Fm' });
+        { playArea: 'Anywhere', timeLimit: 'No limit', headStart: '1 min', foundRange: '50\u202Fm', seekerInfo: 'Distance to nearest seeker', jamming: '1 min jam, 15 min charge', hiderBlur: 'Still hiders ±25\u202Fm' });
     assert.equal(describeSettings({ found_range_m: 100 }).foundRange, '100\u202Fm');
     assert.equal(describeSettings({ geofence: { points: square } }).playArea, '38,300\u202Fm²');
     assert.equal(formatArea(1_234_567), '1.2\u202Fkm²');
@@ -152,7 +152,8 @@ test('foundStatus works from the seeker info the server sends', () => {
 
 test('settings summary describes what hiders see', () => {
     assert.equal(describeSettings({}).seekerInfo, 'Distance to nearest seeker');
-    assert.equal(describeSettings({ seeker_info: 'nearby', seeker_alert_m: 150 }).seekerInfo, 'Alert within 150\u202Fm');
+    // (within a found range that allows it: the alert never reaches further than that, see alert.test.js)
+    assert.equal(describeSettings({ seeker_info: 'nearby', seeker_alert_m: 150, found_range_m: 200 }).seekerInfo, 'Alert within 150\u202Fm');
     assert.equal(describeSettings({ seeker_info: 'none' }).seekerInfo, 'Seekers hidden');
 });
 

@@ -68,7 +68,9 @@
     const waiting = [];
     const position = () => ({
         coords: {
-            latitude: fix.latitude, longitude: fix.longitude, accuracy: 8,
+            // (a good fix out of doors: the app steadies a hider's position
+            // by this, and a poor one makes it slow to follow a run)
+            latitude: fix.latitude, longitude: fix.longitude, accuracy: 5,
             altitude: null, altitudeAccuracy: null, heading: null, speed: fix.speed
         },
         timestamp: Date.now()

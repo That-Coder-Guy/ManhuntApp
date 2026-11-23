@@ -38,9 +38,19 @@ export function formatArea(squareMetres)
 export const FOUND_RANGE_DEFAULT_M = 50;
 export const SEEKER_INFO_DEFAULT = 'distance';
 export const SEEKER_ALERT_DEFAULT_M = 100;
+
+/**
+ * How close a seeker comes before hiders are alerted, where an alert is all
+ * they get: the host's distance, but never further than the found range
+ * (the server keeps to the same rule, in applySettings).
+ */
+export const alertDistance = (settings) => Math.min(
+    settings?.seeker_alert_m ?? SEEKER_ALERT_DEFAULT_M,
+    settings?.found_range_m ?? FOUND_RANGE_DEFAULT_M
+);
 export const JAM_DEFAULTS = Object.freeze({ enabled: true, duration_s: 60, charge_s: 15 * 60 });
 // How far off a still hider's position is shown to seekers (0: always exact)
-export const HIDER_BLUR_DEFAULT_M = 100;
+export const HIDER_BLUR_DEFAULT_M = 25;
 
 /** The lobby's jam settings, with the defaults for any it doesn't have */
 export function jamSettings(settings)
@@ -65,7 +75,7 @@ export function describeSettings(settings)
         foundRange: `${settings?.found_range_m ?? FOUND_RANGE_DEFAULT_M}\u202Fm`,
         seekerInfo: {
             distance: 'Distance to nearest seeker',
-            nearby: `Alert within ${settings?.seeker_alert_m ?? SEEKER_ALERT_DEFAULT_M}\u202Fm`,
+            nearby: `Alert within ${alertDistance(settings)}\u202Fm`,
             none: 'Seekers hidden'
         }[settings?.seeker_info ?? SEEKER_INFO_DEFAULT],
         jamming: jam.enabled ? `${formatDuration(jam.duration_s)} jam, ${formatDuration(jam.charge_s)} charge` : 'No jamming',

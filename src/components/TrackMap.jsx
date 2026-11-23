@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { IonIcon } from '@ionic/react';
-import { scanOutline, locateOutline } from 'ionicons/icons';
+import { scanOutline, locateOutline, compassOutline } from 'ionicons/icons';
 import { createMap, showView, watchSize, dragFollowsRotation, toLatLng, hasPosition, STREET_ZOOM } from '../utils/leafletBase';
 import useCompassHeading from '../hooks/useCompassHeading';
 import useSmoothAngle from '../hooks/useSmoothAngle';
@@ -13,10 +13,11 @@ import { playerName, playerFreshness } from '../utils/players';
 const EDGE_MARGIN = 0.12;
 // Space kept clear around framed markers, in pixels
 const FRAME_PADDING = 32;
-const NORTH_UP_KEY = 'manhunt.mapNorthUp';
+// Whether the map turns with the phone (the align button), remembered
+const TURNS_KEY = 'manhunt.mapTurns';
 
-const readNorthUp = () => { try { return localStorage.getItem(NORTH_UP_KEY) === '1'; } catch { return false; } };
-const saveNorthUp = (on) => { try { localStorage.setItem(NORTH_UP_KEY, on ? '1' : '0'); } catch { /* not remembered */ } };
+const readTurns = () => { try { return localStorage.getItem(TURNS_KEY) === '1'; } catch { return false; } };
+const saveTurns = (on) => { try { localStorage.setItem(TURNS_KEY, on ? '1' : '0'); } catch { /* not remembered */ } };
 
 // Every seeker on the map is this one colour (the accent), you included;
 // hiders are discs with their initials. So the two sides never look alike
@@ -62,19 +63,20 @@ function hiderIcon(player, { tracked, fresh, label = tracked ? playerName(player
  * "Fit" frames you both again.
  *
  * The button under Fit centres the map on you and lines it up with the way
- * you face (turning it with the phone again if north was being kept up).
- * The map then stays centred on you as you walk, until you drag it, press
- * Fit, or track someone else.
+ * you face (it turns the align button on). The map then stays centred on
+ * you as you walk, until you drag it, press Fit, or track someone else.
  *
  * A hider's (`youAre="hider"`, no `target`): you and your fellow hiders, as
  * named pins, and the play area. The others are where the seekers see them,
  * area and all. No seekers: their positions never reach a hider's phone. It
  * frames all of you.
  *
- * Like the compass dial, the map turns with the phone, so the way you face
- * is up (the north button keeps north up instead). The map is drawn on a
- * square big enough to cover the view at any angle, turned with CSS; pins,
- * labels and Leaflet's controls are turned back so they stay upright.
+ * North is up until the align button is pressed: then, like the compass
+ * dial, the map turns with the phone, so the way you face is up, and the
+ * button's needle shows where north has gone. Pressing it again puts north
+ * back up. The map is drawn on a square big enough to cover the view at any
+ * angle, turned with CSS; pins, labels and Leaflet's controls are turned
+ * back so they stay upright.
  */
 function TrackMap({ you, youAre = 'seeker', self = null, target = null, hiders, seekers = [], playArea, onSelect = null, now })
 {
@@ -83,21 +85,21 @@ function TrackMap({ you, youAre = 'seeker', self = null, target = null, hiders, 
     // The visible view and the turned square behind it, in pixels
     const viewRef = useRef({ width: 0, height: 0, side: 0 });
 
-    // Which way the map turns: with the phone, unless north is kept up
+    // Which way is up: north, or (the align button) the way the phone faces
     const { heading } = useCompassHeading();
-    const [northUp, setNorthUp] = useState(readNorthUp);
+    const [turns, setTurns] = useState(readTurns);
     const canTurn = heading !== null;
     const rotationRef = useRef(0);
-    useSmoothAngle(canTurn && !northUp ? -heading : 0, (degrees) =>
+    useSmoothAngle(canTurn && turns ? -heading : 0, (degrees) =>
     {
         rotationRef.current = degrees;
         wrapRef.current?.style.setProperty('--map-rotation', `${degrees}deg`);
     });
 
-    function toggleNorthUp()
+    function align(on)
     {
-        saveNorthUp(!northUp);
-        setNorthUp(!northUp);
+        saveTurns(on);
+        setTurns(on);
     }
     const mapRef = useRef(null);
     const layersRef = useRef(null);
@@ -112,10 +114,13 @@ function TrackMap({ you, youAre = 'seeker', self = null, target = null, hiders, 
     const followRef = useRef(false);
     const [following, setFollowing] = useState(false);
 
-    const latest = useRef({ onSelect });
-    latest.current = { onSelect };
+    const latest = useRef({ onSelect, you });
+    latest.current = { onSelect, you };
     // The newest frame(), for the size watcher set up with the map
     const frameRef = useRef(null);
+    // The newest centreOnYou(), and a centring kept back while a zoom animates
+    const centreRef = useRef(null);
+    const waitingCentreRef = useRef(null);
 
     function setFollow(on)
     {
@@ -138,6 +143,14 @@ function TrackMap({ you, youAre = 'seeker', self = null, target = null, hiders, 
     {
         const map = mapRef.current;
         if (!map || !hasPosition(you)) return;
+        // Leaflet drops a view asked for while a zoom is still animating (our
+        // own reframing, say), so the press would do nothing: keep it for
+        // when the zoom lands
+        if (map._animatingZoom)
+        {
+            waitingCentreRef.current = { zoomIn: zoomIn || !!waitingCentreRef.current?.zoomIn };
+            return;
+        }
         moveIsOurs();
         if (zoomIn) showView(map, containerRef.current, pendingViewRef, { center: toLatLng(you), zoom: Math.max(map.getZoom(), STREET_ZOOM) });
         else map.panTo(toLatLng(you));
@@ -173,6 +186,7 @@ function TrackMap({ you, youAre = 'seeker', self = null, target = null, hiders, 
     }
 
     frameRef.current = frame;
+    centreRef.current = centreOnYou;
 
     // Create the map once
     useEffect(() =>
@@ -235,7 +249,24 @@ function TrackMap({ you, youAre = 'seeker', self = null, target = null, hiders, 
             followRef.current = false;
             setFollowing(false);
         });
-        map.on('moveend', () => { programmaticRef.current = false; });
+        map.on('moveend', () =>
+        {
+            programmaticRef.current = false;
+            // Kept centred on you: a move of ours that ended anywhere else
+            // (a slide and a zoom that overlapped, say) is put right
+            const at = latest.current.you;
+            if (!followRef.current || map._animatingZoom || !hasPosition(at)) return;
+            const off = map.latLngToContainerPoint(toLatLng(at)).distanceTo(map.getSize().divideBy(2));
+            if (off > 2) setTimeout(() => { if (followRef.current) centreRef.current?.(); });
+        });
+        // A centring asked for mid-zoom, now that the zoom has landed (after
+        // this event's own moveend, which would take the move for the player's)
+        map.on('zoomend', () =>
+        {
+            const waiting = waitingCentreRef.current;
+            waitingCentreRef.current = null;
+            if (waiting) setTimeout(() => { if (followRef.current) centreRef.current?.(waiting); });
+        });
         const stopWatching = watchSize(map, container, pendingViewRef);
         mapRef.current = map;
         return () =>
@@ -408,11 +439,7 @@ function TrackMap({ you, youAre = 'seeker', self = null, target = null, hiders, 
         userMovedRef.current = true;
         setUserMoved(true);
         setFollow(true);
-        if (northUp)
-        {
-            saveNorthUp(false);
-            setNorthUp(false);
-        }
+        if (!turns) align(true);
         centreOnYou({ zoomIn: true });
     }
 
@@ -448,17 +475,22 @@ function TrackMap({ you, youAre = 'seeker', self = null, target = null, hiders, 
                 {canTurn && (
                     <button
                         type="button"
-                        className={`track-map-north${northUp ? ' track-map-north--locked' : ''}`}
-                        data-testid="track-map-north"
-                        onClick={toggleNorthUp}
-                        aria-pressed={northUp}
-                        aria-label={northUp ? 'Turn the map with you' : 'Keep north up'}
+                        className={`track-map-align${turns ? ' track-map-align--on' : ''}`}
+                        data-testid="track-map-align"
+                        onClick={() => align(!turns)}
+                        aria-pressed={turns}
+                        aria-label={turns ? 'Put north back up' : 'Turn the map the way you face'}
+                        title={turns ? 'Put north back up' : 'Turn the map the way you face'}
                     >
-                        {/* Points north, turning with the map */}
-                        <svg viewBox="0 0 24 24" aria-hidden="true" className="track-map-north-needle">
-                            <path d="M12 3 L16 12 L8 12 Z" className="track-map-north-tip" />
-                            <path d="M12 21 L16 12 L8 12 Z" className="track-map-north-tail" />
-                        </svg>
+                        {turns ? (
+                            // Turned with you: a needle that points north, turning with the map
+                            <svg viewBox="0 0 24 24" aria-hidden="true" className="track-map-north-needle">
+                                <path d="M12 3 L16 12 L8 12 Z" className="track-map-north-tip" />
+                                <path d="M12 21 L16 12 L8 12 Z" className="track-map-north-tail" />
+                            </svg>
+                        ) : (
+                            <IonIcon icon={compassOutline} aria-hidden="true" />
+                        )}
                     </button>
                 )}
             </div>

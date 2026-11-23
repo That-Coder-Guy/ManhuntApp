@@ -54,8 +54,12 @@ function forgetOldGames()
 
 const MODES = [
     { name: 'still', chance: 0.3, seconds: [20, 60], speed: [0, 0], turn: 0 },
-    { name: 'walk', chance: 0.55, seconds: [20, 60], speed: [1.0, 1.7], turn: 22 },
-    { name: 'run', chance: 0.15, seconds: [8, 25], speed: [2.6, 3.6], turn: 10 }
+    // (a run is faster than an 11-minute mile, 2.44 m/s, and long enough for
+    // the game to count it: a running hider is shown exactly)
+    // (turning only a little each second: people walk along paths, and a
+    // walk that wanders covers little ground, which the game reads as slow)
+    { name: 'walk', chance: 0.45, seconds: [20, 60], speed: [1.2, 1.7], turn: 8 },
+    { name: 'run', chance: 0.25, seconds: [20, 45], speed: [2.8, 3.8], turn: 4 }
 ];
 
 function pickMode(phone, { moving = false } = {})

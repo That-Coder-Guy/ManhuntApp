@@ -63,9 +63,9 @@ real app, captured at phone size (390 × 844) from a scripted game.
       <br><br>
       <b>What hiders see.</b> The distance to the nearest seeker (the default), only an alert when a seeker comes within a set distance, or nothing at all.
       <br><br>
-      <b>What seekers see.</b> A hider who stands still is only shown as somewhere within 100 m (the host can change the distance, or choose <i>Exactly</i>). The faster a hider moves, the smaller that gets, and from walking pace seekers see the exact spot.
+      <b>What seekers see.</b> A hider who stands still is only shown as somewhere within 25 m (the host can change the distance, or choose <i>Exactly</i>). The faster a hider moves, the smaller that gets, and anyone going faster than an 11-minute mile is seen exactly.
       <br><br>
-      <b>Jamming.</b> Each hider has a jammer that hides them from the seekers for a while: the seekers keep seeing where that hider was when it started. By default a jam lasts 60 seconds and takes 15 minutes to charge, counted from when the seekers set off and again after each jam. The host can change both times, or turn jamming off.
+      <b>Jamming.</b> Each hider has a jammer that makes them vanish from the seekers for a while: off the seekers' list and map, with no position sent at all. By default a jam lasts 60 seconds and takes 15 minutes to charge, counted from when the seekers set off and again after each jam. The host can change both times, or turn jamming off.
       <br><br>
       Everyone else can open the same sheet to see the rules and the area, but can't change them.
     </td>
@@ -87,7 +87,7 @@ real app, captured at phone size (390 × 844) from a scripted game.
   </tr>
   <tr>
     <td width="33%" valign="top"><img src="docs/walkthrough/10b-map.png" alt="The tracking map: the seeker's orange dot, a dashed line to Priya's labelled pin, the other hiders and the play area outline" width="100%"></td>
-    <td colspan="2" valign="top"><b>Or the map.</b> Switch from <i>Compass</i> to <i>Map</i> to track on a street map instead: you, a dashed line to the hider you're after, the other hiders (tap one to track them) and the play area. Like the dial, it turns with your phone so the way you face is up (names and buttons stay upright); the north button under <i>Fit</i> keeps north up instead. It frames you both, stays put while you pan and zoom, and <i>Fit</i> brings you both back into view. The crosshair button centres the map on you, facing the way you face, and keeps it on you as you walk until you drag it or tap <i>Fit</i>. Each phone remembers which one its seeker prefers.</td>
+    <td colspan="2" valign="top"><b>Or the map.</b> Switch from <i>Compass</i> to <i>Map</i> to track on a street map instead: you, a dashed line to the hider you're after, the other hiders (tap one to track them) and the play area. North is up until you press the align button under <i>Fit</i>: then, like the dial, the map turns with your phone so the way you face is up (names and buttons stay upright), and pressing it again puts north back up. It frames you both, stays put while you pan and zoom, and <i>Fit</i> brings you both back into view. The crosshair button centres the map on you, facing the way you face, and keeps it on you as you walk until you drag it or tap <i>Fit</i>. Each phone remembers which one its seeker prefers.</td>
   </tr>
 </table>
 
@@ -184,7 +184,7 @@ bar change the numbers, and **New game** starts again in a new lobby. Every
 phone stands, walks or runs at random within 350 m of the middle
 (`?lat=..&lng=..` in the address moves the middle), and the panel on the right
 shows where each one really is, to set against what the phones are shown.
-Each phone can be used like a real one: tap **Jam**, open the map, send a
+Each phone can be used like a real one: open **Abilities** and tap **Jam**, open the map, send a
 chat message. **Reload** under a phone's name reloads just that phone.
 
 It runs its own game server on this computer only, with notifications off.
@@ -207,7 +207,9 @@ each phone's location and compass and keeps their saved data apart.
     `jam` starts a hider's jam, if it is charged; the server answers with
     why not otherwise. `chat-send` adds a message to the lobby's chat: up
     to 280 characters, a picture (`image: { data, width, height }`, a JPEG
-    or WebP of at most 72 KB as bytes), or both.
+    or WebP of at most 72 KB as bytes), or both. `channel` says who it's
+    for: `all` (the default), or the sender's own side, `seekers` or
+    `hiders`.
     `push-subscribe` hands the server the phone's Web Push subscription (or
     `null`), and `set-visibility` says whether the app is on screen; the
     server pushes "found" notices only to players who aren't looking.
@@ -225,6 +227,9 @@ each phone's location and compass and keeps their saved data apart.
     is their real position).
   - The chat: `chat-history` (the lobby's last 200 messages) on every
     connection, then `chat-message` to everyone as each is sent. A message
+    for one side goes only to that side's phones, and a player is given
+    only what their side said since they came onto it: `chat-history` is
+    sent again, without the rest, whenever a player changes sides. A message
     with a picture carries only its ID, type and size; the picture is
     fetched from `GET /manhunt-api/chat-image/<lobby>/<id>` when it's shown.
 - A player who disconnects is marked offline (not deleted) and kept for
@@ -523,23 +528,31 @@ name, a small profile picture and a role; the host sets the rules and starts.
   and not during the head start. When the last hider is found the seekers win
   and the game ends for everyone.
 - **What hiders see** about the seekers: the distance to the nearest one (the
-  default), only an alert when one comes within a chosen distance (25–500 m,
-  100 m by default), or nothing. The server enforces it: during a game a
+  default), only an alert when one comes within a chosen distance (never
+  more than the found range, so 50 m by default), or nothing. The server enforces it: during a game a
   hider's phone is never sent a seeker's position, only what this setting
   allows, worked out on the server.
 - **What seekers see** of a hider depends on the hider's speed: standing
-  still, only an area (within 100 m by default; the host can change it or
-  choose *Exactly*); the radius halves as the speed doubles, and from walking
-  pace it is the exact spot. The server sends seekers the middle of a fixed
-  square, not a point near the hider, so there is nothing to average.
-- **Jamming**: each hider's jammer freezes what the seekers see of them (60
+  still, only an area (within 25 m by default; the host can change it or
+  choose *Exactly*); the radius halves as the speed doubles, and faster
+  than an 11-minute mile (2.44 m/s) it is the exact spot, within a few
+  seconds of breaking into a run. The server sends seekers the middle of a
+  circle that stays put while the hider is in it, and the hider may be
+  anywhere in that circle, so there is nothing to average.
+- **Jamming**: each hider's jammer makes them vanish for the seekers (60
   seconds by default, 15 minutes to charge; the host can change both or turn
-  it off).
+  it off). While it runs the server sends no one else any position for that
+  hider, so they are gone from the seekers' list, compass and map, and come
+  back when it ends.
 - **Hiders see each other** on the **Map** tab, as the seekers see them and
   no more exactly: a hider who is caught joins the seekers, and shouldn't
   arrive knowing better than them where the rest are.
 - **Chat**: the speech-bubble button opens one conversation for everyone in
-  the lobby, both sides, before, during and after a game. A message can
+  the lobby, both sides, before, during and after a game, and beside it a
+  chat for your own side that the other side is never sent. Changing sides
+  (a hider who is caught, a role changed in the lobby) leaves the old
+  side's chat behind and starts the new side's from that moment, so
+  nobody reads what a side said before they were on it. A message can
   carry a picture: the phone shrinks it to at most 1280 pixels and about
   60 KB before sending (WebP where the browser can make one, else JPEG),
   and tapping one in the conversation opens it full screen. A lobby keeps

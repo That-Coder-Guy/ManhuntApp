@@ -49,7 +49,7 @@ const where = (list) => { const p = list.find((q) => q.name === 'Priya'); return
 const mayaHas = where(await lastPlayers(maya.page));
 const hankHas = where(await lastPlayers(hank.page));
 check(JSON.stringify(mayaHas) === JSON.stringify(hankHas), 'her phone has for Priya exactly what a seeker\'s has', `${JSON.stringify(mayaHas)} vs ${JSON.stringify(hankHas)}`);
-check(mayaHas[2] === 100 && mayaHas[0] !== PRIYA.latitude, 'which is an area, not where Priya is', JSON.stringify(mayaHas));
+check(mayaHas[2] === 25 && mayaHas[0] !== PRIYA.latitude, 'which is an area, not where Priya is', JSON.stringify(mayaHas));
 check(await maya.page.locator('[data-testid="track-area"]').count() === 1, 'and her map draws that area');
 check(!(await everSawASeeker(maya.page)), 'she has never been sent a seeker\'s position');
 
